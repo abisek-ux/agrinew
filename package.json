@@ -5,8 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server/server.js",
-    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install",
-    "render-build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install",
+    "build": "npm --prefix client install --include=dev && npm --prefix client run build && npm --prefix server install",
+    "render-build": "npm --prefix client install --include=dev && npm --prefix client run build && npm --prefix server install",
     "build:client": "npm --prefix client install && npm --prefix client run build",
     "dev": "start \"AgriLink Server\" cmd /k \"npm --prefix server run dev\" & start \"AgriLink Client\" cmd /k \"npm --prefix client run dev\"",
     "server": "npm --prefix server run dev",
