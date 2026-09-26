@@ -1,0 +1,44 @@
+{
+  "short_name": "AgriLink",
+  "name": "AgriLink | Farm-to-Table Ecosystem",
+  "description": "Direct farm marketplace, smart cultivation suite, and live GPS delivery tracking.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#071a1d",
+  "theme_color": "#071a1d",
+  "categories": ["shopping", "business", "food", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Browse Marketplace",
+      "short_name": "Marketplace",
+      "description": "Order fresh organic fruits and vegetables directly from farmers",
+      "url": "/?role=customer",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Farmer Harvest Suite",
+      "short_name": "Farmer",
+      "description": "Manage farm inventory, market prices, and buyer orders",
+      "url": "/?role=farmer",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Delivery GPS Radar",
+      "short_name": "Delivery",
+      "description": "Live GPS dispatch tracking and doorstep delivery",
+      "url": "/?role=delivery",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "96x96" }]
+    }
+  ]
+}

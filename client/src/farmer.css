@@ -1,0 +1,469 @@
+/* ==========================================================================
+   AGRISMART FARMER DASHBOARD & CULTIVATION SUITE STYLES (GLASSMORPHISM)
+   ========================================================================== */
+
+.farmer-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: #061714;
+  color: #e2f1ea;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  position: relative;
+}
+
+/* Left Sidebar - Frosted Glass Pane */
+.farmer-sidebar {
+  width: 250px;
+  min-width: 250px;
+  background: rgba(7, 24, 21, 0.65);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px 14px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: 100vh;
+  box-sizing: border-box;
+  z-index: 50;
+  overflow-y: auto;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+}
+
+.farmer-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.farmer-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.farmer-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px 18px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 16px;
+}
+
+.farmer-brand-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.9) 0%, rgba(5, 150, 105, 0.95) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.farmer-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+
+.farmer-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #9cb5aa;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  width: 100%;
+}
+
+.farmer-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #effbe7;
+  transform: translateX(3px);
+}
+
+.farmer-nav-item.active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.85) 0%, rgba(5, 150, 105, 0.95) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+
+.farmer-nav-badge {
+  margin-left: auto;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  font-weight: 700;
+  backdrop-filter: blur(6px);
+}
+
+.farmer-sidebar-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+/* Main Content Area - Ambient Aurora Mesh */
+.farmer-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-left: 250px;
+  width: calc(100% - 250px);
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(16, 185, 129, 0.16), transparent 38%),
+    radial-gradient(circle at 90% 18%, rgba(245, 158, 11, 0.12), transparent 35%),
+    radial-gradient(circle at 50% 80%, rgba(14, 165, 233, 0.12), transparent 45%),
+    #071916;
+}
+
+/* Top Header - Glass Bar */
+.farmer-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(7, 24, 21, 0.65);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.farmer-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 24px;
+  padding: 8px 18px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.farmer-search-box:focus-within {
+  border-color: rgba(52, 211, 153, 0.6);
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.25), inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.farmer-search-box input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #effbe7;
+  font-size: 13.5px;
+  width: 100%;
+}
+
+.farmer-search-box input::placeholder {
+  color: #79958a;
+}
+
+.farmer-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-top: 1px solid rgba(255, 255, 255, 0.32);
+  padding: 5px 14px 5px 6px;
+  border-radius: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.farmer-user-chip:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(52, 211, 153, 0.4);
+  transform: translateY(-1px);
+}
+
+.farmer-avatar-circle {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #047857);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+}
+
+/* Hero Welcome Banner - Looky Attractive Glassmorphism */
+.farmer-hero-banner {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(34, 197, 94, 0.14) 35%, rgba(6, 40, 30, 0.65) 100%);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.35);
+  color: #effbe7;
+  border-radius: 24px;
+  padding: 32px 36px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.55), inset 0 1.5px 2px rgba(255, 255, 255, 0.35);
+  margin-bottom: 26px;
+}
+
+.farmer-hero-banner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.03) 40%, transparent 65%);
+  pointer-events: none;
+}
+
+.farmer-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #6ee7b7;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 5px 14px;
+  border-radius: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  margin-bottom: 12px;
+}
+
+.farmer-stage-toggle-bar {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 5px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  gap: 6px;
+}
+
+.farmer-stage-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #9cb5aa;
+  background: transparent;
+}
+
+.farmer-stage-btn.active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.9) 0%, rgba(5, 150, 105, 0.95) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+}
+
+/* Dynamic Cloud & Weather Box */
+.dynamic-cloud-box {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 16px 20px;
+  transition: all 0.5s ease;
+  color: #ffffff;
+}
+
+.weather-sunny {
+  background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 40%, #0284c7 70%, #d97706 100%);
+}
+
+.weather-rainy {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+}
+
+.weather-cloudy {
+  background: linear-gradient(135deg, #134e4a 0%, #115e59 50%, #475569 100%);
+}
+
+.weather-stormy {
+  background: linear-gradient(135deg, #09090b 0%, #18181b 40%, #3b0764 100%);
+}
+
+.weather-mist {
+  background: linear-gradient(135deg, #1e293b 0%, #475569 60%, #64748b 100%);
+}
+
+@keyframes cloudDrift {
+  0% { transform: translateX(-12px); }
+  50% { transform: translateX(18px); }
+  100% { transform: translateX(-12px); }
+}
+
+.animate-cloud-drift {
+  animation: cloudDrift 7s ease-in-out infinite;
+}
+
+@keyframes rainFall {
+  0% { transform: translateY(-10px); opacity: 1; }
+  100% { transform: translateY(30px); opacity: 0.2; }
+}
+
+.raindrop-item {
+  display: inline-block;
+  width: 2.5px;
+  height: 12px;
+  background: #60a5fa;
+  border-radius: 2px;
+  animation: rainFall 0.7s linear infinite;
+}
+
+@keyframes sunPulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 12px #f59e0b); }
+  50% { transform: scale(1.1); filter: drop-shadow(0 0 28px #fbbf24); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 12px #f59e0b); }
+}
+
+.animate-sun-pulse {
+  animation: sunPulse 3.5s ease-in-out infinite;
+}
+
+@keyframes lightningFlash {
+  0%, 90%, 100% { opacity: 0; }
+  92%, 96% { opacity: 1; filter: drop-shadow(0 0 20px #e0e7ff); }
+}
+
+.animate-lightning {
+  animation: lightningFlash 4s ease-in-out infinite;
+}
+
+/* Plant Disease AI Scanner Line */
+@keyframes laserScan {
+  0% { top: 0%; opacity: 0.8; }
+  50% { top: 92%; opacity: 1; }
+  100% { top: 0%; opacity: 0.8; }
+}
+
+.scanner-laser-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #10b981;
+  box-shadow: 0 0 14px #10b981, 0 0 28px #34d399;
+  animation: laserScan 2.4s ease-in-out infinite;
+  z-index: 5;
+}
+
+/* Progress bar */
+.farmer-progress-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  position: relative;
+}
+
+.farmer-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 960px) {
+  .farmer-layout {
+    flex-direction: column;
+  }
+  .farmer-sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    position: relative;
+    top: auto;
+    left: auto;
+    bottom: auto;
+  }
+  .farmer-main {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* Farmer Portal Select Dropdowns - High Contrast Dark Theme for Ultra-Clear Letters */
+.farmer-layout select,
+.farmer-location-select {
+  color-scheme: dark !important;
+}
+
+.farmer-layout select option,
+.farmer-location-select option {
+  background-color: #08241b !important;
+  color: #f8fafc !important;
+  font-size: 13px !important;
+  padding: 8px 12px !important;
+}
+
+.farmer-layout select optgroup,
+.farmer-location-select optgroup {
+  background-color: #041610 !important;
+  color: #34d399 !important;
+  font-weight: 800 !important;
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+}
+
