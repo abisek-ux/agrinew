@@ -5,8 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server/server.js",
-    "build": "npm --prefix client install --include=dev && npm --prefix client run build && npm --prefix server install",
-    "render-build": "npm --prefix client install --include=dev && npm --prefix client run build && npm --prefix server install",
+    "build": "npm install --prefix server && npm --prefix client install --include=dev && npm --prefix client run build",
+    "render-build": "npm install --prefix server && npm --prefix client install --include=dev && npm --prefix client run build",
     "build:client": "npm --prefix client install && npm --prefix client run build",
     "dev": "start \"AgriLink Server\" cmd /k \"npm --prefix server run dev\" & start \"AgriLink Client\" cmd /k \"npm --prefix client run dev\"",
     "server": "npm --prefix server run dev",
@@ -14,6 +14,7 @@
     "seed": "npm --prefix server run seed"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -23,7 +24,10 @@
     "lucide-react": "^1.43.0",
     "mongoose": "^8.3.1",
     "morgan": "^1.10.0",
-    "three": "^0.185.1"
+    "nodemailer": "^10.0.3",
+    "socket.io": "^4.7.5",
+    "three": "^0.185.1",
+    "twilio": "^6.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
