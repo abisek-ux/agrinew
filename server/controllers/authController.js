@@ -299,15 +299,17 @@ const forgotPassword = async (req, res) => {
     // Deliver OTP to registered Email ID
     if (targetEmail) {
       try {
-        await sendEmail({
+        const emailResult = await sendEmail({
           to: targetEmail,
           subject: '🔐 AgriLink Password Reset Verification Code',
           otp,
           firstName: user.firstName,
           type: 'reset'
         });
-        emailSent = true;
-        console.log(`✅ [EMAIL SENT] Password reset OTP delivered to ${targetEmail}`);
+        emailSent = Boolean(emailResult?.isRealDelivered);
+        if (emailSent) {
+          console.log(`✅ [EMAIL SENT] Password reset OTP delivered to ${targetEmail}`);
+        }
       } catch (emailErr) {
         emailErrorMsg = emailErr.message;
         console.warn(`⚠️ [EMAIL DISPATCH NOTE] ${emailErr.message}`);

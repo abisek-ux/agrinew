@@ -9,6 +9,12 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
   let transporter;
   let isRealSmtp = false;
 
+  const timeoutOptions = {
+    connectionTimeout: 4000, // 4s max to establish connection
+    greetingTimeout: 4000,   // 4s max for greeting
+    socketTimeout: 5000      // 5s max for socket activity
+  };
+
   // Support both EMAIL_PASS and EMAIL_PASSWORD environment variable names and strip spaces (Google App Passwords)
   const rawPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || '';
   const cleanPass = rawPass.replace(/\s+/g, '');
@@ -22,6 +28,7 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
         host: process.env.EMAIL_HOST,
         port: parseInt(process.env.EMAIL_PORT || '587', 10),
         secure: process.env.EMAIL_SECURE === 'true',
+        ...timeoutOptions,
         auth: {
           user: emailUser,
           pass: cleanPass
@@ -34,6 +41,7 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
       // Standard Gmail Configuration
       transporter = nodemailer.createTransport({
         service: 'gmail',
+        ...timeoutOptions,
         auth: {
           user: emailUser,
           pass: cleanPass
@@ -41,17 +49,7 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
       });
     }
   } else {
-    console.log('⚠️ No EMAIL_USER/EMAIL_PASS configured in .env. Creating test email transporter...');
-    const testAccount = await nodemailer.createTestAccount();
-    transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: {
-        user: testAccount.user,
-        pass: testAccount.pass
-      }
-    });
+    console.log('ℹ️ No EMAIL_USER/EMAIL_PASS configured in environment. Using instant verification code simulation.');
   }
 
   const senderEmail = process.env.EMAIL_FROM || emailUser || 'noreply@agrilink.io';
@@ -120,59 +118,43 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
     </html>
   `;
 
-  let info;
+  let info = null;
   let isRealDelivered = false;
 
-  try {
-    info = await transporter.sendMail({
-      from: `"${senderName}" <${senderEmail}>`,
-      to,
-      subject,
-      text: `Your AgriLink OTP verification code is: ${otp}. It expires in 10 minutes.`,
-      html: htmlContent
-    });
-    isRealDelivered = isRealSmtp;
-    console.log(`📧 [EMAIL DELIVERED] Successfully sent to: ${to} (MessageId: ${info.messageId})`);
-  } catch (err) {
-    if (err.code === 'EAUTH') {
-      console.warn(`\n⚠️ [Gmail SMTP Auth Notice] Gmail rejected credentials for ${emailUser}.`);
-      console.warn(`👉 To send real emails via Gmail, Google requires a 16-character App Password without spaces.`);
-      console.warn(`👉 Generate one at: https://myaccount.google.com/apppasswords and set EMAIL_PASSWORD=xxxx xxxx xxxx xxxx in server/.env\n`);
-    } else {
-      console.warn(`⚠️ [Email Transporter Warning]: ${err.message}`);
-    }
-
-    // Fallback via Ethereal test transporter
+  if (transporter) {
     try {
-      const fallbackAccount = await nodemailer.createTestAccount();
-      const fallbackTransporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: fallbackAccount.user,
-          pass: fallbackAccount.pass
-        }
-      });
-      info = await fallbackTransporter.sendMail({
-        from: `"${senderName}" <noreply@agrilink.io>`,
-        to,
-        subject,
-        text: `Your AgriLink OTP verification code is: ${otp}. It expires in 10 minutes.`,
-        html: htmlContent
-      });
-    } catch (fallbackErr) {
-      throw err;
+      // Strict 5-second max race so cloud environments (e.g. Render) never hang on blocked SMTP ports
+      info = await Promise.race([
+        transporter.sendMail({
+          from: `"${senderName}" <${senderEmail}>`,
+          to,
+          subject,
+          text: `Your AgriLink OTP verification code is: ${otp}. It expires in 10 minutes.`,
+          html: htmlContent
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('SMTP network timeout (cloud hosting limitation). Instant code verification active.')), 5000)
+        )
+      ]);
+      isRealDelivered = isRealSmtp;
+      console.log(`📧 [EMAIL DELIVERED] Successfully sent to: ${to} (MessageId: ${info?.messageId})`);
+    } catch (err) {
+      if (err.code === 'EAUTH') {
+        console.warn(`⚠️ [Gmail SMTP Auth Notice] Gmail rejected credentials for ${emailUser}. Fallback code active.`);
+      } else {
+        console.warn(`⚠️ [Email Dispatch Note]: ${err.message}`);
+      }
+      isRealDelivered = false;
     }
   }
 
-  const previewUrl = nodemailer.getTestMessageUrl(info);
+  const previewUrl = info ? nodemailer.getTestMessageUrl(info) : null;
   if (previewUrl) {
     console.log(`📧 Test Email preview URL: ${previewUrl}`);
   }
 
   return {
-    messageId: info?.messageId,
+    messageId: info?.messageId || 'simulated_otp',
     previewUrl,
     isRealDelivered
   };
