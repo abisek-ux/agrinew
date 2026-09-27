@@ -36,3 +36,5 @@ services:
         sync: false
       - key: EMAIL_PASSWORD
         sync: false
+      - key: RESEND_API_KEY
+        sync: false

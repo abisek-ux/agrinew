@@ -114,9 +114,48 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
 
   let info = null;
   let isRealDelivered = false;
-
   let sendError = null;
 
+  // 1. Resend HTTPS API (Port 443 - Bypasses cloud egress firewall blocks)
+  const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
+  if (resendApiKey) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || 'AgriLink <onboarding@resend.dev>',
+          to: [to],
+          subject: subject,
+          html: htmlContent,
+          text: `Your AgriLink OTP verification code is: ${otp}. It expires in 10 minutes.`
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.id) {
+        console.log(`📧 [RESEND HTTPS DELIVERED] Successfully sent to: ${to} (MessageId: ${data.id})`);
+        return {
+          messageId: data.id,
+          previewUrl: null,
+          isRealDelivered: true,
+          error: null
+        };
+      } else {
+        const errorDetail = data.message || JSON.stringify(data);
+        console.warn(`⚠️ [Resend API Error]: ${errorDetail}`);
+        sendError = `Resend delivery failed: ${errorDetail}`;
+      }
+    } catch (resendErr) {
+      console.warn(`⚠️ [Resend Dispatch Exception]: ${resendErr.message}`);
+      sendError = resendErr.message;
+    }
+  }
+
+  // 2. Fallback to Direct SMTP (Port 465 SSL)
   if (transporter) {
     try {
       info = await transporter.sendMail({
