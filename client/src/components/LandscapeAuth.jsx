@@ -228,7 +228,6 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
   const [deliveryChannel, setDeliveryChannel] = useState('email');
   const [resendAvailableIn, setResendAvailableIn] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [debugOtp, setDebugOtp] = useState('');
 
   // Registration Email OTP Verification States
   const [emailOtp, setEmailOtp] = useState('');
@@ -389,12 +388,8 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
       if (res.data.success) {
         setOtpSent(true);
         setOtpCooldown(60);
-        if (res.data.debugOtp) {
-          setEmailOtp(res.data.debugOtp);
-          showToast(`OTP Code: ${res.data.debugOtp} (auto-filled)`, 'info');
-        } else {
-          showToast(`Verification OTP sent to ${email.trim()}! Please check your email inbox.`, 'success');
-        }
+        setEmailOtp('');
+        showToast(res.data.message || `Verification OTP sent to ${email.trim()}! Please check your email inbox.`, 'success');
       }
     } catch (err) {
       const msg = err.response?.data?.message || 'Could not send verification OTP';
@@ -485,18 +480,11 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
       const res = await authAPI.forgotPassword({ identifier: identifier.trim() });
       if (res.data.success) {
         const emailMask = res.data.maskedEmail || '';
-        const phoneMask = res.data.maskedPhone || '';
         setMaskedEmail(emailMask);
-        setMaskedPhone(phoneMask);
-        setDeliveryChannel(res.data.deliveryChannel || 'email');
+        setDeliveryChannel('email');
         setResendAvailableIn(res.data.resendAvailableInSeconds || 0);
-        if (res.data.debugOtp) {
-          setDebugOtp(res.data.debugOtp);
-          setResetToken(res.data.debugOtp);
-          showToast(`Verification code: ${res.data.debugOtp} (auto-filled)`, 'info');
-        } else {
-          showToast(`Verification code sent to ${emailMask || 'your email'}!`, 'success');
-        }
+        setResetToken('');
+        showToast(res.data.message || `Verification code sent to your email (${emailMask})! Please check your inbox.`, 'success');
         setForgotStep(2);
       }
     } catch (err) {
@@ -538,7 +526,6 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
         setResetToken('');
         setNewPassword('');
         setMaskedPhone('');
-        setDebugOtp('');
       }
     } catch (err) {
       showToast(err.response?.data?.message || 'Password reset failed', 'error');
@@ -605,6 +592,9 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
             </div>
 
             <div className="la-form-wrap">
+              <div className="la-mobile-brand">
+                <AgriLinkLogo size="sm" showText={true} showBadge={true} interactive={false} />
+              </div>
               <div className="la-form-header">
                 <div className="la-form-icon">
                   {mode === 'login' && <Sprout size={22} />}
@@ -1127,48 +1117,21 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
                         <span>OTP sent to <strong>{maskedEmail || identifier}</strong> by Email.</span>
                       </div>
 
-                      {debugOtp && (
-                        <div style={{
-                          background: 'rgba(244, 201, 93, 0.15)',
-                          border: '1px solid rgba(244, 201, 93, 0.4)',
-                          borderRadius: '10px',
-                          padding: '12px 14px',
-                          marginBottom: '16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '10px'
-                        }}>
-                          <div>
-                            <div style={{ fontSize: '12px', fontWeight: '700', color: '#f4c95d' }}>
-                              🔑 Verification Code: <span style={{ fontFamily: 'monospace', fontSize: '14px', color: '#effbe7', letterSpacing: '1.5px' }}>{debugOtp}</span>
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#9db5aa', marginTop: '2px' }}>
-                              Verification code generated. Code auto-filled for instant testing.
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setResetToken(debugOtp);
-                              showToast('OTP code filled!', 'success');
-                            }}
-                            style={{
-                              background: '#f4c95d',
-                              color: '#071a1d',
-                              border: 'none',
-                              borderRadius: '6px',
-                              padding: '6px 12px',
-                              fontSize: '11px',
-                              fontWeight: '800',
-                              cursor: 'pointer',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            Fill OTP
-                          </button>
+                      <div style={{
+                        background: 'rgba(34, 197, 94, 0.12)',
+                        border: '1px solid rgba(74, 222, 128, 0.3)',
+                        borderRadius: '12px',
+                        padding: '12px 14px',
+                        marginBottom: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                      }}>
+                        <Mail size={18} color="#4ade80" style={{ flexShrink: 0 }} />
+                        <div style={{ fontSize: '12px', color: '#c8e6c9', lineHeight: '1.4' }}>
+                          We have sent a 6-digit verification code to <strong>{maskedEmail || identifier}</strong>. Please check your email inbox and enter the code below.
                         </div>
-                      )}
+                      </div>
 
                       <div className="la-field">
                         <div className="la-label-row">

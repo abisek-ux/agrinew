@@ -746,7 +746,8 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: center;
   padding: 24px 16px;
   isolation: isolate;
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Dark vignette overlay */
@@ -2186,9 +2187,125 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 12px 26px rgba(30, 160, 64, 0.24);
 }
 
-@media (max-width: 960px) {
-  .la-card { grid-template-columns: 1fr; }
-  .la-left { min-height: 430px; border-right: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.2); }
+/* Mobile and Tablet presentation for Auth page */
+.la-mobile-brand {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .la-stage {
+    padding: 16px 12px;
+    align-items: flex-start;
+  }
+  .la-card-wrap {
+    width: 100%;
+    max-width: 440px;
+    margin: 12px auto;
+  }
+  .la-card {
+    grid-template-columns: 1fr !important;
+    min-height: auto !important;
+    border-radius: 22px !important;
+    background: rgba(9, 28, 16, 0.72) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+  }
+  .la-left {
+    display: none !important;
+  }
+  .la-mobile-brand {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .la-right {
+    border-radius: 22px !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+    background: transparent !important;
+  }
+  .la-form-wrap {
+    padding: 24px 20px !important;
+  }
+  .la-form-title {
+    font-size: 21px !important;
+  }
+  .la-form-sub {
+    font-size: 12px !important;
+  }
+  .la-grid-2 {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .nature-3d-world > .farmer-scene {
+    display: none !important;
+  }
+}
+
+@media (max-width: 440px) {
+  .la-stage {
+    padding: 10px 8px;
+  }
+  .la-form-wrap {
+    padding: 20px 14px !important;
+  }
+  .la-input-wrap {
+    border-radius: 12px !important;
+  }
+  .la-input-wrap input {
+    font-size: 14.5px !important;
+  }
+  .la-submit {
+    padding: 13px !important;
+    font-size: 14.5px !important;
+  }
+}
+
+/* Responsive Navbar Styles */
+.nav-pill-telemetry {
+  display: flex !important;
+  align-items: center;
+}
+.nav-center-showcase {
+  display: flex !important;
+  align-items: center;
+}
+
+@media (max-width: 990px) {
+  .nav-pill-telemetry {
+    display: none !important;
+  }
+  .nav-center-showcase {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-nav-header {
+    padding: 0 8px !important;
+    top: 6px !important;
+  }
+  .app-nav-bar {
+    padding: 8px 12px !important;
+    border-radius: 16px !important;
+  }
+  .nav-user-meta-detail {
+    display: none !important;
+  }
+  .nav-install-btn span {
+    display: none !important;
+  }
+  .nav-install-btn {
+    padding: 6px 8px !important;
+    border-radius: 10px !important;
+  }
+  .nav-logout-btn span {
+    display: none !important;
+  }
+  .nav-logout-btn {
+    padding: 6px 9px !important;
+    border-radius: 10px !important;
+  }
 }
 
 /* ─── LANDING PORTAL SELECTOR PANEL ─── */

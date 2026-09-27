@@ -96,26 +96,34 @@ const sendRegisterOtp = async (req, res) => {
       if (emailSent) {
         console.log(`✅ [REGISTRATION OTP SENT] Real email dispatched to ${cleanEmail}`);
       } else {
-        console.log(`ℹ️ [REGISTRATION OTP SIMULATION] Test code created for ${cleanEmail}: ${otp}`);
+        emailErrorMsg = emailResult?.error || 'Email dispatch failed';
+        console.warn(`⚠️ [REGISTRATION OTP EMAIL FAILED]: ${emailErrorMsg}`);
       }
     } catch (err) {
       emailErrorMsg = err.message;
-      console.warn(`⚠️ [REGISTRATION OTP EMAIL NOTE]: ${err.message}`);
+      console.warn(`⚠️ [REGISTRATION OTP EMAIL ERROR]: ${err.message}`);
+    }
+
+    if (!emailSent) {
+      registrationOtps.delete(cleanEmail);
+      return res.status(500).json({
+        success: false,
+        message: emailErrorMsg
+          ? `Could not send verification email: ${emailErrorMsg}`
+          : `Could not send verification code to ${cleanEmail}. Please check your email address and try again.`
+      });
     }
 
     console.log(`\n======================================================`);
-    console.log(`🔑 [REGISTRATION EMAIL OTP] Verification code for ${cleanEmail}: ${otp}`);
+    console.log(`🔑 [REGISTRATION EMAIL OTP] Verification code dispatched to ${cleanEmail}`);
     console.log(`======================================================\n`);
 
     return res.json({
       success: true,
-      emailSent,
+      emailSent: true,
       maskedEmail: maskEmail(cleanEmail),
       expiresInSeconds: 600,
-      debugOtp: !emailSent ? otp : undefined,
-      message: emailSent
-        ? `Verification code sent to ${cleanEmail}`
-        : (emailErrorMsg || 'Code generated for testing.')
+      message: `Verification code sent to your email (${cleanEmail}). Please check your inbox.`
     });
   } catch (error) {
     console.error('Send registration OTP error:', error.message);
@@ -295,29 +303,44 @@ const forgotPassword = async (req, res) => {
     let emailSent = false;
     let emailErrorMsg = null;
     const targetEmail = user.email || (identifier.includes('@') ? identifier.trim().toLowerCase() : null);
+    if (!targetEmail) {
+      return res.status(400).json({ message: 'No registered email found for this account. Please provide your registered email address to receive the verification OTP.' });
+    }
 
-    // Deliver OTP to registered Email ID
-    if (targetEmail) {
-      try {
-        const emailResult = await sendEmail({
-          to: targetEmail,
-          subject: '🔐 AgriLink Password Reset Verification Code',
-          otp,
-          firstName: user.firstName,
-          type: 'reset'
-        });
-        emailSent = Boolean(emailResult?.isRealDelivered);
-        if (emailSent) {
-          console.log(`✅ [EMAIL SENT] Password reset OTP delivered to ${targetEmail}`);
-        }
-      } catch (emailErr) {
-        emailErrorMsg = emailErr.message;
-        console.warn(`⚠️ [EMAIL DISPATCH NOTE] ${emailErr.message}`);
+    // Deliver OTP strictly to registered Email ID (never mobile phone / SMS)
+    try {
+      const emailResult = await sendEmail({
+        to: targetEmail,
+        subject: '🔐 AgriLink Password Reset Verification Code',
+        otp,
+        firstName: user.firstName,
+        type: 'reset'
+      });
+      emailSent = Boolean(emailResult?.isRealDelivered);
+      if (emailSent) {
+        console.log(`✅ [EMAIL SENT] Password reset OTP delivered to ${targetEmail}`);
+      } else {
+        emailErrorMsg = emailResult?.error || 'Email dispatch failed';
+        console.warn(`⚠️ [EMAIL DISPATCH FAILED]: ${emailErrorMsg}`);
       }
+    } catch (emailErr) {
+      emailErrorMsg = emailErr.message;
+      console.warn(`⚠️ [EMAIL DISPATCH NOTE] ${emailErr.message}`);
+    }
+
+    const maskedMail = maskEmail(targetEmail);
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: emailErrorMsg
+          ? `Could not send password reset email: ${emailErrorMsg}`
+          : `Could not send verification code to your registered email (${maskedMail}). Please check your connection and try again.`
+      });
     }
 
     console.log(`\n======================================================`);
-    console.log(`🔑 [PASSWORD RESET OTP] Verification code for ${targetEmail || user.phone}: ${otp}`);
+    console.log(`🔑 [PASSWORD RESET OTP] Dispatched to email: ${targetEmail}`);
     console.log(`======================================================\n`);
 
     user.resetOtpHash = hashOtp(otp);
@@ -328,20 +351,15 @@ const forgotPassword = async (req, res) => {
     user.resetOtpRequestCount = requestCount + 1;
     await persistUser(user);
 
-    const maskedMail = maskEmail(targetEmail || user.email);
-    const maskedPh = maskPhone(user.phone);
-
     return res.json({
       success: true,
-      deliveryChannel: targetEmail ? 'email' : 'sms',
+      deliveryChannel: 'email',
       maskedEmail: maskedMail,
-      maskedPhone: maskedPh,
-      targetDestination: maskedMail || maskedPh,
+      targetDestination: maskedMail,
       expiresInSeconds: OTP_TTL_MINUTES * 60,
       resendAvailableInSeconds: RESEND_COOLDOWN_SECONDS,
-      emailSent,
-      debugOtp: !emailSent ? otp : undefined,
-      note: emailSent ? `OTP sent to ${maskedMail} by Email` : (emailErrorMsg || 'Code auto-filled for instant testing.')
+      emailSent: true,
+      message: `Verification code sent to your email (${maskedMail}). Please check your inbox.`
     });
   } catch (error) { console.error('Password-reset request failed:', error.message); return res.status(500).json({ message: 'Unable to process reset request. Please try again later.' }); }
 };

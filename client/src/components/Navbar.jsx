@@ -68,7 +68,7 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
   };
 
   return (
-    <header style={{
+    <header className="app-nav-header" style={{
       position: 'sticky',
       top: '12px',
       zIndex: 100,
@@ -76,19 +76,20 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
       padding: '0 20px',
       pointerEvents: 'none'
     }}>
-      <nav style={{
+      <nav className="app-nav-bar" style={{
         maxWidth: '1360px',
         margin: '0 auto',
         pointerEvents: 'auto',
-        background: 'rgba(6, 24, 21, 0.82)',
+        background: 'rgba(6, 24, 21, 0.88)',
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
         border: '1px solid rgba(74, 222, 128, 0.28)',
         borderRadius: '22px',
-        padding: '12px 24px',
+        padding: '10px 20px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: '12px',
         boxShadow: '0 12px 40px rgba(0, 0, 0, 0.55), 0 0 25px rgba(74, 222, 128, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.15)',
         transition: 'all 0.3s ease'
       }}>
@@ -98,16 +99,17 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
             display: 'flex',
             alignItems: 'center',
             cursor: !user && onResetPortal ? 'pointer' : 'default',
-            userSelect: 'none'
+            userSelect: 'none',
+            flexShrink: 0
           }}
           onClick={!user && onResetPortal ? onResetPortal : undefined}
           title={!user && onResetPortal ? 'Click to switch portal variant' : undefined}
         >
-          <AgriLinkLogo size="md" showText={true} showBadge={true} interactive={true} />
+          <AgriLinkLogo size="md" showText={true} showBadge={false} interactive={true} />
         </div>
 
         {/* Center: Interactive Portal / State Indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="nav-center-showcase" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {user ? (
             <div style={{
               display: 'inline-flex',
@@ -190,9 +192,9 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
         </div>
 
         {/* Right Section: System Telemetry & Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {/* Cloud Database Pill */}
-          <div style={{
+          <div className="nav-pill-telemetry" style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
@@ -209,7 +211,7 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
           </div>
 
           {/* OTP Security Pill */}
-          <div style={{
+          <div className="nav-pill-telemetry" style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
@@ -222,13 +224,14 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
             border: '1px solid rgba(74, 222, 128, 0.35)'
           }}>
             <ShieldCheck size={14} color="#4ade80" />
-            <span>2FA OTP Active</span>
+            <span>Email OTP Active</span>
           </div>
 
           {/* PWA Mobile Install */}
           {!isStandalone && (
             <button
               onClick={handleInstallClick}
+              className="nav-install-btn"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -253,7 +256,7 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
 
           {/* User Profile / Logout */}
           {user ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
                   {user.firstName} {user.lastName}
@@ -262,12 +265,13 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
                   <span style={{ fontSize: '9.5px', padding: '1px 6px', borderRadius: '6px', background: 'rgba(74, 222, 128, 0.2)', color: '#86efac', fontWeight: '800' }}>
                     {user.role?.toUpperCase()}
                   </span>
-                  <span>• {user.email || user.phone}</span>
+                  <span className="nav-user-meta-detail">• {user.email || user.phone}</span>
                 </div>
               </div>
 
               <button
                 onClick={handleLogout}
+                className="nav-logout-btn"
                 style={{
                   backgroundColor: 'rgba(239, 68, 68, 0.18)',
                   color: '#fca5a5',

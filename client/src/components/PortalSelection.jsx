@@ -227,7 +227,7 @@ function Portal3DCard({ portal, isHovered, onHover, onSelect }) {
           border: `1.5px solid ${isHovered ? portal.borderGlow : 'rgba(255, 255, 255, 0.22)'}`,
           borderTop: `1.5px solid ${isHovered ? portal.borderGlow : 'rgba(255, 255, 255, 0.5)'}`,
           borderLeft: `1.5px solid ${isHovered ? portal.borderGlow : 'rgba(255, 255, 255, 0.35)'}`,
-          padding: '34px 28px',
+          padding: 'clamp(20px, 4vw, 34px) clamp(16px, 3.5vw, 28px)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -777,7 +777,7 @@ export default function PortalSelection({ onSelectRole }) {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '40px 20px',
+        padding: 'clamp(24px, 4vw, 40px) clamp(12px, 3vw, 20px)',
         backgroundColor: 'transparent',
         isolation: 'isolate'
       }}
@@ -945,12 +945,12 @@ export default function PortalSelection({ onSelectRole }) {
         {/* Main Heading */}
         <h1
           style={{
-            fontSize: 'clamp(34px, 5.2vw, 54px)',
+            fontSize: 'clamp(26px, 5.2vw, 54px)',
             fontWeight: '900',
-            letterSpacing: '-1.5px',
+            letterSpacing: '-1px',
             color: '#effbe7',
             textAlign: 'center',
-            margin: '0 0 14px 0',
+            margin: '0 0 12px 0',
             textShadow: '0 4px 24px rgba(0, 0, 0, 0.8), 0 0 20px rgba(74, 222, 128, 0.2)'
           }}
         >
@@ -959,11 +959,11 @@ export default function PortalSelection({ onSelectRole }) {
 
         <p
           style={{
-            fontSize: '16.5px',
+            fontSize: 'clamp(13.5px, 2.4vw, 16.5px)',
             color: '#d1fae5',
             maxWidth: '740px',
             textAlign: 'center',
-            margin: '0 auto 44px auto',
+            margin: '0 auto clamp(24px, 4vw, 44px) auto',
             lineHeight: '1.65',
             textShadow: '0 2px 10px rgba(0,0,0,0.6)'
           }}
@@ -975,8 +975,8 @@ export default function PortalSelection({ onSelectRole }) {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-            gap: '30px',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 310px), 1fr))',
+            gap: 'clamp(18px, 3vw, 30px)',
             width: '100%',
             marginBottom: '36px'
           }}

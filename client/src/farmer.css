@@ -424,7 +424,7 @@
   transition: width 0.4s ease;
 }
 
-/* Responsive adjustments */
+/* Responsive adjustments for Tablets and Mobile Phones */
 @media (max-width: 960px) {
   .farmer-layout {
     flex-direction: column;
@@ -433,14 +433,74 @@
     width: 100%;
     min-width: 100%;
     height: auto;
-    position: relative;
-    top: auto;
-    left: auto;
-    bottom: auto;
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding: 8px 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    background: rgba(7, 24, 21, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .farmer-brand {
+    display: none;
+  }
+  .farmer-nav-list {
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    gap: 8px;
+    padding: 4px 2px 6px 2px;
+  }
+  .farmer-nav-list::-webkit-scrollbar {
+    height: 3px;
+  }
+  .farmer-nav-item {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 7px 13px;
+    font-size: 12px;
+    border-radius: 18px;
+    gap: 6px;
+  }
+  .farmer-sidebar-footer {
+    display: none;
   }
   .farmer-main {
     margin-left: 0;
     width: 100%;
+    min-height: auto;
+    padding: 10px 8px;
+  }
+  .farmer-topbar {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+    position: relative;
+    top: 0;
+  }
+  .farmer-search-box {
+    max-width: 100%;
+    order: 2;
+    padding: 6px 14px;
+  }
+}
+
+@media (max-width: 600px) {
+  .farmer-topbar {
+    padding: 8px 10px;
+  }
+  .farmer-search-box {
+    font-size: 12px;
+  }
+  .farmer-user-chip {
+    padding: 4px 10px 4px 4px;
+  }
+  .farmer-user-chip span {
+    font-size: 12px;
   }
 }
 

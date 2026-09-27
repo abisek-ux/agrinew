@@ -10,9 +10,9 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
   let isRealSmtp = false;
 
   const timeoutOptions = {
-    connectionTimeout: 4000, // 4s max to establish connection
-    greetingTimeout: 4000,   // 4s max for greeting
-    socketTimeout: 5000      // 5s max for socket activity
+    connectionTimeout: 15000, // 15s max to establish connection
+    greetingTimeout: 15000,   // 15s max for greeting
+    socketTimeout: 20000      // 20s max for socket activity
   };
 
   // Support both EMAIL_PASS and EMAIL_PASSWORD environment variable names and strip spaces (Google App Passwords)
@@ -23,33 +23,24 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
 
   if (hasCredentials) {
     isRealSmtp = true;
-    if (process.env.EMAIL_HOST && process.env.EMAIL_HOST !== 'smtp.gmail.com') {
-      transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: parseInt(process.env.EMAIL_PORT || '587', 10),
-        secure: process.env.EMAIL_SECURE === 'true',
-        ...timeoutOptions,
-        auth: {
-          user: emailUser,
-          pass: cleanPass
-        },
-        tls: {
-          rejectUnauthorized: false
-        }
-      });
-    } else {
-      // Standard Gmail Configuration
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        ...timeoutOptions,
-        auth: {
-          user: emailUser,
-          pass: cleanPass
-        }
-      });
-    }
+    const emailPort = parseInt(process.env.EMAIL_PORT || '465', 10);
+    const isSecure = emailPort === 465 || process.env.EMAIL_SECURE === 'true';
+
+    transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: emailPort,
+      secure: isSecure,
+      ...timeoutOptions,
+      auth: {
+        user: emailUser,
+        pass: cleanPass
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
   } else {
-    console.log('ℹ️ No EMAIL_USER/EMAIL_PASS configured in environment. Using instant verification code simulation.');
+    console.warn('⚠️ No EMAIL_USER/EMAIL_PASS configured in environment.');
   }
 
   const senderEmail = process.env.EMAIL_FROM || emailUser || 'noreply@agrilink.io';
@@ -121,9 +112,10 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
   let info = null;
   let isRealDelivered = false;
 
+  let sendError = null;
+
   if (transporter) {
     try {
-      // Strict 5-second max race so cloud environments (e.g. Render) never hang on blocked SMTP ports
       info = await Promise.race([
         transporter.sendMail({
           from: `"${senderName}" <${senderEmail}>`,
@@ -133,19 +125,22 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
           html: htmlContent
         }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('SMTP network timeout (cloud hosting limitation). Instant code verification active.')), 5000)
+          setTimeout(() => reject(new Error('SMTP connection timed out after 20 seconds. Please check your network connection.')), 20000)
         )
       ]);
-      isRealDelivered = isRealSmtp;
+      isRealDelivered = Boolean(info?.messageId);
       console.log(`📧 [EMAIL DELIVERED] Successfully sent to: ${to} (MessageId: ${info?.messageId})`);
     } catch (err) {
+      sendError = err.message;
       if (err.code === 'EAUTH') {
-        console.warn(`⚠️ [Gmail SMTP Auth Notice] Gmail rejected credentials for ${emailUser}. Fallback code active.`);
+        console.warn(`⚠️ [Gmail SMTP Auth Notice] Gmail rejected credentials for ${emailUser}.`);
       } else {
         console.warn(`⚠️ [Email Dispatch Note]: ${err.message}`);
       }
       isRealDelivered = false;
     }
+  } else {
+    sendError = 'Email service is not configured on the server.';
   }
 
   const previewUrl = info ? nodemailer.getTestMessageUrl(info) : null;
@@ -154,9 +149,10 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
   }
 
   return {
-    messageId: info?.messageId || 'simulated_otp',
+    messageId: info?.messageId || null,
     previewUrl,
-    isRealDelivered
+    isRealDelivered,
+    error: sendError
   };
 }
 
