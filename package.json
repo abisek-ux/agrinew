@@ -1,5 +1,5 @@
 {
-  "name": "agrinexus-server",
+  "name": "agrilink-app",
   "version": "1.0.0",
   "description": "Express Backend for Farm-to-Table MERN App",
   "main": "server.js",

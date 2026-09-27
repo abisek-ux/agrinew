@@ -79,20 +79,27 @@ Render hosts both the **React Frontend** and **Node.js Express Backend** togethe
    - **Instance Type**: `Free`
 
 5. **Set Environment Variables**:
-   Under **Environment Variables**, add:
-   | Key | Value | Notes |
-   |-----|-------|-------|
+   Under **Environment Variables** in Render, add the variables from your `server/.env` file:
+   | Key | Recommended Value / Source | Description |
+   |---|---|---|
    | `NODE_ENV` | `production` | Enables production optimizations |
    | `PORT` | `10000` | Render standard port |
-   | `KEEP_ALIVE` | `true` | Prevents free tier from sleeping |
-   | `JWT_SECRET` | `your_secret_key_here` | Any long random string |
-   | `RESET_OTP_PEPPER` | `your_otp_pepper_key` | Any long random string |
-   | `CLIENT_ORIGIN` | `*` | Permits CORS from all mobile devices |
-   | `MONGODB_URI` | `mongodb+srv://...` | *(Optional: MongoDB Atlas connection string; if left blank, in-memory store is used)* |
-   | `SMS_PROVIDER` | `twilio` | *(Optional)* |
-   | `TWILIO_ACCOUNT_SID` | `your_twilio_sid` | *(Optional)* |
-   | `TWILIO_AUTH_TOKEN` | `your_twilio_token` | *(Optional)* |
-   | `TWILIO_FROM_NUMBER` | `your_twilio_number` | *(Optional)* |
+   | `KEEP_ALIVE` | `true` | Prevents Render free tier from sleeping |
+   | `JWT_SECRET` | *(from your server/.env)* | Secret key for JWT sessions |
+   | `RESET_OTP_PEPPER` | *(from your server/.env)* | Secret key for OTP hashing |
+   | `CLIENT_ORIGIN` | `*` | Permits requests from any origin / mobile app |
+   | `MONGODB_URI` | *(from your server/.env)* | Your MongoDB Atlas connection string |
+   | `GOOGLE_SCRIPT_URL` | *(from your server/.env)* | Free email webhook (Port 443 HTTPS) |
+   | `EMAIL_HOST` | `smtp.gmail.com` | SMTP host |
+   | `EMAIL_PORT` | `465` | SSL port |
+   | `EMAIL_SECURE` | `true` | SSL enabled |
+   | `EMAIL_USER` | *(from your server/.env)* | Sender Gmail address |
+   | `EMAIL_PASSWORD` | *(from your server/.env)* | Gmail App Password |
+   | `RESEND_API_KEY` | *(from your server/.env)* | Backup email API |
+   | `SMS_PROVIDER` | `twilio` | SMS provider |
+   | `TWILIO_ACCOUNT_SID` | *(from your server/.env)* | Twilio Account SID |
+   | `TWILIO_AUTH_TOKEN` | *(from your server/.env)* | Twilio Auth Token |
+   | `TWILIO_FROM_NUMBER` | *(from your server/.env)* | Twilio Phone Number |
 
 6. **Click "Deploy Web Service"**:
    - Once deployment finishes, your website and mobile PWA will be live at:

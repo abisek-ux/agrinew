@@ -46,7 +46,27 @@ const clearOtp = (user) => {
   user.resetOtpExpiresAt = null;
   user.resetOtpAttempts = 0;
 };
-const persistUser = async (user) => { if (isConnected()) await user.save(); else saveMemoryUsers(); };
+const persistUser = async (user) => {
+  if (isConnected()) {
+    try {
+      await user.save();
+    } catch (saveErr) {
+      console.warn('⚠️ user.save() notice, applying direct updateOne:', saveErr.message);
+      const updateData = {
+        resetOtpHash: user.resetOtpHash,
+        resetOtpExpiresAt: user.resetOtpExpiresAt,
+        resetOtpAttempts: user.resetOtpAttempts,
+        resetOtpLastSentAt: user.resetOtpLastSentAt,
+        resetOtpRequestWindowStartedAt: user.resetOtpRequestWindowStartedAt,
+        resetOtpRequestCount: user.resetOtpRequestCount,
+        password: user.password
+      };
+      await User.updateOne({ _id: user._id }, { $set: updateData });
+    }
+  } else {
+    saveMemoryUsers();
+  }
+};
 const lookupUser = async (identifier) => {
   const clean = identifier.trim().toLowerCase();
   const cleanPhone = normalizePhone(identifier);
@@ -361,7 +381,12 @@ const forgotPassword = async (req, res) => {
       emailSent: true,
       message: `Verification code sent to your email (${maskedMail}). Please check your inbox.`
     });
-  } catch (error) { console.error('Password-reset request failed:', error.message); return res.status(500).json({ message: 'Unable to process reset request. Please try again later.' }); }
+  } catch (error) {
+    console.error('Password-reset request failed:', error);
+    return res.status(500).json({
+      message: error.message || 'Unable to process reset request. Please try again later.'
+    });
+  }
 };
 
 const resetPassword = async (req, res) => {

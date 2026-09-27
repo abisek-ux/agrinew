@@ -55,7 +55,7 @@ app.use('/api/notifications', notificationRoutes);
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
-    app: 'AgriNexus MERN Stack Portal',
+    app: 'AgriLink Farm-to-Table MERN Portal',
     db: getDBStatus()
   });
 });
