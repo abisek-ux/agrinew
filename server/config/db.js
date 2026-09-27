@@ -9,6 +9,7 @@ const connectDB = async () => {
 
   try {
     const conn = await mongoose.connect(uri, {
+      dbName: 'agrinexus',
       serverSelectionTimeoutMS: 10000
     });
     isConnectedToMongo = true;
