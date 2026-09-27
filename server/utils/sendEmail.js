@@ -10,9 +10,9 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
   let isRealSmtp = false;
 
   const timeoutOptions = {
-    connectionTimeout: 15000, // 15s max to establish connection
-    greetingTimeout: 15000,   // 15s max for greeting
-    socketTimeout: 20000      // 20s max for socket activity
+    connectionTimeout: 5000, // 5s max to establish connection
+    greetingTimeout: 5000,   // 5s max for greeting
+    socketTimeout: 8000      // 8s max for socket activity
   };
 
   const DEFAULT_EMAIL_USER = 'mgowres@gmail.com';
@@ -156,7 +156,50 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
     }
   }
 
-  // 2. Resend HTTPS API (Port 443 - Testing sandbox)
+  // 2. Brevo (Sendinblue) HTTPS API (Port 443 - Sends to ANY email in the world with no domain restrictions)
+  const brevoApiKey = (process.env.BREVO_API_KEY || '').trim();
+  if (brevoApiKey) {
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoApiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: {
+            name: senderName,
+            email: process.env.BREVO_SENDER || emailUser || 'support@agrilink.io'
+          },
+          to: [{ email: to, name: firstName || 'Valued Member' }],
+          subject: subject,
+          htmlContent: htmlContent,
+          textContent: `Your AgriLink OTP verification code is: ${otp}. It expires in 10 minutes.`
+        })
+      });
+
+      const bData = await response.json();
+      if (response.ok && (bData.messageId || bData.messageIds)) {
+        console.log(`📧 [BREVO HTTPS DELIVERED] Successfully sent to: ${to} (MessageId: ${bData.messageId || bData.messageIds?.[0]})`);
+        return {
+          messageId: bData.messageId || bData.messageIds?.[0],
+          previewUrl: null,
+          isRealDelivered: true,
+          error: null
+        };
+      } else {
+        const bErr = bData.message || JSON.stringify(bData);
+        console.warn(`⚠️ [Brevo API Error]: ${bErr}`);
+        sendError = bErr;
+      }
+    } catch (brevoErr) {
+      console.warn(`⚠️ [Brevo Dispatch Exception]: ${brevoErr.message}`);
+      sendError = brevoErr.message;
+    }
+  }
+
+  // 3. Resend HTTPS API (Port 443 - Testing sandbox)
   const FALLBACK_RESEND_KEY = Buffer.from('cmVfTEU2OW51U3VfQkNINVBka2p4SHZkV3BDQjdMV0tQWThk', 'base64').toString('utf8');
   const resendApiKey = (process.env.RESEND_API_KEY || FALLBACK_RESEND_KEY).trim();
   if (resendApiKey) {
