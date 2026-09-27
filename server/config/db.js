@@ -2,15 +2,14 @@ const mongoose = require('mongoose');
 
 let isConnectedToMongo = false;
 
+const DEFAULT_MONGODB_URI = 'mongodb+srv://mgowres_db_user:ABISEK%402008@cluster0.r31p3y1.mongodb.net/?retryWrites=true&w=majority';
+
 const connectDB = async () => {
-  if (!process.env.MONGODB_URI) {
-    console.warn('MongoDB URI not configured. Using the in-memory database fallback.');
-    return false;
-  }
+  const uri = process.env.MONGODB_URI || DEFAULT_MONGODB_URI;
 
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 4000
+    const conn = await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 10000
     });
     isConnectedToMongo = true;
     console.log(`MongoDB Connected: ${conn.connection.host}`);

@@ -15,10 +15,13 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
     socketTimeout: 20000      // 20s max for socket activity
   };
 
+  const DEFAULT_EMAIL_USER = 'mgowres@gmail.com';
+  const DEFAULT_EMAIL_PASS = 'jbxe dlnp mazj rfzs';
+
   // Support both EMAIL_PASS and EMAIL_PASSWORD environment variable names and strip spaces (Google App Passwords)
-  const rawPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || '';
+  const rawPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || DEFAULT_EMAIL_PASS;
   const cleanPass = rawPass.replace(/\s+/g, '');
-  const emailUser = (process.env.EMAIL_USER || '').trim();
+  const emailUser = (process.env.EMAIL_USER || DEFAULT_EMAIL_USER).trim();
   const hasCredentials = Boolean(emailUser && cleanPass);
 
   if (hasCredentials) {
@@ -116,18 +119,13 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
 
   if (transporter) {
     try {
-      info = await Promise.race([
-        transporter.sendMail({
-          from: `"${senderName}" <${senderEmail}>`,
-          to,
-          subject,
-          text: `Your AgriLink OTP verification code is: ${otp}. It expires in 10 minutes.`,
-          html: htmlContent
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('SMTP connection timed out after 20 seconds. Please check your network connection.')), 20000)
-        )
-      ]);
+      info = await transporter.sendMail({
+        from: `"${senderName}" <${senderEmail}>`,
+        to,
+        subject,
+        text: `Your AgriLink OTP verification code is: ${otp}. It expires in 10 minutes.`,
+        html: htmlContent
+      });
       isRealDelivered = Boolean(info?.messageId);
       console.log(`📧 [EMAIL DELIVERED] Successfully sent to: ${to} (MessageId: ${info?.messageId})`);
     } catch (err) {
