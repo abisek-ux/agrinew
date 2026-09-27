@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const dns = require('dns');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
