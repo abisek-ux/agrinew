@@ -454,21 +454,21 @@ function FarmerVideoTheaterModal({ isOpen, onClose, onSelectRole }) {
     {
       title: 'Harvesting & Field Work',
       desc: 'Real footage of organic farmers harvesting crops at dawn with sustainable methods.',
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-farmer-walking-through-a-crop-field-42999-large.mp4',
+      src: '/videos/cam-greenhouse.mp4',
       duration: '4K Ultra HD',
       farmer: 'Ramesh Patel, Punjab Organic Collective'
     },
     {
       title: 'Golden Wheat Quality Check',
       desc: 'Inspecting pure ripe wheat ears before direct customer packaging.',
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-farmer-holding-ripe-wheat-ears-43001-large.mp4',
+      src: '/videos/cam-orchard.mp4',
       duration: '1080p HD',
       farmer: 'Gurdeep Singh, Certified Grain Specialist'
     },
     {
       title: 'Lush Agricultural Valley',
       desc: 'Aerial view of chemical-free bio-fields connected directly to AgriLink delivery routes.',
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-green-agricultural-fields-43003-large.mp4',
+      src: '/videos/cam-polyhouse.mp4',
       duration: 'Drone 4K',
       farmer: 'Southern Plateau Cooperative, Karnataka'
     }

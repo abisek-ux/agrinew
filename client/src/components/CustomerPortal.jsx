@@ -811,7 +811,7 @@ function LiveFarmCamModal({ isOpen, onClose }) {
       temp: '23.8°C',
       humidity: '64%',
       lux: '46,500 Lux',
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-green-agricultural-fields-43003-large.mp4',
+      src: '/videos/cam-polyhouse.mp4',
       status: 'Irrigation Drip Active • Certified Pure'
     },
     {
@@ -820,7 +820,7 @@ function LiveFarmCamModal({ isOpen, onClose }) {
       temp: '25.1°C',
       humidity: '58%',
       lux: '52,000 Lux',
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-farmer-walking-through-a-crop-field-42999-large.mp4',
+      src: '/videos/cam-greenhouse.mp4',
       status: 'Harvesting Batch #12 for Customer Dispatch'
     },
     {
@@ -829,7 +829,7 @@ function LiveFarmCamModal({ isOpen, onClose }) {
       temp: '18.4°C',
       humidity: '72%',
       lux: '38,000 Lux',
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-farmer-holding-ripe-wheat-ears-43001-large.mp4',
+      src: '/videos/cam-orchard.mp4',
       status: 'Natural Sunlight Maturation'
     }
   ];
