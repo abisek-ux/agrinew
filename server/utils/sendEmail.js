@@ -33,6 +33,7 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
       host: process.env.EMAIL_HOST || 'smtp.gmail.com',
       port: emailPort,
       secure: isSecure,
+      family: 4, // Explicitly enforce IPv4 to prevent IPv6 ENETUNREACH in containers
       ...timeoutOptions,
       auth: {
         user: emailUser,

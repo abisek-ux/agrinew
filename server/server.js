@@ -4,6 +4,12 @@ const morgan = require('morgan');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
+const dns = require('dns');
+
+// Prioritize IPv4 addresses so cloud containers don't route to unreachable IPv6 interfaces
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, '.env') });
