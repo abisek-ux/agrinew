@@ -64,11 +64,26 @@ const clientDist = clientDistCandidates.find(p => fs.existsSync(p));
 
 if (clientDist) {
   console.log(`📁 Serving client static assets from: ${clientDist}`);
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (filePath.includes('assets')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
+
+  // Never return index.html for missing static assets
+  app.use('/assets', (req, res) => {
+    res.status(404).type('text/plain').send('Asset not found');
+  });
+
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) {
       return next();
     }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
