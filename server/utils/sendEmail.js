@@ -117,7 +117,46 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
   let isRealDelivered = false;
   let sendError = null;
 
-  // 1. Resend HTTPS API (Port 443 - Bypasses cloud egress firewall blocks)
+  // 1. Google Apps Script Webhook (Port 443 HTTPS - Sends directly from Gmail to ANY email in the world with no domain restrictions)
+  const googleScriptUrl = (process.env.GOOGLE_SCRIPT_URL || '').trim();
+  if (googleScriptUrl) {
+    try {
+      const response = await fetch(googleScriptUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: to,
+          subject: subject,
+          html: htmlContent,
+          text: `Your AgriLink OTP verification code is: ${otp}. It expires in 10 minutes.`
+        })
+      });
+
+      const resText = await response.text();
+      let resJson = {};
+      try { resJson = JSON.parse(resText); } catch (e) {}
+
+      if (response.ok && resJson.success !== false) {
+        console.log(`📧 [GOOGLE APPS SCRIPT DELIVERED] Successfully sent to: ${to}`);
+        return {
+          messageId: resJson.id || `gas_${Date.now()}`,
+          previewUrl: null,
+          isRealDelivered: true,
+          error: null
+        };
+      } else {
+        const gasErr = resJson.error || resText || 'Google Script delivery error';
+        console.warn(`⚠️ [Google Script Warning]: ${gasErr}`);
+        sendError = gasErr;
+      }
+    } catch (gasErr) {
+      console.warn(`⚠️ [Google Script Exception]: ${gasErr.message}`);
+      sendError = gasErr.message;
+    }
+  }
+
+  // 2. Resend HTTPS API (Port 443 - Testing sandbox)
   const FALLBACK_RESEND_KEY = Buffer.from('cmVfTEU2OW51U3VfQkNINVBka2p4SHZkV3BDQjdMV0tQWThk', 'base64').toString('utf8');
   const resendApiKey = (process.env.RESEND_API_KEY || FALLBACK_RESEND_KEY).trim();
   if (resendApiKey) {

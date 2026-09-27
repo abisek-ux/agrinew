@@ -38,3 +38,5 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      - key: GOOGLE_SCRIPT_URL
+        sync: false
