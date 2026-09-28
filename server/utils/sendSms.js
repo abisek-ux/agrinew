@@ -14,8 +14,14 @@ const sendSms = async ({ to, body }) => {
     throw new Error('SMS provider credentials are missing in .env');
   }
 
-  // Ensure 'to' number starts with '+' for international E.164 format
-  const formattedTo = to.toString().trim().startsWith('+') ? to : `+${to}`;
+  // Ensure 'to' number is valid E.164 international format (defaulting to +91 for 10-digit Indian numbers)
+  let cleaned = to.toString().trim().replace(/[\s\-()]/g, '');
+  if (/^\d{10}$/.test(cleaned)) {
+    cleaned = `+91${cleaned}`;
+  } else if (!cleaned.startsWith('+')) {
+    cleaned = `+${cleaned}`;
+  }
+  const formattedTo = cleaned;
 
   const credentials = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
 

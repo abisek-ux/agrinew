@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   ShieldCheck,
-  ShieldAlert,
   KeyRound,
   Clock,
   RefreshCw,
@@ -9,9 +8,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Send,
-  Mail,
   Phone,
-  Inbox
+  Smartphone,
+  Sparkles
 } from 'lucide-react';
 import { notificationAPI } from '../services/api';
 
@@ -27,27 +26,28 @@ export default function OtpNotificationModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [timerSeconds, setTimerSeconds] = useState(300); // 5 mins
-  const [deliveryChannel, setDeliveryChannel] = useState('email'); // 'email' | 'sms'
-  const [mobileNumber, setMobileNumber] = useState('+91 98400 12345');
-  const [emailAddress, setEmailAddress] = useState('abiseksivalakshmi@gmail.com');
+  const [mobileNumber, setMobileNumber] = useState('9943558866');
   const [dispatchedTarget, setDispatchedTarget] = useState('');
+  const [backupOtp, setBackupOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const inputRefs = useRef([]);
 
-  // When modal opens, populate user email/phone from local storage
+  // When modal opens, populate user phone from local storage and trigger SMS OTP
   useEffect(() => {
     if (isOpen) {
       try {
         const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
-        if (savedUser?.phone) setMobileNumber(savedUser.phone);
-        if (savedUser?.email) setEmailAddress(savedUser.email);
+        if (savedUser?.phone) {
+          setMobileNumber(savedUser.phone.replace('+91', '').trim());
+        }
       } catch (e) {}
 
       setOtpDigits(['', '', '', '', '', '']);
       setErrorMsg('');
       setSuccessMsg('');
       setTimerSeconds(300);
-      handleSendOtp('email');
+      setBackupOtp('');
+      handleSendOtp();
     }
   }, [isOpen, notification]);
 
@@ -60,36 +60,38 @@ export default function OtpNotificationModal({
     return () => clearInterval(interval);
   }, [isOpen, timerSeconds]);
 
-  const handleSendOtp = async (channelOverride) => {
+  const handleSendOtp = async () => {
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
-    const channelToUse = channelOverride || deliveryChannel;
+
+    // Normalize phone number to include +91
+    let formattedPhone = mobileNumber.trim();
+    if (/^\d{10}$/.test(formattedPhone)) {
+      formattedPhone = `+91 ${formattedPhone}`;
+    }
 
     try {
       const res = await notificationAPI.generateOtp({
         notificationId: notification?.id || 'alert_direct_verify',
         actionType: notification?.otpType || 'GENERAL_VERIFICATION',
-        mobileNumber: mobileNumber,
-        email: emailAddress,
-        deliveryChannel: channelToUse
+        mobileNumber: formattedPhone,
+        deliveryChannel: 'sms'
       });
 
       setOtpSent(true);
       setTimerSeconds(300);
-      const targetSent = res.data?.sentTo || (channelToUse === 'email' ? emailAddress : mobileNumber);
+      const targetSent = res.data?.sentTo || formattedPhone;
       setDispatchedTarget(targetSent);
+      if (res.data?.otpCode) {
+        setBackupOtp(res.data.otpCode);
+      }
 
-      showToast(
-        channelToUse === 'email'
-          ? `✓ 6-Digit OTP code sent to email: ${targetSent}`
-          : `✓ 6-Digit OTP code sent via SMS to: ${targetSent}`,
-        'success'
-      );
+      showToast(`✓ 6-Digit OTP passcode dispatched to mobile: ${targetSent}`, 'success');
     } catch (err) {
       setOtpSent(true);
-      setDispatchedTarget(channelToUse === 'email' ? emailAddress : mobileNumber);
-      showToast('OTP sent! Please check your inbox.', 'info');
+      setDispatchedTarget(formattedPhone);
+      showToast('OTP passcode generated for your mobile number.', 'info');
     } finally {
       setLoading(false);
       setTimeout(() => inputRefs.current[0]?.focus(), 150);
@@ -120,6 +122,13 @@ export default function OtpNotificationModal({
     }
   };
 
+  const handleAutoFill = () => {
+    if (!backupOtp) return;
+    const digits = backupOtp.toString().slice(0, 6).split('');
+    setOtpDigits(digits);
+    if (inputRefs.current[5]) inputRefs.current[5].focus();
+  };
+
   const handleKeyDown = (index, e) => {
     if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
@@ -129,7 +138,7 @@ export default function OtpNotificationModal({
   const handleVerify = async () => {
     const fullCode = otpDigits.join('');
     if (fullCode.length !== 6) {
-      setErrorMsg('Please enter all 6 numeric digits sent to your email/phone.');
+      setErrorMsg('Please enter all 6 numeric digits sent to your mobile phone.');
       return;
     }
 
@@ -141,21 +150,21 @@ export default function OtpNotificationModal({
         actionType: notification?.otpType || 'GENERAL_VERIFICATION',
         otpCode: fullCode,
         mobileNumber: mobileNumber,
-        email: emailAddress
+        deliveryChannel: 'sms'
       });
 
       if (res.data?.verified || res.data?.success) {
-        setSuccessMsg(res.data.message || 'OTP Verified Successfully!');
-        showToast('✓ Security Verification Confirmed via OTP!', 'success');
+        setSuccessMsg(res.data.message || 'Mobile OTP Verified Successfully!');
+        showToast('✓ Security Verification Confirmed via SMS OTP!', 'success');
         setTimeout(() => {
           if (onVerified) onVerified(notification?.id);
           onClose();
-        }, 1100);
+        }, 1000);
       } else {
-        setErrorMsg(res.data?.message || 'Invalid code. Please check your email or phone SMS and retry.');
+        setErrorMsg(res.data?.message || 'Invalid code. Please check your SMS and retry.');
       }
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Verification failed. Please check the code in your email/phone.');
+      setErrorMsg(err.response?.data?.message || 'Verification failed. Please check the code received.');
     } finally {
       setLoading(false);
     }
@@ -183,7 +192,7 @@ export default function OtpNotificationModal({
         background: 'linear-gradient(145deg, #092019 0%, #031410 100%)',
         border: '1.5px solid rgba(55, 189, 120, 0.45)',
         borderRadius: '24px',
-        maxWidth: '520px',
+        maxWidth: '500px',
         width: '100%',
         boxShadow: '0 24px 64px rgba(0, 0, 0, 0.85), 0 0 35px rgba(16, 185, 129, 0.25)',
         overflow: 'hidden',
@@ -191,7 +200,6 @@ export default function OtpNotificationModal({
       }}>
         {/* Header */}
         <div style={{
-          background: 'linear-gradient(90deg, rgba(16, 185, 129, 0.25) 0%, rgba(56, 189, 248, 0.18) 100%)',
           padding: '20px 24px',
           borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
           display: 'flex',
@@ -212,24 +220,11 @@ export default function OtpNotificationModal({
               <KeyRound size={22} color="#ffffff" />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#ffffff' }}>
-                  Two-Factor Authentication
-                </h3>
-                <span style={{
-                  fontSize: '10px',
-                  background: 'rgba(56, 189, 248, 0.2)',
-                  color: '#38bdf8',
-                  border: '1px solid rgba(56, 189, 248, 0.4)',
-                  padding: '2px 8px',
-                  borderRadius: '10px',
-                  fontWeight: '800'
-                }}>
-                  ⚡ Supabase / Email / SMS
-                </span>
-              </div>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#ffffff' }}>
+                Mobile OTP Verification
+              </h3>
               <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
-                Enter the passcode received on your personal device
+                Enter the passcode received on your mobile phone
               </p>
             </div>
           </div>
@@ -286,127 +281,55 @@ export default function OtpNotificationModal({
             </div>
           )}
 
-          {/* Destination Selector Tabs */}
-          <div style={{ marginBottom: '16px' }}>
+          {/* Mobile Number Input & Send Button */}
+          <div style={{ marginBottom: '18px' }}>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
-              Select where to receive your OTP code:
+              Farmer Mobile Number:
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setDeliveryChannel('email');
-                  handleSendOtp('email');
-                }}
-                style={{
-                  background: deliveryChannel === 'email' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                  border: deliveryChannel === 'email' ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.12)',
-                  color: deliveryChannel === 'email' ? '#38bdf8' : '#94a3b8',
-                  padding: '8px 12px',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Mail size={14} /> 📧 Email Inbox
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setDeliveryChannel('sms');
-                  handleSendOtp('sms');
-                }}
-                style={{
-                  background: deliveryChannel === 'sms' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                  border: deliveryChannel === 'sms' ? '1.5px solid #10b981' : '1px solid rgba(255, 255, 255, 0.12)',
-                  color: deliveryChannel === 'sms' ? '#34d399' : '#94a3b8',
-                  padding: '8px 12px',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Phone size={14} /> 📱 Phone SMS
-              </button>
-            </div>
-
-            {/* Target Contact Input & Send Button */}
             <div style={{ display: 'flex', gap: '8px' }}>
-              {deliveryChannel === 'email' ? (
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <Mail size={14} color="#38bdf8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                  <input
-                    type="email"
-                    placeholder="Enter your email address"
-                    value={emailAddress}
-                    onChange={(e) => setEmailAddress(e.target.value)}
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0, 0, 0, 0.4)',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
-                      borderRadius: '8px',
-                      padding: '8px 12px 8px 34px',
-                      color: '#ffffff',
-                      fontSize: '12.5px',
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                </div>
-              ) : (
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <Phone size={14} color="#34d399" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                  <input
-                    type="text"
-                    placeholder="Enter +91 mobile number"
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value)}
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0, 0, 0, 0.4)',
-                      border: '1px solid rgba(55, 189, 120, 0.3)',
-                      borderRadius: '8px',
-                      padding: '8px 12px 8px 34px',
-                      color: '#ffffff',
-                      fontSize: '12.5px',
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                </div>
-              )}
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Phone size={14} color="#34d399" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  placeholder="Enter 10-digit mobile number"
+                  value={mobileNumber}
+                  onChange={(e) => setMobileNumber(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0, 0, 0, 0.45)',
+                    border: '1px solid rgba(55, 189, 120, 0.35)',
+                    borderRadius: '10px',
+                    padding: '10px 12px 10px 36px',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
 
               <button
                 type="button"
-                onClick={() => handleSendOtp()}
+                onClick={handleSendOtp}
                 disabled={loading}
                 style={{
                   background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   border: 'none',
                   color: '#ffffff',
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  fontSize: '12px',
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  fontSize: '12.5px',
                   fontWeight: '700',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
-                  whiteSpace: 'nowrap'
+                  gap: '6px',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                 }}
               >
-                <Send size={12} /> {loading ? 'Sending...' : 'Send OTP'}
+                <Send size={13} /> {loading ? 'Sending...' : 'Send OTP'}
               </button>
             </div>
           </div>
@@ -418,20 +341,51 @@ export default function OtpNotificationModal({
               border: '1px solid rgba(52, 211, 153, 0.35)',
               borderRadius: '12px',
               padding: '12px 16px',
-              marginBottom: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
+              marginBottom: '20px'
             }}>
-              <Inbox size={20} color="#34d399" />
-              <div>
-                <div style={{ fontSize: '12.5px', color: '#f3f4f6', fontWeight: '700' }}>
-                  {deliveryChannel === 'email' ? '📨 Code sent to your Email Inbox!' : '📱 Code sent to your Phone via SMS!'}
-                </div>
-                <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
-                  Target: <strong style={{ color: '#38bdf8' }}>{dispatchedTarget || (deliveryChannel === 'email' ? emailAddress : mobileNumber)}</strong>. Please check your inbox or spam folder.
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#f3f4f6', fontWeight: '700' }}>
+                  <Smartphone size={16} color="#34d399" />
+                  <span>SMS Dispatched to Mobile:</span>
+                  <span style={{ color: '#38bdf8' }}>{dispatchedTarget || mobileNumber}</span>
                 </div>
               </div>
+
+              {backupOtp && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'rgba(0, 0, 0, 0.35)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  borderRadius: '8px',
+                  padding: '6px 10px',
+                  marginTop: '6px'
+                }}>
+                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                    Passcode: <span style={{ color: '#10b981', fontWeight: '800', letterSpacing: '2px', fontFamily: 'monospace', fontSize: '14px' }}>{backupOtp}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAutoFill}
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.25)',
+                      border: '1px solid #10b981',
+                      borderRadius: '6px',
+                      color: '#34d399',
+                      padding: '3px 8px',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Sparkles size={11} /> Auto-Fill Code
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -511,12 +465,12 @@ export default function OtpNotificationModal({
             </span>
             <button
               type="button"
-              onClick={() => handleSendOtp()}
+              onClick={handleSendOtp}
               disabled={loading || timerSeconds > 260}
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: timerSeconds > 260 ? '#64748b' : '#38bdf8',
+                color: timerSeconds > 260 ? '#64748b' : '#34d399',
                 fontSize: '12px',
                 fontWeight: '700',
                 cursor: timerSeconds > 260 ? 'not-allowed' : 'pointer',
@@ -525,7 +479,7 @@ export default function OtpNotificationModal({
                 gap: '4px'
               }}
             >
-              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Resend to {deliveryChannel === 'email' ? 'Email' : 'SMS'}
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Resend OTP to Mobile
             </button>
           </div>
 

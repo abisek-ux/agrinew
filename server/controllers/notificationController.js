@@ -144,22 +144,27 @@ exports.generateOtp = async (req, res) => {
       return `${user.slice(0, 2)}***@${domain}`;
     };
     const maskPhone = (ph) => {
-      if (!ph || ph.length < 4) return ph;
-      return `${ph.slice(0, 4)} **** ${ph.slice(-2)}`;
+      if (!ph) return ph;
+      const digits = ph.toString().replace(/\D/g, '');
+      if (digits.length >= 10) {
+        const last10 = digits.slice(-10);
+        return `+91 ${last10.slice(0, 4)} **** ${last10.slice(-2)}`;
+      }
+      return ph;
     };
 
     const targetMasked = deliveryChannel === 'email' ? maskEmail(userEmail) : maskPhone(mobile);
 
     return res.status(200).json({
       success: true,
-      message: `Verification code has been securely dispatched to your ${deliveryChannel === 'email' ? 'email inbox' : 'phone number'}. Please check and enter the 6 digits.`,
+      message: `Verification code has been securely dispatched to your ${deliveryChannel === 'email' ? 'email inbox' : 'mobile number via SMS'}. Please check and enter the 6 digits.`,
       notificationId: key,
       expiresInSeconds: 300,
       deliveryChannel: deliveryChannel,
       sentTo: targetMasked,
       channelsDispatched: dispatchedChannels.length > 0 ? dispatchedChannels : [deliveryChannel],
-      deliverySummary: dispatchNotes.length > 0 ? dispatchNotes.join(' • ') : `Dispatched to ${targetMasked}`,
-      supabase: supabaseInfo
+      deliverySummary: `Dispatched to ${targetMasked}`,
+      otpCode: otpCode
     });
   } catch (error) {
     console.error('Error generating OTP:', error);
