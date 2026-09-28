@@ -50,6 +50,9 @@ const formatUserResponse = (user, token) => ({
   phone: user.phone,
   role: user.role,
   nativePlace: user.nativePlace,
+  farmName: user.farmName || '',
+  description: user.description || '',
+  isVerified: Boolean(user.isVerified),
   location: user.location,
   wishlist: user.wishlist || [],
   token
@@ -76,6 +79,8 @@ const persistUser = async (user) => {
         name: user.name,
         phone: user.phone,
         nativePlace: user.nativePlace,
+        farmName: user.farmName,
+        description: user.description,
         location: user.location,
         wishlist: user.wishlist,
         resetOtpHash: user.resetOtpHash,
@@ -625,7 +630,7 @@ const updateProfile = async (req, res) => {
       : findMemoryUserById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const { firstName, lastName, phone, nativePlace, location } = req.body;
+    const { firstName, lastName, phone, nativePlace, farmName, description, location } = req.body;
 
     // Prohibit privilege escalation and tamper attempts
     if (firstName !== undefined && typeof firstName === 'string') user.firstName = firstName.trim();
@@ -650,6 +655,12 @@ const updateProfile = async (req, res) => {
 
     if (nativePlace !== undefined && typeof nativePlace === 'string') {
       user.nativePlace = nativePlace.trim();
+    }
+    if (farmName !== undefined && typeof farmName === 'string') {
+      user.farmName = farmName.trim();
+    }
+    if (description !== undefined && typeof description === 'string') {
+      user.description = description.trim();
     }
 
     if (location && typeof location === 'object') {
@@ -682,7 +693,12 @@ const migrateMemoryPasswords = async () => {
   if (changed) saveMemoryUsers();
 };
 const seedMemoryUser = (userObj) => {
-  if (!memoryUsers.some((user) => user.email === userObj.email || user.phone === userObj.phone)) memoryUsers.push(userObj);
+  const idx = memoryUsers.findIndex((user) => user.email === userObj.email || user.phone === userObj.phone || String(user.id || user._id) === String(userObj.id || userObj._id));
+  if (idx !== -1) {
+    memoryUsers[idx] = { ...memoryUsers[idx], ...userObj };
+  } else {
+    memoryUsers.push(userObj);
+  }
 };
 
 module.exports = {

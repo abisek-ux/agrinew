@@ -182,6 +182,16 @@ const createOrder = async (req, res) => {
         category: 'order',
         priority: 'NORMAL'
       });
+
+      pushNotification({
+        recipientId: group.farmerId,
+        recipientRole: 'farmer',
+        orderId: orderPayload.orderId,
+        title: '🌾 New Customer Order Received',
+        message: `New order ${orderPayload.orderId} placed by ${customerName} for ${orderItems.map(i => `${i.title} (${i.quantity} ${i.unit || 'kg'})`).join(', ')}. Total: ₹${totalAmount}.`,
+        category: 'order',
+        priority: 'HIGH'
+      });
     }
 
     // Support single order backward compatibility and multi-order array response
@@ -302,7 +312,7 @@ const updateOrderStatus = async (req, res) => {
     const userId = String(req.user.id || req.user._id);
     const userRole = String(req.user.role || '').toLowerCase();
 
-    const validStatuses = ['pending', 'confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'arrived', 'delivered'];
+    const validStatuses = ['pending', 'confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'arrived', 'delivered', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: `Invalid status: ${status}` });
     }
@@ -330,11 +340,29 @@ const updateOrderStatus = async (req, res) => {
       if (String(order.farmerId) !== userId) {
         return res.status(403).json({ success: false, message: 'You are not authorized to update another farmer\'s order' });
       }
-      if (!['confirmed', 'accepted', 'packed'].includes(status)) {
+      if (!['confirmed', 'accepted', 'packed', 'cancelled'].includes(status)) {
         return res.status(403).json({
           success: false,
-          message: `Farmers can only transition orders to confirmed or packed (requested: ${status})`
+          message: `Farmers can only transition orders to confirmed, packed, or cancelled (requested: ${status})`
         });
+      }
+      if (status === 'cancelled') {
+        if (!['pending', 'confirmed', 'accepted'].includes(order.status)) {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot cancel order at stage "${order.status}". Only pending or confirmed orders can be cancelled.`
+          });
+        }
+        // Replenish stock for all items
+        for (const item of order.items || []) {
+          const prodId = item.productId || item.product;
+          if (prodId) {
+            const pDoc = await findProduct(prodId);
+            if (pDoc) {
+              await saveProductStock(pDoc, (Number(pDoc.stock) || 0) + Number(item.quantity));
+            }
+          }
+        }
       }
     } else if (userRole === 'delivery') {
       if (order.deliveryId && order.deliveryId !== 'Unassigned' && String(order.deliveryId) !== userId) {
@@ -378,6 +406,9 @@ const updateOrderStatus = async (req, res) => {
     } else if (status === 'arrived') {
       notifTitle = '📍 Delivery Partner Arrived';
       notifMsg = `Driver ${order.deliveryName || 'Courier'} has arrived at your address with order ${order.orderId || order._id || order.id}.`;
+    } else if (status === 'cancelled') {
+      notifTitle = '⚠️ Order Cancelled by Farmer';
+      notifMsg = `Your order ${order.orderId || order._id || order.id} has been cancelled by ${order.farmerName}. Reserved produce has been returned to inventory.`;
     }
     if (notifTitle) {
       pushNotification({
@@ -387,7 +418,7 @@ const updateOrderStatus = async (req, res) => {
         title: notifTitle,
         message: notifMsg,
         category: 'order',
-        priority: status === 'arrived' ? 'URGENT' : 'NORMAL'
+        priority: status === 'cancelled' || status === 'arrived' ? 'HIGH' : 'NORMAL'
       });
     }
 
@@ -446,6 +477,16 @@ const assignDeliveryDriver = async (req, res) => {
       orderId: order.orderId || order._id || order.id,
       title: '🚚 Delivery Courier Assigned',
       message: `Courier ${driverName} has been assigned to deliver order ${order.orderId || order._id || order.id}.`,
+      category: 'delivery',
+      priority: 'NORMAL'
+    });
+
+    pushNotification({
+      recipientId: order.farmerId,
+      recipientRole: 'farmer',
+      orderId: order.orderId || order._id || order.id,
+      title: '🚚 Courier Assigned for Pickup',
+      message: `Courier ${driverName} has been assigned to pick up order ${order.orderId || order._id || order.id} from your farm depot.`,
       category: 'delivery',
       priority: 'NORMAL'
     });
@@ -615,6 +656,16 @@ const verifyDeliveryOtp = async (req, res) => {
       orderId: order.orderId || order._id || order.id,
       title: '🎉 Order Delivered Successfully',
       message: `Order ${order.orderId || order._id || order.id} has been delivered and authenticated via OTP. Thank you for buying direct from farmers!`,
+      category: 'order',
+      priority: 'HIGH'
+    });
+
+    pushNotification({
+      recipientId: order.farmerId,
+      recipientRole: 'farmer',
+      orderId: order.orderId || order._id || order.id,
+      title: '🎉 Produce Delivered & Settlement Logged',
+      message: `Order ${order.orderId || order._id || order.id} has been authenticated with delivery OTP and delivered to ${order.customerName}. Total: ₹${order.totalAmount}.`,
       category: 'order',
       priority: 'HIGH'
     });

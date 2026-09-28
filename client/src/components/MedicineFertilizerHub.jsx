@@ -376,7 +376,7 @@ export default function MedicineFertilizerHub({
     if (onSelectMedicineForOrder) {
       onSelectMedicineForOrder(med);
     } else {
-      showToast(`Initiating OTP-verified order dispatch for ${med.name}`, 'info');
+      showToast(`[Reference Catalog Demo] Prescribed item: ${med.name}. Depot purchasing will be enabled upon agrochemical retailer onboarding.`, 'info');
     }
   };
 
@@ -412,29 +412,29 @@ export default function MedicineFertilizerHub({
             marginBottom: '10px'
           }}>
             <FlaskConical size={14} color="#34d399" />
-            <span>Kisan Agro-Pharmacy & Precision Nutrients</span>
+            <span>Curated Reference Catalog & Dosage Advisory</span>
           </div>
           <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#ffffff', margin: '0 0 6px 0' }}>
             Farmer Medicines & Fertilizers Center (இயற்கை & ரசாயன மருந்துகள்)
           </h1>
           <p style={{ fontSize: '13.5px', color: '#cbd5e1', maxWidth: '780px', margin: 0, lineHeight: '1.5' }}>
-            Explore verified <strong>Natural Bio-Formulations</strong> (Neem, Panchagavya, Jeevamrutham) and certified <strong>Synthetic Agrochemicals</strong> (Urea, DAP, Mancozeb, Confidor) with automated acre dosage calculations & OTP-secured ordering.
+            Reference library of <strong>Natural Bio-Formulations</strong> (Neem, Panchagavya, Jeevamrutham) and certified <strong>Synthetic Agrochemicals</strong> (Urea, DAP, Mancozeb, Confidor) with calibrated acre dosage calculations. (Static advisory catalog; direct pharmacy checkout will link to licensed regional dealers).
           </p>
         </div>
 
         {/* Feature Highlights Pills */}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(52,211,153,0.3)', borderRadius: '12px', padding: '10px 16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '18px', fontWeight: '800', color: '#34d399' }}>100% Verified</div>
-            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Govt TNAU Approved</div>
+            <div style={{ fontSize: '18px', fontWeight: '800', color: '#34d399' }}>Demo Catalog</div>
+            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Agronomic Guidelines</div>
           </div>
           <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(56,189,248,0.3)', borderRadius: '12px', padding: '10px 16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '18px', fontWeight: '800', color: '#38bdf8' }}>3D Ports</div>
-            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Real-time 360° View</div>
+            <div style={{ fontSize: '18px', fontWeight: '800', color: '#38bdf8' }}>3D Mesh</div>
+            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Interactive Canister</div>
           </div>
           <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '12px', padding: '10px 16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '18px', fontWeight: '800', color: '#f59e0b' }}>OTP Protected</div>
-            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Safe Chemical Release</div>
+            <div style={{ fontSize: '18px', fontWeight: '800', color: '#f59e0b' }}>Dosage Engine</div>
+            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Per-Acre Calculator</div>
           </div>
         </div>
       </div>

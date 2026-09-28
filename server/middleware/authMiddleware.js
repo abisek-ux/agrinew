@@ -15,8 +15,23 @@ const protect = async (req, res, next) => {
         const decoded = jwt.verify(token, secret);
 
         if (isConnected()) {
-          const user = await User.findById(decoded.id).select('-password');
+          let user = null;
+          try {
+            user = await User.findById(decoded.id).select('-password');
+          } catch (castErr) {
+            // Non-ObjectId string (e.g. seeded test user id)
+          }
           if (!user) {
+            const memUser = findMemoryUserById(decoded.id);
+            if (memUser) {
+              req.user = {
+                ...memUser,
+                id: memUser.id || memUser._id,
+                _id: memUser._id || memUser.id,
+                role: memUser.role
+              };
+              return next();
+            }
             return res.status(401).json({ message: 'Not authorized, user not found' });
           }
           req.user = user;
@@ -53,10 +68,18 @@ const optionalProtect = async (req, res, next) => {
       if (token && token !== 'undefined' && token !== 'null') {
         const decoded = jwt.verify(token, secret);
         if (isConnected()) {
-          const user = await User.findById(decoded.id).select('-password');
+          let user = null;
+          try {
+            user = await User.findById(decoded.id).select('-password');
+          } catch (castErr) {
+            // Non-ObjectId string
+          }
+          if (!user) {
+            user = findMemoryUserById(decoded.id);
+          }
           if (user) {
             req.user = user;
-            req.user.id = String(user._id);
+            req.user.id = String(user._id || user.id);
           }
         } else {
           const user = findMemoryUserById(decoded.id);

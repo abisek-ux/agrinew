@@ -497,7 +497,7 @@ export default function ThreeDPortViewer({
             borderRadius: '6px',
             fontWeight: '700'
           }}>
-            360° Real-Time
+            3D Simulation Mesh
           </span>
         </div>
 

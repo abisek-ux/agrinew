@@ -55,6 +55,9 @@ const userSchema = new mongoose.Schema(
       placeName: { type: String, default: 'Bengaluru, Karnataka' }
     },
     wishlist: [{ type: String }],
+    farmName: { type: String, default: '', trim: true },
+    description: { type: String, default: '', trim: true },
+    isVerified: { type: Boolean, default: false },
 
     // Password Reset & OTP Fields
     resetOtpHash: { type: String, default: null },

@@ -963,7 +963,7 @@ function DeliverySummonModal({ isOpen, onClose, onDriverConfirmed }) {
 }
 
 export default function FarmerPortal({ onLogout }) {
-  const { user, logout, showToast } = useAuth();
+  const { user, logout, showToast, updateUserProfile, updateUserLocation } = useAuth();
   const [farmerProducts, setFarmerProducts] = useState([]);
   const [incomingOrders, setIncomingOrders] = useState([]);
   
@@ -1287,9 +1287,22 @@ export default function FarmerPortal({ onLogout }) {
   const [editPrice, setEditPrice] = useState('');
   const [editStock, setEditStock] = useState('');
   const [editTitle, setEditTitle] = useState('');
-  const [editUnit, setEditUnit] = useState('');
+  const [editCategory, setEditCategory] = useState('vegetable');
+  const [editUnit, setEditUnit] = useState('kg');
   const [editDescription, setEditDescription] = useState('');
+  const [editImage, setEditImage] = useState('');
+  const [editHarvestDate, setEditHarvestDate] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Profile Edit State
+  const [profileFirstName, setProfileFirstName] = useState(user?.firstName || '');
+  const [profileLastName, setProfileLastName] = useState(user?.lastName || '');
+  const [profileFarmName, setProfileFarmName] = useState(user?.farmName || '');
+  const [profilePhone, setProfilePhone] = useState(user?.phone || '');
+  const [profileNativePlace, setProfileNativePlace] = useState(user?.nativePlace || '');
+  const [profileDescription, setProfileDescription] = useState(user?.description || '');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [showProfileMapPicker, setShowProfileMapPicker] = useState(false);
 
   const isFarmer = user?.role === 'farmer';
 
@@ -1298,6 +1311,7 @@ export default function FarmerPortal({ onLogout }) {
     detectCurrentGpsLocation(true);
     fetchFarmerProducts();
     fetchIncomingOrders();
+    fetchFarmerNotifications();
   }, []);
 
   useEffect(() => {
@@ -1481,9 +1495,21 @@ export default function FarmerPortal({ onLogout }) {
     }
   };
 
+  const fetchFarmerNotifications = async () => {
+    try {
+      const fId = user?._id || user?.id;
+      const res = await notificationAPI.getNotifications(fId ? { userId: fId, role: 'farmer' } : { role: 'farmer' });
+      if (res.data?.notifications) {
+        setNotificationsList(res.data.notifications);
+      }
+    } catch (err) {
+      console.warn('Notifications fetch note:', err.message);
+    }
+  };
+
   const handleRefreshAll = async () => {
     setRefreshing(true);
-    await Promise.all([fetchFarmerProducts(), fetchIncomingOrders()]);
+    await Promise.all([fetchFarmerProducts(), fetchIncomingOrders(), fetchFarmerNotifications()]);
     setRefreshing(false);
     showToast('Farmer dashboard synchronized with live marketplace', 'info');
   };
@@ -1553,24 +1579,38 @@ export default function FarmerPortal({ onLogout }) {
   const openEditModal = (prod) => {
     setEditingProduct(prod);
     setEditTitle(prod.title || '');
+    setEditCategory(prod.category || 'vegetable');
     setEditPrice(String(prod.price || ''));
     setEditUnit(prod.unit || 'kg');
     setEditStock(String(prod.stock || '0'));
     setEditDescription(prod.description || '');
+    setEditImage(prod.image || '');
+    setEditHarvestDate(prod.harvestDate ? new Date(prod.harvestDate).toISOString().split('T')[0] : '');
   };
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingProduct) return;
+    if (isNaN(Number(editPrice)) || Number(editPrice) < 0) {
+      showToast('Price must be a valid non-negative number', 'error');
+      return;
+    }
+    if (isNaN(Number(editStock)) || Number(editStock) < 0) {
+      showToast('Stock quantity cannot be negative', 'error');
+      return;
+    }
     setSavingEdit(true);
     try {
       const prodId = editingProduct._id || editingProduct.id;
       const payload = {
         title: editTitle.trim(),
+        category: editCategory,
         price: Number(editPrice),
         unit: editUnit.trim() || 'kg',
-        stock: Number(editStock) || 0,
-        description: editDescription.trim()
+        stock: Math.max(0, Number(editStock) || 0),
+        description: editDescription.trim(),
+        image: editImage || editingProduct.image,
+        harvestDate: editHarvestDate ? new Date(editHarvestDate) : undefined
       };
       const res = await productAPI.updateProduct(prodId, payload);
       setFarmerProducts(farmerProducts.map(p =>
@@ -1614,9 +1654,27 @@ export default function FarmerPortal({ onLogout }) {
       setIncomingOrders(incomingOrders.map(o =>
         (String(o._id || o.id) === String(orderId)) ? { ...o, status: newStatus } : o
       ));
-      showToast(`Order updated to ${newStatus.toUpperCase()}! Ready for delivery driver.`, 'success');
+      showToast(`Order status updated to ${newStatus.toUpperCase()}`, 'success');
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to update order status';
+      showToast(msg, 'error');
+    }
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    if (!isFarmer) return;
+    if (!window.confirm('Are you sure you want to reject / cancel this order? Reserved stock will automatically be returned to your inventory.')) {
+      return;
+    }
+    try {
+      await orderAPI.updateStatus(orderId, { status: 'cancelled' });
+      setIncomingOrders(incomingOrders.map(o =>
+        (String(o._id || o.id) === String(orderId)) ? { ...o, status: 'cancelled' } : o
+      ));
+      showToast('Order cancelled and reserved inventory replenished.', 'info');
+      fetchFarmerProducts(); // refresh products to show replenished inventory
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to cancel order';
       showToast(msg, 'error');
     }
   };
@@ -1629,10 +1687,66 @@ export default function FarmerPortal({ onLogout }) {
     }
   };
 
-  // Metrics
+  const handleSaveProfile = async (e) => {
+    if (e) e.preventDefault();
+    setSavingProfile(true);
+    try {
+      const payload = {
+        firstName: profileFirstName.trim(),
+        lastName: profileLastName.trim(),
+        farmName: profileFarmName.trim(),
+        phone: profilePhone.trim(),
+        nativePlace: profileNativePlace.trim(),
+        description: profileDescription.trim()
+      };
+      const res = await updateUserProfile(payload);
+      if (res && res.success) {
+        showToast('Farmer profile and farm bio updated successfully', 'success');
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to update profile', 'error');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleUpdateFarmGps = async (selectedLoc) => {
+    try {
+      const locPayload = {
+        lat: selectedLoc.lat,
+        lng: selectedLoc.lng,
+        address: selectedLoc.address || selectedLoc.placeName || 'Farm Gate Coordinates'
+      };
+      await updateUserLocation(locPayload);
+      setFarmLocation(locPayload);
+      setShowProfileMapPicker(false);
+      showToast('Farm GPS coordinates saved to registry!', 'success');
+    } catch (err) {
+      showToast('Failed to save farm GPS', 'error');
+    }
+  };
+
+  // Real Database Metrics & Analytics
   const totalStockUnits = farmerProducts.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
   const totalInventoryValuation = farmerProducts.reduce((sum, p) => sum + ((Number(p.price) || 0) * (Number(p.stock) || 0)), 0);
   const pendingOrdersCount = incomingOrders.filter(o => o.status === 'pending').length;
+  const confirmedOrdersCount = incomingOrders.filter(o => o.status === 'confirmed' || o.status === 'accepted').length;
+  const packedOrdersCount = incomingOrders.filter(o => o.status === 'packed').length;
+  const transitOrdersCount = incomingOrders.filter(o => ['assigned', 'driver_assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status)).length;
+  const completedOrdersCount = incomingOrders.filter(o => o.status === 'delivered').length;
+  const cancelledOrdersCount = incomingOrders.filter(o => o.status === 'cancelled').length;
+
+  const realDeliveredEarnings = incomingOrders
+    .filter(o => o.status === 'delivered')
+    .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+
+  const realPendingRevenue = incomingOrders
+    .filter(o => o.status !== 'delivered' && o.status !== 'cancelled')
+    .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+
+  const lowStockProducts = farmerProducts.filter(p => Number(p.stock) > 0 && Number(p.stock) <= 10);
+  const outOfStockProducts = farmerProducts.filter(p => Number(p.stock) <= 0);
+  const recentOrdersList = [...incomingOrders].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
 
   const farmerDisplayName = user?.firstName || 'Aravinth';
   const farmerCityName = user?.nativePlace || selectedCity || 'Chidambaram';
@@ -1939,22 +2053,57 @@ export default function FarmerPortal({ onLogout }) {
                   position: 'absolute',
                   top: '46px',
                   right: 0,
-                  width: '280px',
+                  width: '320px',
+                  maxHeight: '400px',
+                  overflowY: 'auto',
                   background: '#0d2823',
-                  border: '1px solid rgba(55, 189, 120, 0.3)',
-                  borderRadius: '12px',
-                  padding: '14px',
-                  boxShadow: '0 12px 28px rgba(0,0,0,0.5)',
+                  border: '1px solid rgba(55, 189, 120, 0.4)',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  boxShadow: '0 16px 36px rgba(0,0,0,0.6)',
                   zIndex: 60
                 }}>
-                  <div style={{ fontSize: '12px', fontWeight: '800', color: '#10b981', marginBottom: '10px' }}>
-                    FARMER ALERTS
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '800', color: '#10b981' }}>
+                      🌾 FARMER ALERTS & UPDATES
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                      {notificationsList.length} total
+                    </span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#e5e7eb', marginBottom: '8px' }}>
-                    🔔 {pendingOrdersCount} buyer order(s) awaiting your packaging.
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#9ca3af' }}>
-                    🌤️ Weather forecast: {weatherData.advisory}
+
+                  {notificationsList.length === 0 ? (
+                    <div style={{ padding: '16px 0', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
+                      No new farmer notifications.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {notificationsList.slice(0, 8).map((notif, idx) => (
+                        <div
+                          key={notif._id || notif.id || idx}
+                          style={{
+                            background: notif.isRead ? 'rgba(255,255,255,0.03)' : 'rgba(52, 211, 153, 0.12)',
+                            border: `1px solid ${notif.isRead ? 'rgba(255,255,255,0.06)' : 'rgba(52, 211, 153, 0.3)'}`,
+                            borderRadius: '10px',
+                            padding: '10px 12px'
+                          }}
+                        >
+                          <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#effbe7', marginBottom: '2px' }}>
+                            {notif.title}
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: '#c2dcd0', lineHeight: '1.4' }}>
+                            {notif.message}
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#7e9e8f', marginTop: '4px' }}>
+                            {notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '11px', color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>🌤️ Weather: {weatherData.advisory?.slice(0, 35)}...</span>
                   </div>
                 </div>
               )}
@@ -2115,7 +2264,7 @@ export default function FarmerPortal({ onLogout }) {
               </div>
             </div>
 
-            {/* 3 Metric Cards with Glassmorphism */}
+            {/* 3 Metric Cards with Glassmorphism (Real Database Data) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px', marginBottom: '28px' }}>
               <div
                 style={{
@@ -2138,14 +2287,20 @@ export default function FarmerPortal({ onLogout }) {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                   <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.1) 100%)', border: '1px solid rgba(52, 211, 153, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34d399', boxShadow: '0 0 18px rgba(16, 185, 129, 0.25)' }}>
-                    <Sprout size={24} />
+                    <Package size={24} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '22px', fontWeight: '900', color: '#effbe7' }}>1,420 Ha</div>
-                    <div style={{ fontSize: '12.5px', color: '#9db5aa', fontWeight: '600' }}>Farm Area Monitored</div>
+                    <div style={{ fontSize: '22px', fontWeight: '900', color: '#effbe7' }}>
+                      {farmerProducts.length} Items
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#9db5aa', fontWeight: '600' }}>
+                      {totalStockUnits.toLocaleString()} Units in Stock
+                    </div>
                   </div>
                 </div>
-                <span style={{ fontSize: '11.5px', color: '#4ade80', fontWeight: '800', background: 'rgba(74, 222, 128, 0.12)', border: '1px solid rgba(74, 222, 128, 0.25)', padding: '3px 8px', borderRadius: '12px' }}>↑ 12%</span>
+                <span style={{ fontSize: '11.5px', color: '#4ade80', fontWeight: '800', background: 'rgba(74, 222, 128, 0.12)', border: '1px solid rgba(74, 222, 128, 0.25)', padding: '3px 8px', borderRadius: '12px' }}>
+                  {outOfStockProducts.length > 0 ? `${outOfStockProducts.length} Out` : 'Active'}
+                </span>
               </div>
 
               <div
@@ -2169,16 +2324,20 @@ export default function FarmerPortal({ onLogout }) {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                   <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(180, 83, 9, 0.1) 100%)', border: '1px solid rgba(251, 191, 36, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fbbf24', boxShadow: '0 0 18px rgba(245, 158, 11, 0.25)' }}>
-                    <Package size={24} />
+                    <Truck size={24} />
                   </div>
                   <div>
                     <div style={{ fontSize: '22px', fontWeight: '900', color: '#effbe7' }}>
-                      {totalStockUnits > 0 ? `${totalStockUnits} Units` : '5,950 kg'}
+                      {pendingOrdersCount + confirmedOrdersCount} Orders
                     </div>
-                    <div style={{ fontSize: '12.5px', color: '#9db5aa', fontWeight: '600' }}>Current Produce Stock</div>
+                    <div style={{ fontSize: '12.5px', color: '#9db5aa', fontWeight: '600' }}>
+                      {pendingOrdersCount} Pending • {confirmedOrdersCount} Confirmed
+                    </div>
                   </div>
                 </div>
-                <span style={{ fontSize: '11.5px', color: '#fbbf24', fontWeight: '800', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.25)', padding: '3px 8px', borderRadius: '12px' }}>↑ 18%</span>
+                <span style={{ fontSize: '11.5px', color: '#fbbf24', fontWeight: '800', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.25)', padding: '3px 8px', borderRadius: '12px' }}>
+                  {packedOrdersCount} Packed
+                </span>
               </div>
 
               <div
@@ -2205,11 +2364,17 @@ export default function FarmerPortal({ onLogout }) {
                     <IndianRupee size={24} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '22px', fontWeight: '900', color: '#effbe7' }}>₹2,480 / Qtl</div>
-                    <div style={{ fontSize: '12.5px', color: '#9db5aa', fontWeight: '600' }}>Average Market Price</div>
+                    <div style={{ fontSize: '22px', fontWeight: '900', color: '#effbe7' }}>
+                      ₹{realDeliveredEarnings.toLocaleString('en-IN')}
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#9db5aa', fontWeight: '600' }}>
+                      {completedOrdersCount} Delivered • ₹{realPendingRevenue.toLocaleString('en-IN')} In Pipeline
+                    </div>
                   </div>
                 </div>
-                <span style={{ fontSize: '11.5px', color: '#38bdf8', fontWeight: '800', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '3px 8px', borderRadius: '12px' }}>↑ 1.9%</span>
+                <span style={{ fontSize: '11.5px', color: '#38bdf8', fontWeight: '800', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '3px 8px', borderRadius: '12px' }}>
+                  Real Sales
+                </span>
               </div>
             </div>
 
@@ -2625,7 +2790,7 @@ export default function FarmerPortal({ onLogout }) {
                 </div>
               </div>
 
-              {/* 2. Available Products */}
+              {/* 2. Available Products (Real Database Data) */}
               <div style={{
                 background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(16, 185, 129, 0.03) 50%, rgba(5, 30, 20, 0.3) 100%)',
                 backdropFilter: 'blur(24px) saturate(180%)',
@@ -2642,55 +2807,56 @@ export default function FarmerPortal({ onLogout }) {
                     <h4 style={{ fontSize: '16px', fontWeight: '800', color: '#effbe7', margin: 0 }}>
                       2. Available Products
                     </h4>
-                    <span style={{ fontSize: '11.5px', color: '#9db5aa' }}>Currently available harvested produce.</span>
+                    <span style={{ fontSize: '11.5px', color: '#9db5aa' }}>Currently listed produce from your farm inventory.</span>
                   </div>
                   <button
                     onClick={() => setActiveNav('products')}
                     style={{ background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(52, 211, 153, 0.3)', padding: '5px 12px', borderRadius: '12px', color: '#34d399', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
                   >
-                    View All →
+                    View All ({farmerProducts.length}) →
                   </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: '10px' }}>
-                  <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '14px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '26px', marginBottom: '4px' }}>🍅</div>
-                    <div style={{ fontSize: '12.5px', fontWeight: '800', color: '#effbe7' }}>Tomato</div>
-                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>1,250 kg</div>
-                    <div style={{ fontSize: '11.5px', color: '#4ade80', fontWeight: '800' }}>₹18/kg</div>
+                {farmerProducts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '24px 10px', color: '#9db5aa' }}>
+                    <div style={{ fontSize: '28px', marginBottom: '6px' }}>🧺</div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#effbe7' }}>No produce listed yet</div>
+                    <p style={{ fontSize: '11.5px', margin: '4px 0 12px 0' }}>Add fresh harvests to connect with buyers.</p>
+                    <button
+                      onClick={() => { setActiveNav('products'); setShowAddForm(true); }}
+                      style={{ background: '#10b981', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                      + Add First Produce
+                    </button>
                   </div>
-
-                  <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '14px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '26px', marginBottom: '4px' }}>🧅</div>
-                    <div style={{ fontSize: '12.5px', fontWeight: '800', color: '#effbe7' }}>Onion</div>
-                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>980 kg</div>
-                    <div style={{ fontSize: '11.5px', color: '#4ade80', fontWeight: '800' }}>₹16/kg</div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px' }}>
+                    {farmerProducts.slice(0, 6).map((prod) => (
+                      <div key={prod._id || prod.id} style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '12px 8px', textAlign: 'center' }}>
+                        {prod.image ? (
+                          <img src={prod.image} alt={prod.title} style={{ width: '38px', height: '38px', borderRadius: '8px', objectFit: 'cover', margin: '0 auto 6px auto', display: 'block' }} />
+                        ) : (
+                          <div style={{ fontSize: '24px', marginBottom: '4px' }}>🌾</div>
+                        )}
+                        <div style={{ fontSize: '12px', fontWeight: '800', color: '#effbe7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prod.title}</div>
+                        <div style={{ fontSize: '10.5px', color: Number(prod.stock) <= 0 ? '#ef4444' : Number(prod.stock) <= 10 ? '#f59e0b' : '#9db5aa' }}>
+                          {Number(prod.stock) <= 0 ? 'Out of Stock' : `${prod.stock} ${prod.unit || 'kg'}`}
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: '#4ade80', fontWeight: '800' }}>₹{prod.price}/{prod.unit || 'kg'}</div>
+                      </div>
+                    ))}
                   </div>
-
-                  <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '14px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '26px', marginBottom: '4px' }}>🍆</div>
-                    <div style={{ fontSize: '12.5px', fontWeight: '800', color: '#effbe7' }}>Brinjal</div>
-                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>640 kg</div>
-                    <div style={{ fontSize: '11.5px', color: '#4ade80', fontWeight: '800' }}>₹22/kg</div>
-                  </div>
-
-                  <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '14px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '26px', marginBottom: '4px' }}>🌶️</div>
-                    <div style={{ fontSize: '12.5px', fontWeight: '800', color: '#effbe7' }}>Green Chilli</div>
-                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>430 kg</div>
-                    <div style={{ fontSize: '11.5px', color: '#4ade80', fontWeight: '800' }}>₹30/kg</div>
-                  </div>
-                </div>
+                )}
               </div>
 
             </div>
 
-            {/* Quick KPI Strip */}
+            {/* Quick KPI Strip (Real Database Data) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '28px' }}>
               <div style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
                 <span style={{ fontSize: '24px' }}>📦</span>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#effbe7' }}>{farmerProducts.length || 8}</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#effbe7' }}>{farmerProducts.length}</div>
                   <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Active Listings</div>
                 </div>
               </div>
@@ -2698,15 +2864,15 @@ export default function FarmerPortal({ onLogout }) {
               <div style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
                 <span style={{ fontSize: '24px' }}>💰</span>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#4ade80' }}>₹42,580</div>
-                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Total Earnings</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#4ade80' }}>₹{realDeliveredEarnings.toLocaleString('en-IN')}</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Completed Earnings</div>
                 </div>
               </div>
 
               <div style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
                 <span style={{ fontSize: '24px' }}>📑</span>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#fbbf24' }}>{pendingOrdersCount || 3}</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#fbbf24' }}>{pendingOrdersCount}</div>
                   <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Pending Orders</div>
                 </div>
               </div>
@@ -2714,46 +2880,50 @@ export default function FarmerPortal({ onLogout }) {
               <div style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
                 <span style={{ fontSize: '24px' }}>🚚</span>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#38bdf8' }}>5</div>
-                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Completed Orders</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#38bdf8' }}>{completedOrdersCount}</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Delivered Orders</div>
                 </div>
               </div>
             </div>
 
-            {/* Recent Activity Feed (Screenshot 2) */}
+            {/* Recent Orders Activity Feed (Real Orders from Database) */}
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(55, 189, 120, 0.15)', borderRadius: '14px', padding: '22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
-                  Recent Activity
+                  Recent Orders & Activity
                 </h4>
-                <span style={{ fontSize: '11px', color: '#9ca3af' }}>Latest updates from your farm.</span>
+                <button
+                  onClick={() => setActiveNav('orders')}
+                  style={{ background: 'transparent', border: 'none', color: '#34d399', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  View All Orders →
+                </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#f3f4f6' }}>New buyer request</div>
-                  <div style={{ fontSize: '11px', color: '#34d399' }}>50kg Tomato • Coimbatore</div>
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>2 hours ago</div>
+              {recentOrdersList.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: '12.5px' }}>
+                  No recent customer order activity recorded yet. Buyer orders will appear here automatically.
                 </div>
-
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#f3f4f6' }}>Price updated</div>
-                  <div style={{ fontSize: '11px', color: '#9ca3af' }}>Tomato ₹18/kg</div>
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>4 hours ago</div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                  {recentOrdersList.map((ord) => (
+                    <div key={ord._id || ord.id} style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#f3f4f6' }}>Order #{ord.orderId || String(ord._id || ord.id).slice(-6)}</span>
+                        <span style={{ fontSize: '10.5px', fontWeight: '800', color: ord.status === 'delivered' ? '#34d399' : ord.status === 'cancelled' ? '#f87171' : '#fbbf24' }}>
+                          {(ord.status || 'pending').toUpperCase()}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#34d399' }}>
+                        ₹{Number(ord.totalAmount || 0).toFixed(2)} • {ord.customerName || 'Customer'}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>
+                        {new Date(ord.createdAt || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#f3f4f6' }}>Order delivered</div>
-                  <div style={{ fontSize: '11px', color: '#10b981' }}>Order #AG12340 completed</div>
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>5 hours ago</div>
-                </div>
-
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#f3f4f6' }}>Crop monitoring updated</div>
-                  <div style={{ fontSize: '11px', color: '#0ea5e9' }}>Field monitoring completed</div>
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>6 hours ago</div>
-                </div>
-              </div>
+              )}
             </div>
 
           </div>
@@ -4180,20 +4350,36 @@ export default function FarmerPortal({ onLogout }) {
                       {/* Actions */}
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
                         {isPending && isFarmer && (
-                          <button
-                            onClick={() => handleUpdateOrderStatus(orderId, 'confirmed')}
-                            style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                          >
-                            <CheckCircle size={15} /> 1. Confirm Order
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleUpdateOrderStatus(orderId, 'confirmed')}
+                              style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              <CheckCircle size={15} /> 1. Confirm Order
+                            </button>
+                            <button
+                              onClick={() => handleCancelOrder(orderId)}
+                              style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              <X size={15} /> Reject Order
+                            </button>
+                          </>
                         )}
                         {isConfirmed && !isPacked && isFarmer && (
-                          <button
-                            onClick={() => handleUpdateOrderStatus(orderId, 'packed')}
-                            style={{ background: '#0284c7', color: '#ffffff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                          >
-                            <Package size={15} /> 2. Mark Packed & Ready for Driver
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleUpdateOrderStatus(orderId, 'packed')}
+                              style={{ background: '#0284c7', color: '#ffffff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              <Package size={15} /> 2. Mark Packed & Ready for Driver
+                            </button>
+                            <button
+                              onClick={() => handleCancelOrder(orderId)}
+                              style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              <X size={15} /> Cancel Order
+                            </button>
+                          </>
                         )}
                         {isPacked && (
                           <span style={{ fontSize: '12px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
@@ -4208,6 +4394,11 @@ export default function FarmerPortal({ onLogout }) {
                         {isDelivered && (
                           <span style={{ fontSize: '12px', color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
                             <CheckCircle size={14} /> Delivered Successfully
+                          </span>
+                        )}
+                        {o.status === 'cancelled' && (
+                          <span style={{ fontSize: '12px', color: '#f87171', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+                            <X size={14} /> Order Cancelled (Inventory Replenished)
                           </span>
                         )}
                       </div>
@@ -4225,11 +4416,14 @@ export default function FarmerPortal({ onLogout }) {
         {activeNav === 'market_prices' && (
           <div style={{ padding: '24px 28px', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
             <div style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.35)', color: '#7dd3fc', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', marginBottom: '8px' }}>
+                <Info size={12} /> Regional Mandi Reference Benchmarks (Sample Data)
+              </div>
               <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
-                Live Mandi & Market Wholesale Prices
+                Regional Mandi Wholesale Price Benchmarks
               </h2>
               <p style={{ fontSize: '13px', color: '#9ca3af', margin: '4px 0 0 0' }}>
-                Real-time benchmark rates across primary agricultural markets to help farmers price produce profitably.
+                Curated wholesale benchmark rates to guide produce pricing. Live automated APMC telemetry feeds require authorized government gateway integration.
               </p>
             </div>
 
@@ -4293,24 +4487,24 @@ export default function FarmerPortal({ onLogout }) {
                   marginBottom: '10px'
                 }}>
                   <ShieldCheck size={14} color="#f87171" />
-                  <span>AI Crop Clinic & Disease Diagnostic Suite</span>
+                  <span>SIMULATION / DEMO MODE (Visual Symptom Presets)</span>
                 </div>
                 <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#ffffff', margin: '0 0 6px 0' }}>
                   Plant Disease Detection & Remedy Center
                 </h1>
-                <p style={{ fontSize: '13.5px', color: '#cbd5e1', maxWidth: '720px', margin: 0, lineHeight: '1.5' }}>
-                  Capture or upload photos of leaves, stems, or fruits. AgriLink AI scans symptoms, detects crop infections, and recommends certified organic treatments and exact chemical spray dosages.
+                <p style={{ fontSize: '13.5px', color: '#cbd5e1', maxWidth: '750px', margin: 0, lineHeight: '1.5' }}>
+                  Simulated reference diagnostics matching uploaded leaf photos and symptoms against calibrated regional pathogen presets. (Production Vision AI provider can be connected cleanly without UI rewrites).
                 </p>
               </div>
 
               {/* Clinic Stats Pill */}
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '10px 16px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '18px', fontWeight: '800', color: '#34d399' }}>98.4%</div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>AI Accuracy</div>
+                  <div style={{ fontSize: '18px', fontWeight: '800', color: '#f59e0b' }}>Simulated</div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Diagnostic Mode</div>
                 </div>
                 <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '10px 16px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '18px', fontWeight: '800', color: '#f59e0b' }}>Instant</div>
+                  <div style={{ fontSize: '18px', fontWeight: '800', color: '#34d399' }}>Instant</div>
                   <div style={{ fontSize: '11px', color: '#94a3b8' }}>Remedy Speed</div>
                 </div>
                 <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '10px 16px', textAlign: 'center' }}>
@@ -4941,55 +5135,6 @@ export default function FarmerPortal({ onLogout }) {
         )}
 
         {/* =========================================================================
-            VIEW 6: PROFILE
-            ========================================================================= */}
-        {activeNav === 'profile' && (
-          <div style={{ padding: '24px 28px', maxWidth: '1000px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(55, 189, 120, 0.2)', borderRadius: '16px', padding: '28px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: '24px' }}>
-                <div className="farmer-avatar-circle" style={{ width: '64px', height: '64px', fontSize: '24px' }}>
-                  {farmerDisplayName[0] || 'A'}
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#ffffff', margin: 0 }}>
-                    {farmerDisplayName} {user?.lastName || 'Kumar'}
-                  </h3>
-                  <div style={{ fontSize: '12px', color: '#34d399', fontWeight: '700', marginTop: '2px' }}>
-                    Certified Organic Producer • {farmerCityName}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: '10px' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>Email Address</span>
-                  <strong style={{ fontSize: '13px', color: '#f3f4f6' }}>{user?.email || 'aravinth@agrisun.in'}</strong>
-                </div>
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: '10px' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>Contact Phone</span>
-                  <strong style={{ fontSize: '13px', color: '#f3f4f6' }}>{user?.phone || '+91 98421 55678'}</strong>
-                </div>
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: '10px' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>Farm Location</span>
-                  <strong style={{ fontSize: '13px', color: '#f3f4f6' }}>{farmLocation.address || farmerCityName}</strong>
-                </div>
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: '10px' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>Farm Land Area</span>
-                  <strong style={{ fontSize: '13px', color: '#10b981' }}>12.5 Acres (Alluvial Basin)</strong>
-                </div>
-              </div>
-
-              <button
-                onClick={() => showToast('Profile details saved in cloud registry', 'success')}
-                style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-              >
-                Save Farmer Details
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
             VIEW 7: SETTINGS
             ========================================================================= */}
         {activeNav === 'settings' && (
@@ -5155,54 +5300,237 @@ export default function FarmerPortal({ onLogout }) {
         {/* =========================================================================
             VIEW: FARMER PROFILE & GPS (Mobile Friendly)
             ========================================================================= */}
+        {/* =========================================================================
+            VIEW: FARMER PROFILE & GPS (Fully Interactive & Safe)
+            ========================================================================= */}
         {activeNav === 'profile' && (
-          <div style={{ padding: 'clamp(14px, 3vw, 28px)', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#effbe7', margin: '0 0 20px 0' }}>
-              Farmer Profile & Farm Coordinates
-            </h2>
+          <div style={{ padding: 'clamp(14px, 3vw, 28px)', maxWidth: '1000px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(74, 222, 128, 0.15)', border: '1px solid rgba(74, 222, 128, 0.35)', color: '#86efac', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', marginBottom: '8px' }}>
+                <User size={12} /> Producer Identity & Field Coordinates
+              </div>
+              <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#effbe7', margin: '0 0 6px 0' }}>
+                Farmer Profile & Farm Location
+              </h2>
+              <p style={{ fontSize: '13px', color: '#9db5aa', margin: 0 }}>
+                Manage verified producer details, farm land branding, contact numbers, and delivery pickup coordinates.
+              </p>
+            </div>
 
-            <div style={{ background: 'rgba(9, 38, 28, 0.85)', border: '1.5px solid rgba(74, 222, 128, 0.3)', borderRadius: '20px', padding: '24px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-                <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'linear-gradient(135deg, #10b981, #047857)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '24px', fontWeight: '900' }}>
-                  {user?.firstName?.[0]?.toUpperCase() || 'F'}
+            <div style={{ background: 'rgba(9, 38, 28, 0.85)', border: '1.5px solid rgba(74, 222, 128, 0.3)', borderRadius: '20px', padding: '24px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px' }}>
+                <div style={{ width: '60px', height: '60px', borderRadius: '18px', background: 'linear-gradient(135deg, #10b981, #047857)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '26px', fontWeight: '900' }}>
+                  {profileFirstName?.[0]?.toUpperCase() || user?.firstName?.[0]?.toUpperCase() || 'F'}
                 </div>
                 <div>
                   <div style={{ color: '#effbe7', fontSize: '20px', fontWeight: '800' }}>
-                    {user?.firstName} {user?.lastName}
+                    {profileFirstName || user?.firstName} {profileLastName || user?.lastName}
                   </div>
-                  <div style={{ color: '#34d399', fontSize: '12.5px', fontWeight: '700', marginTop: '2px' }}>
-                    🌾 Verified Direct Producer • AgriLink Certified
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      background: user?.isVerified ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                      color: user?.isVerified ? '#34d399' : '#fbbf24',
+                      border: `1px solid ${user?.isVerified ? '#34d399' : '#fbbf24'}`,
+                      padding: '2px 10px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: '800'
+                    }}>
+                      {user?.isVerified ? '✓ Verified Direct Producer' : '⏳ Document Verification Pending'}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#9db5aa' }}>
+                      Account Role: <strong>Farmer (Immutable)</strong>
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
-                  <div style={{ color: '#9db5aa', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Phone</div>
-                  <div style={{ color: '#effbe7', fontSize: '13.5px', fontWeight: '700', marginTop: '3px' }}>{user?.phone || '+91 98400 12345'}</div>
+              {/* Editable Profile Form */}
+              <form onSubmit={handleSaveProfile}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>First Name</label>
+                    <input
+                      type="text"
+                      value={profileFirstName}
+                      onChange={e => setProfileFirstName(e.target.value)}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Last Name</label>
+                    <input
+                      type="text"
+                      value={profileLastName}
+                      onChange={e => setProfileLastName(e.target.value)}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Farm Name / Estate</label>
+                    <input
+                      type="text"
+                      value={profileFarmName}
+                      onChange={e => setProfileFarmName(e.target.value)}
+                      placeholder="e.g. Kaveri Organic Greens Estate"
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Contact Phone</label>
+                    <input
+                      type="text"
+                      value={profilePhone}
+                      onChange={e => setProfilePhone(e.target.value)}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Native Place / District</label>
+                    <input
+                      type="text"
+                      value={profileNativePlace}
+                      onChange={e => setProfileNativePlace(e.target.value)}
+                      placeholder="e.g. Mandya / Chidambaram"
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Email (Registered Login)</label>
+                    <input
+                      type="email"
+                      value={user?.email || ''}
+                      disabled
+                      style={{ opacity: 0.7, cursor: 'not-allowed' }}
+                      className="input-field"
+                    />
+                  </div>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
-                  <div style={{ color: '#9db5aa', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email</div>
-                  <div style={{ color: '#effbe7', fontSize: '13.5px', fontWeight: '700', marginTop: '3px' }}>{user?.email || 'farmer@agrilink.in'}</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
-                  <div style={{ color: '#9db5aa', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Active Harvests</div>
-                  <div style={{ color: '#34d399', fontSize: '15px', fontWeight: '800', marginTop: '3px' }}>{farmerProducts.length} Listed Items</div>
-                </div>
-              </div>
 
-              <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Farm Description & Cultivation Methods</label>
+                  <textarea
+                    value={profileDescription}
+                    onChange={e => setProfileDescription(e.target.value)}
+                    rows="3"
+                    placeholder="Describe your soil, crops, organic certifications, and pesticide-free methods..."
+                    className="input-field"
+                  />
+                </div>
+
+                {/* Farm GPS & Gate Pickup Coordinates */}
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(74, 222, 128, 0.25)', borderRadius: '16px', padding: '16px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <MapPin size={18} color="#34d399" />
+                      <span style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
+                        Farm Gate GPS Location
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowProfileMapPicker(true)}
+                      style={{
+                        background: 'rgba(52, 211, 153, 0.2)',
+                        border: '1px solid #34d399',
+                        color: '#34d399',
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🗺️ Update Farm GPS on Map
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#c0d9cb', marginBottom: '4px' }}>
+                    {farmLocation?.address || farmLocation?.placeName || 'Mandya Organic Farm Gate, Karnataka'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#86efac' }}>
+                    Coordinates: {farmLocation?.lat ? Number(farmLocation.lat).toFixed(4) : '11.3992'}° N, {farmLocation?.lng ? Number(farmLocation.lng).toFixed(4) : '79.6936'}° E
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    style={{
+                      background: '#10b981',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '10px 24px',
+                      borderRadius: '10px',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {savingProfile ? 'Saving Profile...' : 'Save Profile Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Farm GPS MapPicker Modal */}
+        {showProfileMapPicker && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.8)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px'
+          }}>
+            <div style={{
+              background: '#0b2320',
+              border: '1.5px solid rgba(74, 222, 128, 0.4)',
+              borderRadius: '20px',
+              padding: '24px',
+              maxWidth: '650px',
+              width: '100%',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.7)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <MapPin size={16} color="#34d399" />
-                  <span style={{ color: '#c0d9cb', fontSize: '13px' }}>
-                    {farmerLocation?.address || 'Mandya Organic Farm Gate, Karnataka'}
-                  </span>
+                  <MapPin size={20} color="#34d399" />
+                  <h3 style={{ margin: 0, color: '#effbe7', fontSize: '17px', fontWeight: '800' }}>
+                    Select Farm Gate Pickup Coordinates
+                  </h3>
                 </div>
                 <button
-                  onClick={() => setShowMapPicker(true)}
-                  style={{ background: 'rgba(52, 211, 153, 0.2)', border: '1px solid #34d399', color: '#34d399', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+                  type="button"
+                  onClick={() => setShowProfileMapPicker(false)}
+                  style={{ background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer' }}
                 >
-                  Update Farm GPS
+                  <X size={20} />
+                </button>
+              </div>
+              <p style={{ color: '#a3c2b0', fontSize: '12.5px', margin: '0 0 16px 0' }}>
+                Click anywhere on the map or drag the green marker to pinpoint your farm dispatch gate. Delivery couriers navigate to this location.
+              </p>
+              <div style={{ height: '320px', borderRadius: '14px', overflow: 'hidden', marginBottom: '16px' }}>
+                <MapPicker
+                  location={farmLocation}
+                  onSelectLocation={handleUpdateFarmGps}
+                  height="320px"
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowProfileMapPicker(false)}
+                  style={{ background: 'rgba(255,255,255,0.08)', color: '#effbe7', border: 'none', padding: '8px 18px', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}
+                >
+                  Close
                 </button>
               </div>
             </div>
@@ -5236,7 +5564,7 @@ export default function FarmerPortal({ onLogout }) {
               border: '1px solid rgba(55, 189, 120, 0.4)',
               borderRadius: '16px',
               width: '100%',
-              maxWidth: '500px',
+              maxWidth: '540px',
               maxHeight: '92vh',
               overflowY: 'auto',
               padding: 'clamp(16px, 4vw, 24px)'
@@ -5254,7 +5582,7 @@ export default function FarmerPortal({ onLogout }) {
             <form onSubmit={handleSaveEdit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
                 <div>
-                  <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Title</label>
+                  <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Produce Title</label>
                   <input
                     type="text"
                     value={editTitle}
@@ -5262,6 +5590,34 @@ export default function FarmerPortal({ onLogout }) {
                     className="input-field"
                     required
                   />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Category</label>
+                    <select
+                      value={editCategory}
+                      onChange={e => setEditCategory(e.target.value)}
+                      className="input-field"
+                    >
+                      <option value="vegetable">Vegetable</option>
+                      <option value="fruit">Fruit</option>
+                      <option value="grain">Grain</option>
+                      <option value="spice">Spice</option>
+                      <option value="organic">Organic Special</option>
+                      <option value="seed">Seeds</option>
+                      <option value="dairy">Dairy & Farm Fresh</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Harvest Date</label>
+                    <input
+                      type="date"
+                      value={editHarvestDate}
+                      onChange={e => setEditHarvestDate(e.target.value)}
+                      className="input-field"
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -5284,19 +5640,53 @@ export default function FarmerPortal({ onLogout }) {
                       value={editUnit}
                       onChange={e => setEditUnit(e.target.value)}
                       className="input-field"
+                      placeholder="e.g. kg, bunch, crate"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Stock Quantity</label>
+                  <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Available Stock Quantity</label>
                   <input
                     type="number"
                     min="0"
                     value={editStock}
                     onChange={e => setEditStock(e.target.value)}
                     className="input-field"
+                    required
                   />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Produce Image URL</label>
+                  <input
+                    type="url"
+                    value={editImage}
+                    onChange={e => setEditImage(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="input-field"
+                  />
+                  {/* Preset quick buttons */}
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    {(PRESET_IMAGES[editCategory] || PRESET_IMAGES.vegetable).slice(0, 3).map((item, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setEditImage(item.url)}
+                        style={{
+                          background: editImage === item.url ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.06)',
+                          border: `1px solid ${editImage === item.url ? '#34d399' : 'rgba(255,255,255,0.1)'}`,
+                          color: '#effbe7',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontSize: '10.5px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
