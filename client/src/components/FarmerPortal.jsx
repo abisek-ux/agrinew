@@ -2554,10 +2554,10 @@ export default function FarmerPortal({ onLogout }) {
                       </div>
                       <div>
                         <h4 style={{ fontSize: '15.5px', fontWeight: '800', color: '#effbe7', margin: '0 0 4px 0' }}>
-                          AI Disease Detection & Clinic
+                          Plant Disease Reference Clinic (Simulation Mode)
                         </h4>
                         <p style={{ fontSize: '12.5px', color: '#9db5aa', margin: 0 }}>
-                          Scan leaves in 2D & 3D, hear audio diagnosis & instant remedies.
+                          Reference leaf pathology in 2D & 3D, hear audio diagnosis & instant remedies.
                         </p>
                       </div>
                     </div>
@@ -3689,10 +3689,10 @@ export default function FarmerPortal({ onLogout }) {
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '16px', padding: '24px' }}>
               <div style={{ marginBottom: '18px' }}>
                 <h3 style={{ fontSize: '17px', fontWeight: '800', color: '#f87171', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 4px 0' }}>
-                  <ShieldCheck size={20} /> 3. Plant Disease Detection (AI Plant Doctor)
+                  <ShieldCheck size={20} /> 3. Plant Disease Reference Clinic (Simulation / Reference Mode)
                 </h3>
                 <p style={{ fontSize: '12.5px', color: '#9ca3af', margin: 0 }}>
-                  Upload a photo of your diseased leaf or plant. The system identifies the infection and explains <strong>simple, easy-to-understand solutions</strong> for farmers.
+                  Upload a photo or choose a sample diseased leaf. The system references an agricultural pathology knowledge base to explain <strong>simple, easy-to-understand solutions</strong> for farmers. (Note: Reference simulation mode; external vision AI API key not configured).
                 </p>
               </div>
 
@@ -3751,7 +3751,7 @@ export default function FarmerPortal({ onLogout }) {
                         fontSize: '11px',
                         fontWeight: '700'
                       }}>
-                        {analyzingImage ? 'Scanning with AI...' : 'Scan Complete'}
+                        {analyzingImage ? 'Matching symptoms...' : 'Reference Scan Ready'}
                       </span>
                     </div>
                   ) : (

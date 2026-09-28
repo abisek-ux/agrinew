@@ -166,7 +166,7 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
             ? `Driver: ${order?.deliveryName || 'Assigned Courier'}`
             : ordStatus === 'delivered'
               ? 'Delivery Complete'
-              : 'Awaiting Driver Transit Ping'}
+              : "Waiting for driver's location"}
         </div>
       </div>
     </div>

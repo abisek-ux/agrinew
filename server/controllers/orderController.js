@@ -251,8 +251,7 @@ const getOrders = async (req, res) => {
                 { deliveryId: { $in: [null, 'Unassigned', ''] } },
                 { status: { $in: ['confirmed', 'accepted', 'packed'] } }
               ]
-            },
-            { status: { $in: ['assigned', 'picked_up', 'in_transit', 'arrived'] } }
+            }
           ]
         };
       } else if (userRole === 'admin') {
@@ -278,8 +277,7 @@ const getOrders = async (req, res) => {
       } else if (userRole === 'delivery') {
         filtered = memoryOrders.filter(o =>
           String(o.deliveryId) === userId ||
-          ((!o.deliveryId || o.deliveryId === 'Unassigned') && ['confirmed', 'accepted', 'packed'].includes(o.status)) ||
-          ['assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status)
+          ((!o.deliveryId || o.deliveryId === 'Unassigned') && ['confirmed', 'accepted', 'packed'].includes(o.status))
         );
       } else if (userRole === 'admin') {
         filtered = [...memoryOrders];
@@ -335,6 +333,14 @@ const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
+    if (order.status === 'delivered') {
+      return res.status(400).json({ success: false, message: 'Order is already marked as delivered' });
+    }
+
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'Order has already been cancelled' });
+    }
+
     // Role-based authorization
     if (userRole === 'farmer') {
       if (String(order.farmerId) !== userId) {
@@ -374,6 +380,27 @@ const updateOrderStatus = async (req, res) => {
           message: `Delivery drivers can only update delivery transit stages (requested: ${status})`
         });
       }
+
+      // Validate sequential status progression for delivery drivers
+      const currentStatus = order.status;
+      const allowedNext = {
+        pending: ['assigned'],
+        confirmed: ['assigned'],
+        accepted: ['assigned'],
+        packed: ['assigned', 'picked_up'],
+        assigned: ['picked_up', 'in_transit'],
+        picked_up: ['in_transit'],
+        in_transit: ['arrived'],
+        arrived: []
+      };
+
+      if (!allowedNext[currentStatus] || !allowedNext[currentStatus].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid status transition from "${currentStatus}" to "${status}". Must follow delivery logistics stages: packed -> assigned -> picked_up -> in_transit -> arrived -> delivered (via OTP).`
+        });
+      }
+
       order.deliveryId = userId;
       if (deliveryName) order.deliveryName = deliveryName;
       if (deliveryPhone) order.deliveryPhone = deliveryPhone;
@@ -391,7 +418,7 @@ const updateOrderStatus = async (req, res) => {
       await order.save();
     }
 
-    // Send customer notification on status milestone
+    // Send notifications on status milestones
     let notifTitle = '';
     let notifMsg = '';
     if (status === 'confirmed' || status === 'accepted') {
@@ -400,16 +427,40 @@ const updateOrderStatus = async (req, res) => {
     } else if (status === 'packed') {
       notifTitle = '📦 Order Packed';
       notifMsg = `Your order ${order.orderId || order._id || order.id} is packed and ready for dispatch at ${order.farmerName}'s farm.`;
-    } else if (status === 'in_transit' || status === 'picked_up') {
+    } else if (status === 'picked_up') {
+      notifTitle = '📦 Cargo Picked Up from Farm';
+      notifMsg = `Courier ${order.deliveryName || 'Partner'} has collected order ${order.orderId || order._id || order.id} from ${order.farmerName}'s farm and is preparing for transit.`;
+      // Also notify farmer that courier picked up
+      pushNotification({
+        recipientId: order.farmerId,
+        recipientRole: 'farmer',
+        orderId: order.orderId || order._id || order.id,
+        title: '📦 Cargo Dispatched with Courier',
+        message: `Courier ${order.deliveryName || 'Partner'} has picked up order ${order.orderId || order._id || order.id} from your farm depot.`,
+        category: 'delivery',
+        priority: 'NORMAL'
+      });
+    } else if (status === 'in_transit') {
       notifTitle = '🛵 Out for Delivery';
       notifMsg = `Order ${order.orderId || order._id || order.id} is out for delivery! Driver: ${order.deliveryName || 'Courier'}.`;
     } else if (status === 'arrived') {
       notifTitle = '📍 Delivery Partner Arrived';
-      notifMsg = `Driver ${order.deliveryName || 'Courier'} has arrived at your address with order ${order.orderId || order._id || order.id}.`;
+      notifMsg = `Driver ${order.deliveryName || 'Courier'} has arrived at your address with order ${order.orderId || order._id || order.id}. Please provide your handover PIN upon inspection.`;
+      // Notify farmer
+      pushNotification({
+        recipientId: order.farmerId,
+        recipientRole: 'farmer',
+        orderId: order.orderId || order._id || order.id,
+        title: '📍 Courier Arrived at Customer Doorstep',
+        message: `Courier ${order.deliveryName || 'Partner'} has arrived at customer ${order.customerName}'s destination for order ${order.orderId || order._id || order.id}.`,
+        category: 'delivery',
+        priority: 'NORMAL'
+      });
     } else if (status === 'cancelled') {
       notifTitle = '⚠️ Order Cancelled by Farmer';
       notifMsg = `Your order ${order.orderId || order._id || order.id} has been cancelled by ${order.farmerName}. Reserved produce has been returned to inventory.`;
     }
+
     if (notifTitle) {
       pushNotification({
         recipientId: order.customerId,
@@ -487,6 +538,16 @@ const assignDeliveryDriver = async (req, res) => {
       orderId: order.orderId || order._id || order.id,
       title: '🚚 Courier Assigned for Pickup',
       message: `Courier ${driverName} has been assigned to pick up order ${order.orderId || order._id || order.id} from your farm depot.`,
+      category: 'delivery',
+      priority: 'NORMAL'
+    });
+
+    pushNotification({
+      recipientId: driverId,
+      recipientRole: 'delivery',
+      orderId: order.orderId || order._id || order.id,
+      title: '🚚 Order Claimed Successfully',
+      message: `You have claimed order ${order.orderId || order._id || order.id}. Ready for pickup at ${order.farmerName}'s farm.`,
       category: 'delivery',
       priority: 'NORMAL'
     });
@@ -667,6 +728,16 @@ const verifyDeliveryOtp = async (req, res) => {
       title: '🎉 Produce Delivered & Settlement Logged',
       message: `Order ${order.orderId || order._id || order.id} has been authenticated with delivery OTP and delivered to ${order.customerName}. Total: ₹${order.totalAmount}.`,
       category: 'order',
+      priority: 'HIGH'
+    });
+
+    pushNotification({
+      recipientId: driverId,
+      recipientRole: 'delivery',
+      orderId: order.orderId || order._id || order.id,
+      title: '🎉 Delivery Completed & Authenticated',
+      message: `Order ${order.orderId || order._id || order.id} successfully authenticated with customer handover OTP and delivered!`,
+      category: 'delivery',
       priority: 'HIGH'
     });
 

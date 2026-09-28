@@ -144,12 +144,12 @@ function FleetTelemetryHUD({ speed = 48, battery = 88, satelliteCount = 11 }) {
         </div>
       </div>
 
-      {/* Telemetry Metrics */}
+      {/* Telemetry Metrics (Simulation Demo) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, marginLeft: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a3c2b0', fontSize: '12px' }}>
             <Radio size={14} color="#37bd78" />
-            <span>GPS Satellite Lock</span>
+            <span>GPS Satellite Lock (Demo)</span>
           </div>
           <span style={{ color: '#37bd78', fontWeight: '800', fontSize: '13px' }}>{satelliteCount} Satellites</span>
         </div>
@@ -157,7 +157,7 @@ function FleetTelemetryHUD({ speed = 48, battery = 88, satelliteCount = 11 }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a3c2b0', fontSize: '12px' }}>
             <Fuel size={14} color="#f4c95d" />
-            <span>Eco EV Range / Battery</span>
+            <span>Vehicle EV Range (Simulated)</span>
           </div>
           <span style={{ color: '#f4c95d', fontWeight: '800', fontSize: '13px' }}>{battery}% (142 km)</span>
         </div>
@@ -165,9 +165,9 @@ function FleetTelemetryHUD({ speed = 48, battery = 88, satelliteCount = 11 }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a3c2b0', fontSize: '12px' }}>
             <TrendingUp size={14} color="#6edbd0" />
-            <span>Route Optimization</span>
+            <span>Route Optimization (Model)</span>
           </div>
-          <span style={{ color: '#6edbd0', fontWeight: '800', fontSize: '13px' }}>AI High Efficiency</span>
+          <span style={{ color: '#6edbd0', fontWeight: '800', fontSize: '13px' }}>Algorithmic Eco Mode</span>
         </div>
       </div>
     </div>
@@ -291,10 +291,10 @@ function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
           </div>
           <div>
             <h3 style={{ margin: 0, color: '#effbe7', fontSize: '16px', fontWeight: '800' }}>
-              3D Cold-Chain Freshness Telemetry
+              3D Cold-Chain Chamber (Interactive WebGL Simulation)
             </h3>
             <p style={{ margin: '2px 0 0 0', color: '#7dd3fc', fontSize: '11px', fontWeight: '700' }}>
-              Autonomous Perishable Micro-Climate Chamber • Active Chill
+              Visual Chamber Simulation • Hardware IoT Sensors Pending
             </p>
           </div>
         </div>
@@ -319,7 +319,7 @@ function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
           }}
         >
           <Zap size={13} color="#fef08a" />
-          <span>{boostActive ? '❄️ Cryo-Chill Boost Active!' : 'Trigger Rapid Sub-Zero Boost'}</span>
+          <span>{boostActive ? '❄️ Simulated Cryo Boost Active' : 'Test Cryo Temperature Fluctuation'}</span>
         </button>
       </div>
 
@@ -651,13 +651,14 @@ export default function DeliveryPortal() {
   const [orders, setOrders] = useState([]);
   const [simulating, setSimulating] = useState(false);
   const [activeOrderId, setActiveOrderId] = useState(null);
-  const [activeNavTab, setActiveNavTab] = useState('dispatch'); // 'dispatch' | 'coldchain' | 'earnings'
+  const [activeNavTab, setActiveNavTab] = useState('home'); // 'home' | 'dispatch' | 'map' | 'coldchain' | 'earnings' | 'profile'
+  const [deliverySubTab, setDeliverySubTab] = useState('assigned'); // 'assigned' | 'available' | 'completed'
   const [refreshing, setRefreshing] = useState(false);
   const [sosActive, setSosActive] = useState(false);
   const [selectedHandoverOrder, setSelectedHandoverOrder] = useState(null);
-  const [voiceNavEnabled, setVoiceNavEnabled] = useState(true);
 
   const isDriver = user?.role === 'delivery';
+  const driverId = String(user?._id || user?.id || '');
 
   useEffect(() => {
     fetchDeliveryOrders();
@@ -668,7 +669,7 @@ export default function DeliveryPortal() {
   const fetchDeliveryOrders = async () => {
     try {
       const res = await orderAPI.getOrders();
-      setOrders(res.data);
+      setOrders(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.warn('Delivery fetch note:', err.message);
     }
@@ -678,23 +679,67 @@ export default function DeliveryPortal() {
     setRefreshing(true);
     await fetchDeliveryOrders();
     setRefreshing(false);
-    showToast('Delivery radar updated', 'info');
+    showToast('Delivery dispatch radar updated', 'info');
+  };
+
+  // Orders segmentation based on real DB status and driver ID
+  const myAssignedOrders = orders.filter(o => String(o.deliveryId) === driverId);
+  const acceptedOrders = myAssignedOrders.filter(o => o.status === 'assigned');
+  const pickedUpOrders = myAssignedOrders.filter(o => o.status === 'picked_up');
+  const inTransitOrders = myAssignedOrders.filter(o => o.status === 'in_transit');
+  const arrivedOrders = myAssignedOrders.filter(o => o.status === 'arrived');
+  const activeOrders = myAssignedOrders.filter(o => ['assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status));
+  const completedOrders = myAssignedOrders.filter(o => o.status === 'delivered');
+
+  // Available ready farm orders waiting for a courier to claim
+  const availableOrders = orders.filter(o =>
+    (!o.deliveryId || o.deliveryId === 'Unassigned') &&
+    ['confirmed', 'accepted', 'packed'].includes(o.status)
+  );
+
+  // Today's completed runs
+  const todayCompleted = completedOrders.filter(o => {
+    const d = o.deliveryOtpVerifiedAt || o.updatedAt || o.createdAt;
+    return d && new Date(d).toDateString() === new Date().toDateString();
+  });
+
+  // Shift earnings: Calculated strictly from real persisted deliveries
+  const perDeliveryFee = 50; // ₹50 standard logistics payout per completed delivery
+  const shiftEarnings = completedOrders.length * perDeliveryFee;
+
+  const handleClaimOrder = async (orderId) => {
+    if (!isDriver) {
+      showToast('Only registered Delivery Drivers can claim shipments.', 'error');
+      return;
+    }
+    try {
+      const res = await orderAPI.assignDriver(orderId);
+      if (res.data?.success) {
+        showToast('Shipment successfully claimed! Added to your active delivery route.', 'success');
+        await fetchDeliveryOrders();
+        setDeliverySubTab('assigned');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to claim shipment';
+      showToast(msg, 'error');
+    }
   };
 
   const handleUpdateStatus = async (orderId, newStatus) => {
     if (!isDriver) {
-      showToast('Responsibility rule: Only registered Delivery Drivers can confirm cargo pickups and deliveries.', 'info');
+      showToast('Only registered Delivery Drivers can confirm cargo pickups and deliveries.', 'error');
       return;
     }
     try {
       await orderAPI.updateStatus(orderId, {
         status: newStatus,
         deliveryName: `${user?.firstName || 'David'} ${user?.lastName || 'Swift'}`.trim(),
-        deliveryPhone: user?.phone || '+1 555-019-7766',
-        deliveryEmail: user?.email || 'driver@nexus.io'
+        deliveryPhone: user?.phone || '+91 98400 12345',
+        deliveryEmail: user?.email || 'driver@agrilink.in'
       });
       setOrders(orders.map(o => (String(o._id || o.id) === String(orderId)) ? { ...o, status: newStatus } : o));
-      showToast(`Updated order status to ${newStatus.toUpperCase()}`, 'success');
+      showToast(`Updated shipment status to ${newStatus.toUpperCase()}`, 'success');
+      await fetchDeliveryOrders();
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Could not update order';
       showToast(msg, 'error');
@@ -710,14 +755,14 @@ export default function DeliveryPortal() {
 
     setSimulating(true);
     setActiveOrderId(orderId);
-    showToast('🛰️ Live GPS Triangulation active! Navigating towards customer doorstep...', 'info');
+    showToast('🛰️ Simulating route navigation towards customer doorstep...', 'info');
 
-    const steps = 6;
+    const steps = 5;
     for (let i = 1; i <= steps; i++) {
-      await new Promise(r => setTimeout(r, 1200));
+      await new Promise(r => setTimeout(r, 1000));
       const currentLat = fLat + ((cLat - fLat) * (i / steps));
       const currentLng = fLng + ((cLng - fLng) * (i / steps));
-      const stepAddress = i === steps ? 'Arrived at Customer Doorstep' : `En Route GPS Step ${i}/${steps}`;
+      const stepAddress = i === steps ? 'Arrived at Customer Doorstep' : `En Route Waypoint ${i}/${steps}`;
 
       try {
         await orderAPI.updateLocation(orderId, {
@@ -737,27 +782,23 @@ export default function DeliveryPortal() {
 
     setSimulating(false);
     setActiveOrderId(null);
-    showToast('🏁 Driver reached customer destination point!', 'success');
+    showToast('🏁 Route simulation reached destination waypoint!', 'success');
   };
 
   const triggerSOS = () => {
     setSosActive(true);
-    showToast('🚨 SOS Broadcast Sent! Emergency response team & nearest regional dispatch alerted.', 'error');
+    showToast('⚠️ Demo Safety Beacon Triggered (In-app simulation only — NOT connected to police or 112 emergency services). In a real emergency, dial 112 directly.', 'warning');
     setTimeout(() => setSosActive(false), 5000);
   };
 
-  // Calculate earnings
-  const completedOrders = orders.filter(o => o.status === 'delivered');
-  const shiftEarnings = completedOrders.length * 120 + 80;
-
   return (
     <div className="portal-layout" style={{ minHeight: 'calc(100vh - 70px)' }}>
-      {/* Left Menu Bar (Desktop Sidebar) */}
+      {/* Desktop Sidebar Navigation */}
       <aside
         className="portal-desktop-sidebar"
         style={{
-          width: '250px',
-          minWidth: '250px',
+          width: '260px',
+          minWidth: '260px',
           background: 'rgba(18, 14, 8, 0.95)',
           borderRight: '1px solid rgba(244, 201, 93, 0.18)',
           padding: '24px 14px',
@@ -771,7 +812,6 @@ export default function DeliveryPortal() {
         }}
       >
         <div>
-          {/* Logo & Section title */}
           <div style={{ padding: '0 8px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: '16px' }}>
             <div style={{ marginBottom: '12px' }}>
               <AgriLinkLogo size="sm" showText={true} showBadge={false} interactive={false} />
@@ -782,6 +822,29 @@ export default function DeliveryPortal() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <button
+              onClick={() => setActiveNavTab('home')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '11px 14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: activeNavTab === 'home' ? 'linear-gradient(135deg, #b7835d, #8d5e34)' : 'transparent',
+                color: activeNavTab === 'home' ? '#ffffff' : '#a3b899',
+                fontWeight: activeNavTab === 'home' ? '700' : '600',
+                fontSize: '13.5px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Home size={18} />
+              <span>Fleet Overview</span>
+            </button>
+
             <button
               onClick={() => setActiveNavTab('dispatch')}
               style={{
@@ -804,9 +867,9 @@ export default function DeliveryPortal() {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Truck size={18} />
-                <span>Live Dispatch Queue</span>
+                <span>Live Deliveries</span>
               </div>
-              {orders.length > 0 && (
+              {activeOrders.length > 0 && (
                 <span style={{
                   background: '#f4c95d',
                   color: '#092b27',
@@ -815,9 +878,32 @@ export default function DeliveryPortal() {
                   padding: '2px 7px',
                   borderRadius: '10px'
                 }}>
-                  {orders.length}
+                  {activeOrders.length}
                 </span>
               )}
+            </button>
+
+            <button
+              onClick={() => setActiveNavTab('map')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '11px 14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: activeNavTab === 'map' ? 'linear-gradient(135deg, #b7835d, #8d5e34)' : 'transparent',
+                color: activeNavTab === 'map' ? '#ffffff' : '#a3b899',
+                fontWeight: activeNavTab === 'map' ? '700' : '600',
+                fontSize: '13.5px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Navigation size={18} />
+              <span>Waypoint Map</span>
             </button>
 
             <button
@@ -836,24 +922,11 @@ export default function DeliveryPortal() {
                 cursor: 'pointer',
                 textAlign: 'left',
                 width: '100%',
-                transition: 'all 0.2s ease',
-                justifyContent: 'space-between'
+                transition: 'all 0.2s ease'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Snowflake size={18} color={activeNavTab === 'coldchain' ? '#fff' : '#38bdf8'} />
-                <span>3D Cold-Chain Radar</span>
-              </div>
-              <span style={{
-                background: 'rgba(56, 189, 248, 0.25)',
-                color: '#7dd3fc',
-                fontSize: '10.5px',
-                fontWeight: '800',
-                padding: '2px 7px',
-                borderRadius: '10px'
-              }}>
-                4.1°C
-              </span>
+              <Snowflake size={18} color={activeNavTab === 'coldchain' ? '#fff' : '#38bdf8'} />
+              <span>3D Cold-Chain</span>
             </button>
 
             <button
@@ -876,11 +949,11 @@ export default function DeliveryPortal() {
               }}
             >
               <DollarSign size={18} />
-              <span>Shift Earnings & Tips</span>
+              <span>Shift Earnings</span>
             </button>
           </div>
 
-          {/* SOS Safety Button */}
+          {/* SOS Safety Button (Honestly labeled as in-app simulation) */}
           <button
             onClick={triggerSOS}
             style={{
@@ -892,7 +965,7 @@ export default function DeliveryPortal() {
               border: '1.5px solid #ff1744',
               color: '#ffffff',
               fontWeight: '800',
-              fontSize: '12.5px',
+              fontSize: '12px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -901,12 +974,12 @@ export default function DeliveryPortal() {
               boxShadow: sosActive ? '0 0 20px #ff1744' : 'none'
             }}
           >
-            <AlertTriangle size={16} />
-            <span>{sosActive ? '🚨 SOS BEACON BROADCASTING' : 'Driver Emergency SOS'}</span>
+            <AlertTriangle size={15} />
+            <span>{sosActive ? '🚨 BEACON ACTIVE (DEMO)' : 'Demo Safety Beacon'}</span>
           </button>
         </div>
 
-        {/* Driver Profile */}
+        {/* Driver Profile Summary */}
         <div style={{
           background: 'rgba(255, 255, 255, 0.04)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -935,19 +1008,19 @@ export default function DeliveryPortal() {
               {user?.firstName} {user?.lastName}
             </div>
             <div style={{ color: '#f4c95d', fontSize: '11px', fontWeight: '600' }}>
-              ⭐ 4.95 Fleet Rating
+              ⭐ 4.95 Certified Courier
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Main Content Pane */}
+      {/* Main Content Area */}
       <main className="portal-main-content" style={{ flex: 1, padding: 'clamp(14px, 3vw, 24px)', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
-        {/* Top Fleet HUD & Refresh */}
+        {/* Top Fleet HUD & Real Performance Bar */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '20px', marginBottom: '24px' }}>
-          <FleetTelemetryHUD speed={simulating ? 58 : 0} battery={88} satelliteCount={12} />
+          <FleetTelemetryHUD speed={simulating ? 54 : 0} battery={88} satelliteCount={11} />
 
-          {/* Shift Performance Summary */}
+          {/* Real Persisted Shift Payout */}
           <div style={{
             background: 'linear-gradient(145deg, rgba(20, 16, 10, 0.9), rgba(12, 10, 6, 0.95))',
             border: '1.5px solid rgba(244, 201, 93, 0.35)',
@@ -986,215 +1059,597 @@ export default function DeliveryPortal() {
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '14px 0' }}>
               <span style={{ color: '#37bd78', fontSize: '32px', fontWeight: '900' }}>₹{shiftEarnings}</span>
-              <span style={{ color: '#a3c2b0', fontSize: '13px' }}>from {completedOrders.length} completed run(s)</span>
+              <span style={{ color: '#a3c2b0', fontSize: '13px' }}>
+                from {completedOrders.length} verified run(s)
+              </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ background: 'rgba(55, 189, 120, 0.2)', color: '#8be28b', fontSize: '11.5px', fontWeight: '700', padding: '4px 10px', borderRadius: '12px' }}>
-                +₹80 Green Incentive
+                ₹{perDeliveryFee} Payout per Completed Delivery
               </span>
               <span style={{ background: 'rgba(244, 201, 93, 0.2)', color: '#f4c95d', fontSize: '11.5px', fontWeight: '700', padding: '4px 10px', borderRadius: '12px' }}>
-                100% On-Time Record
+                {todayCompleted.length} Completed Today
               </span>
             </div>
           </div>
         </div>
 
-        {/* Active Dispatch Orders List */}
+        {/* 1. Fleet Overview Dashboard Tab */}
+        {activeNavTab === 'home' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+            {/* Operational Summary Metrics Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+              <div style={{ background: 'rgba(20, 16, 10, 0.85)', border: '1px solid rgba(244, 201, 93, 0.25)', borderRadius: '16px', padding: '16px' }}>
+                <div style={{ color: '#a3c2b0', fontSize: '12px', fontWeight: '600' }}>My Active Deliveries</div>
+                <div style={{ color: '#effbe7', fontSize: '24px', fontWeight: '900', marginTop: '6px' }}>{activeOrders.length}</div>
+                <div style={{ color: '#f4c95d', fontSize: '11px', marginTop: '4px' }}>Assigned & in route</div>
+              </div>
+
+              <div style={{ background: 'rgba(20, 16, 10, 0.85)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '16px', padding: '16px' }}>
+                <div style={{ color: '#a3c2b0', fontSize: '12px', fontWeight: '600' }}>Available to Claim</div>
+                <div style={{ color: '#38bdf8', fontSize: '24px', fontWeight: '900', marginTop: '6px' }}>{availableOrders.length}</div>
+                <div style={{ color: '#7dd3fc', fontSize: '11px', marginTop: '4px' }}>Ready at farm depots</div>
+              </div>
+
+              <div style={{ background: 'rgba(20, 16, 10, 0.85)', border: '1px solid rgba(110, 219, 208, 0.25)', borderRadius: '16px', padding: '16px' }}>
+                <div style={{ color: '#a3c2b0', fontSize: '12px', fontWeight: '600' }}>In Transit / Arrived</div>
+                <div style={{ color: '#6edbd0', fontSize: '24px', fontWeight: '900', marginTop: '6px' }}>{inTransitOrders.length + arrivedOrders.length}</div>
+                <div style={{ color: '#86efac', fontSize: '11px', marginTop: '4px' }}>Approaching doorstep</div>
+              </div>
+
+              <div style={{ background: 'rgba(20, 16, 10, 0.85)', border: '1px solid rgba(55, 189, 120, 0.25)', borderRadius: '16px', padding: '16px' }}>
+                <div style={{ color: '#a3c2b0', fontSize: '12px', fontWeight: '600' }}>Completed Total</div>
+                <div style={{ color: '#37bd78', fontSize: '24px', fontWeight: '900', marginTop: '6px' }}>{completedOrders.length}</div>
+                <div style={{ color: '#a7f3d0', fontSize: '11px', marginTop: '4px' }}>OTP authenticated</div>
+              </div>
+            </div>
+
+            {/* Active Run Quick Card */}
+            {activeOrders.length > 0 && (
+              <div style={{
+                background: 'linear-gradient(145deg, rgba(20, 16, 10, 0.9), rgba(12, 10, 6, 0.95))',
+                border: '1.5px solid rgba(244, 201, 93, 0.35)',
+                borderRadius: '20px',
+                padding: '20px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Truck size={20} color="#f4c95d" />
+                    <h3 style={{ margin: 0, color: '#effbe7', fontSize: '17px', fontWeight: '800' }}>
+                      Current Active Route: #{String(activeOrders[0]._id || activeOrders[0].id).slice(-8).toUpperCase()}
+                    </h3>
+                  </div>
+                  <span style={{
+                    background: 'rgba(244, 201, 93, 0.2)',
+                    border: '1px solid #f4c95d',
+                    color: '#f4c95d',
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    textTransform: 'uppercase'
+                  }}>
+                    {activeOrders[0].status?.replace('_', ' ')}
+                  </span>
+                </div>
+
+                <div style={{ color: '#effbe7', fontSize: '14px', marginBottom: '10px' }}>
+                  <strong>Destination:</strong> {activeOrders[0].customerLocation?.address || activeOrders[0].customerAddress || 'Customer Address'}
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setActiveNavTab('dispatch')}
+                    style={{
+                      padding: '9px 16px',
+                      background: 'linear-gradient(135deg, #f4c95d, #ffa726)',
+                      border: 'none',
+                      color: '#092b27',
+                      borderRadius: '10px',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Manage Active Deliveries ({activeOrders.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveNavTab('map')}
+                    style={{
+                      padding: '9px 16px',
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      color: '#effbe7',
+                      borderRadius: '10px',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Open Live Waypoint Map
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Available Pickups Preview */}
+            {availableOrders.length > 0 && (
+              <div style={{
+                background: 'rgba(20, 16, 10, 0.85)',
+                border: '1.5px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '20px',
+                padding: '20px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <h3 style={{ margin: 0, color: '#effbe7', fontSize: '16px', fontWeight: '800' }}>
+                    📦 Regional Farm Shipments Ready for Pickup ({availableOrders.length})
+                  </h3>
+                  <button
+                    onClick={() => { setActiveNavTab('dispatch'); setDeliverySubTab('available'); }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#38bdf8',
+                      fontSize: '12.5px',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    View All →
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                  {availableOrders.slice(0, 2).map(ord => (
+                    <div key={ord._id || ord.id} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '14px', padding: '14px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ color: '#f4c95d', fontSize: '11px', fontWeight: '800' }}>#{String(ord._id || ord.id).slice(-8).toUpperCase()}</span>
+                        <span style={{ color: '#37bd78', fontSize: '13px', fontWeight: '800' }}>₹{ord.totalAmount}</span>
+                      </div>
+                      <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '700' }}>Farm: {ord.farmerName}</div>
+                      <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        To: {ord.customerLocation?.address || ord.customerAddress || 'Customer Destination'}
+                      </div>
+                      <button
+                        onClick={() => handleClaimOrder(String(ord._id || ord.id))}
+                        style={{
+                          marginTop: '10px',
+                          width: '100%',
+                          background: 'linear-gradient(135deg, #10b981, #059669)',
+                          border: 'none',
+                          color: '#fff',
+                          padding: '8px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Claim & Accept Shipment
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. Deliveries Tab (Assigned, Available, Completed) */}
         {activeNavTab === 'dispatch' && (
           <div>
-            <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: '0 0 18px' }}>
-              Assigned Regional Farm Shipments ({orders.length})
-            </h2>
+            {/* Sub-tabs header */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setDeliverySubTab('assigned')}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(244, 201, 93, 0.4)',
+                  background: deliverySubTab === 'assigned' ? 'linear-gradient(135deg, #b7835d, #8d5e34)' : 'rgba(0,0,0,0.3)',
+                  color: '#effbe7',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>My Active Deliveries</span>
+                <span style={{ background: '#f4c95d', color: '#092b27', fontSize: '11px', fontWeight: '800', padding: '1px 6px', borderRadius: '10px' }}>
+                  {activeOrders.length}
+                </span>
+              </button>
 
-            {orders.length === 0 ? (
-              <div style={{
-                background: 'rgba(20, 16, 10, 0.6)',
-                border: '1px dashed rgba(244, 201, 93, 0.3)',
-                borderRadius: '20px',
-                padding: '60px 20px',
-                textAlign: 'center',
-                color: '#a3b899'
-              }}>
-                <Truck size={48} color="#f4c95d" style={{ margin: '0 auto 16px' }} />
-                <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Active Shipments in Dispatch Radar</h3>
-                <p style={{ margin: 0, fontSize: '13.5px' }}>New customer orders placed across Mandya and regional farms will appear here automatically.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-                {orders.map(order => {
-                  const orderId = String(order._id || order.id);
-                  const isCurrentSimulating = simulating && activeOrderId === orderId;
+              <button
+                onClick={() => setDeliverySubTab('available')}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  background: deliverySubTab === 'available' ? 'linear-gradient(135deg, #0284c7, #0369a1)' : 'rgba(0,0,0,0.3)',
+                  color: '#effbe7',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>Available Farm Pickups</span>
+                <span style={{ background: '#38bdf8', color: '#092b27', fontSize: '11px', fontWeight: '800', padding: '1px 6px', borderRadius: '10px' }}>
+                  {availableOrders.length}
+                </span>
+              </button>
 
-                  return (
-                    <div
-                      key={orderId}
+              <button
+                onClick={() => setDeliverySubTab('completed')}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(55, 189, 120, 0.4)',
+                  background: deliverySubTab === 'completed' ? 'linear-gradient(135deg, #16a34a, #15803d)' : 'rgba(0,0,0,0.3)',
+                  color: '#effbe7',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>Delivery History</span>
+                <span style={{ background: '#37bd78', color: '#092b27', fontSize: '11px', fontWeight: '800', padding: '1px 6px', borderRadius: '10px' }}>
+                  {completedOrders.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Sub-tab: My Active Deliveries */}
+            {deliverySubTab === 'assigned' && (
+              <div>
+                {activeOrders.length === 0 ? (
+                  <div style={{
+                    background: 'rgba(20, 16, 10, 0.6)',
+                    border: '1px dashed rgba(244, 201, 93, 0.3)',
+                    borderRadius: '20px',
+                    padding: '60px 20px',
+                    textAlign: 'center',
+                    color: '#a3b899'
+                  }}>
+                    <Truck size={48} color="#f4c95d" style={{ margin: '0 auto 16px' }} />
+                    <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Active Shipments Assigned</h3>
+                    <p style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
+                      Ready orders from regional farms are available for pickup.
+                    </p>
+                    <button
+                      onClick={() => setDeliverySubTab('available')}
                       style={{
-                        background: 'rgba(20, 16, 10, 0.85)',
-                        backdropFilter: 'blur(16px)',
-                        border: '1.5px solid rgba(244, 201, 93, 0.3)',
-                        borderRadius: '20px',
-                        padding: '24px',
-                        boxShadow: '0 12px 32px rgba(0,0,0,0.45)'
+                        padding: '10px 18px',
+                        background: 'linear-gradient(135deg, #f4c95d, #ffa726)',
+                        border: 'none',
+                        color: '#092b27',
+                        borderRadius: '10px',
+                        fontWeight: '800',
+                        fontSize: '13px',
+                        cursor: 'pointer'
                       }}
                     >
-                      {/* Order header */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: '#f4c95d', fontSize: '12px', fontWeight: '800' }}>
-                              SHIPMENT #{orderId.slice(-8).toUpperCase()}
-                            </span>
-                            <span style={{
-                              background: order.status === 'delivered' ? 'rgba(55, 189, 120, 0.25)' : 'rgba(244, 201, 93, 0.25)',
-                              border: `1px solid ${order.status === 'delivered' ? '#37bd78' : '#f4c95d'}`,
-                              color: order.status === 'delivered' ? '#8be28b' : '#f4c95d',
-                              padding: '3px 10px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: '800',
-                              textTransform: 'uppercase'
-                            }}>
-                              {order.status || 'Pending'}
-                            </span>
+                      View Available Farm Pickups ({availableOrders.length})
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+                    {activeOrders.map(order => {
+                      const orderId = String(order._id || order.id);
+                      const isCurrentSimulating = simulating && activeOrderId === orderId;
+
+                      return (
+                        <div
+                          key={orderId}
+                          style={{
+                            background: 'rgba(20, 16, 10, 0.85)',
+                            backdropFilter: 'blur(16px)',
+                            border: '1.5px solid rgba(244, 201, 93, 0.3)',
+                            borderRadius: '20px',
+                            padding: '24px',
+                            boxShadow: '0 12px 32px rgba(0,0,0,0.45)'
+                          }}
+                        >
+                          {/* Order Header */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ color: '#f4c95d', fontSize: '12px', fontWeight: '800' }}>
+                                  SHIPMENT #{orderId.slice(-8).toUpperCase()}
+                                </span>
+                                <span style={{
+                                  background: 'rgba(244, 201, 93, 0.25)',
+                                  border: '1px solid #f4c95d',
+                                  color: '#f4c95d',
+                                  padding: '3px 10px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  textTransform: 'uppercase'
+                                }}>
+                                  {order.status?.replace('_', ' ')}
+                                </span>
+                              </div>
+                              <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800', marginTop: '4px' }}>
+                                {order.items?.map(i => `${i.quantity}x ${i.title}`).join(', ') || 'Produce Batch'} • ₹{order.totalAmount}
+                              </div>
+                            </div>
+
+                            {/* Actions & Simulation */}
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              <a
+                                href={`tel:${order.customerPhone || '9840012345'}`}
+                                style={{
+                                  padding: '10px 14px',
+                                  borderRadius: '10px',
+                                  background: 'rgba(255,255,255,0.08)',
+                                  border: '1px solid rgba(255,255,255,0.2)',
+                                  color: '#effbe7',
+                                  fontSize: '12px',
+                                  fontWeight: '700',
+                                  textDecoration: 'none',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                <Phone size={14} color="#37bd78" />
+                                <span>Call Customer</span>
+                              </a>
+
+                              <button
+                                disabled={simulating}
+                                onClick={() => simulateGpsMovement(order)}
+                                style={{
+                                  padding: '10px 14px',
+                                  borderRadius: '10px',
+                                  background: isCurrentSimulating ? '#37bd78' : 'linear-gradient(135deg, #f4c95d, #ffa726)',
+                                  border: 'none',
+                                  color: '#092b27',
+                                  fontSize: '12.5px',
+                                  fontWeight: '800',
+                                  cursor: simulating ? 'not-allowed' : 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                <Play size={14} />
+                                <span>{isCurrentSimulating ? '🛰️ Simulating Route...' : 'Simulate Route (Test)'}</span>
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800', marginTop: '4px' }}>
-                            {order.items?.map(i => `${i.quantity}x ${i.title}`).join(', ') || 'Produce Batch'} • ₹{order.totalAmount}
+
+                          {/* Pickup & Destination Details */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginBottom: '16px', background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                            <div>
+                              <div style={{ color: '#f4c95d', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase' }}>Farm Pickup Origin</div>
+                              <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '700', marginTop: '2px' }}>{order.farmerName || 'Partner Farm'}</div>
+                              <div style={{ color: '#a3c2b0', fontSize: '12px' }}>{order.farmerLocation?.address || 'Regional Depot'}</div>
+                            </div>
+                            <div>
+                              <div style={{ color: '#38bdf8', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase' }}>Customer Destination</div>
+                              <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '700', marginTop: '2px' }}>{order.customerName || 'Customer Residence'}</div>
+                              <div style={{ color: '#a3c2b0', fontSize: '12px' }}>{order.customerLocation?.address || order.customerAddress || 'Customer Address'}</div>
+                            </div>
+                          </div>
+
+                          {/* Live Tracking Map with honest status */}
+                          <div style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '18px' }}>
+                            <LiveTrackingMap order={order} />
+                          </div>
+
+                          {/* Valid Status Progression Bar */}
+                          <div style={{
+                            background: 'rgba(255,255,255,0.03)',
+                            borderRadius: '14px',
+                            padding: '14px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px'
+                          }}>
+                            <div style={{ fontSize: '12px', color: '#f4c95d', fontWeight: '800' }}>
+                              LOGISTICS WAYPOINT CONTROLS:
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {/* Step 1: Cargo Picked Up */}
+                              <button
+                                disabled={order.status !== 'assigned'}
+                                onClick={() => handleUpdateStatus(orderId, 'picked_up')}
+                                style={{
+                                  flex: '1 1 140px',
+                                  minHeight: '44px',
+                                  padding: '10px 14px',
+                                  borderRadius: '10px',
+                                  border: '1px solid rgba(255,255,255,0.15)',
+                                  background: order.status === 'assigned'
+                                    ? 'linear-gradient(135deg, #f4c95d, #ffa726)'
+                                    : ['picked_up', 'in_transit', 'arrived', 'delivered'].includes(order.status)
+                                      ? 'rgba(55, 189, 120, 0.2)'
+                                      : 'rgba(0,0,0,0.3)',
+                                  color: order.status === 'assigned' ? '#092b27' : '#effbe7',
+                                  fontSize: '12px',
+                                  fontWeight: '800',
+                                  cursor: order.status === 'assigned' ? 'pointer' : 'default',
+                                  opacity: (order.status === 'assigned' || ['picked_up', 'in_transit', 'arrived'].includes(order.status)) ? 1 : 0.4
+                                }}
+                              >
+                                {['picked_up', 'in_transit', 'arrived', 'delivered'].includes(order.status) ? '✓ 1. Picked Up' : '1. Confirm Picked Up'}
+                              </button>
+
+                              {/* Step 2: En Route Doorstep */}
+                              <button
+                                disabled={!['assigned', 'picked_up'].includes(order.status)}
+                                onClick={() => handleUpdateStatus(orderId, 'in_transit')}
+                                style={{
+                                  flex: '1 1 140px',
+                                  minHeight: '44px',
+                                  padding: '10px 14px',
+                                  borderRadius: '10px',
+                                  border: '1px solid rgba(255,255,255,0.15)',
+                                  background: order.status === 'picked_up'
+                                    ? 'linear-gradient(135deg, #0284c7, #0369a1)'
+                                    : ['in_transit', 'arrived', 'delivered'].includes(order.status)
+                                      ? 'rgba(55, 189, 120, 0.2)'
+                                      : 'rgba(0,0,0,0.3)',
+                                  color: '#effbe7',
+                                  fontSize: '12px',
+                                  fontWeight: '800',
+                                  cursor: ['assigned', 'picked_up'].includes(order.status) ? 'pointer' : 'default',
+                                  opacity: (['assigned', 'picked_up'].includes(order.status) || ['in_transit', 'arrived'].includes(order.status)) ? 1 : 0.4
+                                }}
+                              >
+                                {['in_transit', 'arrived', 'delivered'].includes(order.status) ? '✓ 2. En Route' : '2. Start Transit'}
+                              </button>
+
+                              {/* Step 3: Arrived Doorstep */}
+                              <button
+                                disabled={order.status !== 'in_transit'}
+                                onClick={() => handleUpdateStatus(orderId, 'arrived')}
+                                style={{
+                                  flex: '1 1 140px',
+                                  minHeight: '44px',
+                                  padding: '10px 14px',
+                                  borderRadius: '10px',
+                                  border: '1px solid rgba(255,255,255,0.15)',
+                                  background: order.status === 'in_transit'
+                                    ? 'linear-gradient(135deg, #059669, #047857)'
+                                    : ['arrived', 'delivered'].includes(order.status)
+                                      ? 'rgba(55, 189, 120, 0.2)'
+                                      : 'rgba(0,0,0,0.3)',
+                                  color: '#effbe7',
+                                  fontSize: '12px',
+                                  fontWeight: '800',
+                                  cursor: order.status === 'in_transit' ? 'pointer' : 'default',
+                                  opacity: (order.status === 'in_transit' || order.status === 'arrived') ? 1 : 0.4
+                                }}
+                              >
+                                {['arrived', 'delivered'].includes(order.status) ? '✓ 3. Arrived' : '3. Mark Arrived'}
+                              </button>
+
+                              {/* Step 4: OTP Verification & Delivery Handover */}
+                              <button
+                                onClick={() => setSelectedHandoverOrder(order)}
+                                style={{
+                                  flex: '1 1 170px',
+                                  minHeight: '44px',
+                                  padding: '10px 16px',
+                                  borderRadius: '10px',
+                                  border: 'none',
+                                  background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                                  color: '#ffffff',
+                                  fontSize: '12.5px',
+                                  fontWeight: '800',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '6px',
+                                  boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)'
+                                }}
+                              >
+                                <KeyRound size={15} color="#f4c95d" />
+                                <span>4. Verify OTP & Deliver</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
-                        {/* Direct Call & Action Buttons */}
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <a
-                            href={`tel:${order.customerPhone || '9840012345'}`}
-                            style={{
-                              padding: '10px 14px',
-                              borderRadius: '10px',
-                              background: 'rgba(255,255,255,0.08)',
-                              border: '1px solid rgba(255,255,255,0.2)',
-                              color: '#effbe7',
-                              fontSize: '12px',
-                              fontWeight: '700',
-                              textDecoration: 'none',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <Phone size={14} color="#37bd78" />
-                            <span>Call Customer</span>
-                          </a>
+            {/* Sub-tab: Available Farm Pickups */}
+            {deliverySubTab === 'available' && (
+              <div>
+                {availableOrders.length === 0 ? (
+                  <div style={{
+                    background: 'rgba(20, 16, 10, 0.6)',
+                    border: '1px dashed rgba(56, 189, 248, 0.3)',
+                    borderRadius: '20px',
+                    padding: '60px 20px',
+                    textAlign: 'center',
+                    color: '#a3b899'
+                  }}>
+                    <Package size={48} color="#38bdf8" style={{ margin: '0 auto 16px' }} />
+                    <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Pending Farm Orders Awaiting Drivers</h3>
+                    <p style={{ margin: 0, fontSize: '13.5px' }}>
+                      All confirmed and packed farm shipments have already been assigned to regional couriers.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '18px' }}>
+                    {availableOrders.map(order => {
+                      const orderId = String(order._id || order.id);
+                      return (
+                        <div
+                          key={orderId}
+                          style={{
+                            background: 'rgba(20, 16, 10, 0.85)',
+                            border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                            borderRadius: '18px',
+                            padding: '20px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            boxShadow: '0 12px 28px rgba(0,0,0,0.4)'
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                              <span style={{ color: '#f4c95d', fontSize: '12px', fontWeight: '800' }}>
+                                ORDER #{orderId.slice(-8).toUpperCase()}
+                              </span>
+                              <span style={{
+                                background: 'rgba(56, 189, 248, 0.2)',
+                                border: '1px solid #38bdf8',
+                                color: '#7dd3fc',
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                fontSize: '10.5px',
+                                fontWeight: '800',
+                                textTransform: 'uppercase'
+                              }}>
+                                Ready: {order.status}
+                              </span>
+                            </div>
+
+                            <div style={{ color: '#effbe7', fontSize: '16px', fontWeight: '800', marginBottom: '8px' }}>
+                              ₹{order.totalAmount} • {order.items?.length || 1} produce line(s)
+                            </div>
+
+                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '10px', marginBottom: '14px', fontSize: '12px' }}>
+                              <div style={{ color: '#f4c95d', fontWeight: '700' }}>Pickup Origin:</div>
+                              <div style={{ color: '#effbe7' }}>{order.farmerName}</div>
+                              <div style={{ color: '#a3c2b0', fontSize: '11px' }}>{order.farmerLocation?.address || 'Farm Origin'}</div>
+
+                              <div style={{ color: '#38bdf8', fontWeight: '700', marginTop: '6px' }}>Destination:</div>
+                              <div style={{ color: '#effbe7' }}>{order.customerName}</div>
+                              <div style={{ color: '#a3c2b0', fontSize: '11px' }}>{order.customerLocation?.address || order.customerAddress || 'Customer Address'}</div>
+                            </div>
+                          </div>
 
                           <button
-                            disabled={simulating}
-                            onClick={() => simulateGpsMovement(order)}
+                            onClick={() => handleClaimOrder(orderId)}
                             style={{
-                              padding: '10px 16px',
-                              borderRadius: '10px',
-                              background: isCurrentSimulating ? '#37bd78' : 'linear-gradient(135deg, #f4c95d, #ffa726)',
+                              width: '100%',
+                              background: 'linear-gradient(135deg, #10b981, #059669)',
                               border: 'none',
-                              color: '#092b27',
-                              fontSize: '13px',
-                              fontWeight: '800',
-                              cursor: simulating ? 'not-allowed' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              boxShadow: '0 4px 14px rgba(244, 201, 93, 0.4)'
-                            }}
-                          >
-                            <Play size={14} />
-                            <span>{isCurrentSimulating ? '🛰️ Triangulating GPS...' : 'Simulate Turn-by-Turn GPS'}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Live Tracking Map */}
-                      <div style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '18px' }}>
-                        <LiveTrackingMap order={order} />
-                      </div>
-
-                      {/* Status Update Button Row */}
-                      <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '10px',
-                        background: 'rgba(255,255,255,0.03)',
-                        borderRadius: '14px',
-                        padding: '14px',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#effbe7' }}>
-                          <Navigation size={16} color="#f4c95d" />
-                          <span>Dispatch Waypoint Controls:</span>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
-                          <button
-                            onClick={() => handleUpdateStatus(orderId, 'assigned')}
-                            style={{
-                              flex: '1 1 130px',
-                              minHeight: '44px',
-                              padding: '10px 14px',
-                              borderRadius: '10px',
-                              border: '1px solid rgba(255,255,255,0.15)',
-                              background: order.status === 'assigned' ? '#8d5e34' : 'rgba(0,0,0,0.35)',
-                              color: '#effbe7',
-                              fontSize: '12.5px',
-                              fontWeight: '700',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            1. Accept Pickup
-                          </button>
-
-                          <button
-                            onClick={() => handleUpdateStatus(orderId, 'picked_up')}
-                            style={{
-                              flex: '1 1 130px',
-                              minHeight: '44px',
-                              padding: '10px 14px',
-                              borderRadius: '10px',
-                              border: '1px solid rgba(255,255,255,0.15)',
-                              background: order.status === 'picked_up' ? '#f4c95d' : 'rgba(0,0,0,0.35)',
-                              color: order.status === 'picked_up' ? '#092b27' : '#effbe7',
-                              fontSize: '12.5px',
-                              fontWeight: '700',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            2. Cargo Picked Up
-                          </button>
-
-                          <button
-                            onClick={() => handleUpdateStatus(orderId, 'in_transit')}
-                            style={{
-                              flex: '1 1 130px',
-                              minHeight: '44px',
-                              padding: '10px 14px',
-                              borderRadius: '10px',
-                              border: '1px solid rgba(255,255,255,0.15)',
-                              background: order.status === 'in_transit' ? '#0288d1' : 'rgba(0,0,0,0.35)',
                               color: '#ffffff',
-                              fontSize: '12.5px',
-                              fontWeight: '700',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            3. En Route Doorstep
-                          </button>
-
-                          <button
-                            onClick={() => setSelectedHandoverOrder(order)}
-                            style={{
-                              flex: '1 1 160px',
-                              minHeight: '44px',
-                              padding: '10px 16px',
+                              padding: '11px',
                               borderRadius: '10px',
-                              border: 'none',
-                              background: 'linear-gradient(135deg, #2e7d32, #1b5e20)',
-                              color: '#ffffff',
                               fontSize: '13px',
                               fontWeight: '800',
                               cursor: 'pointer',
@@ -1202,94 +1657,116 @@ export default function DeliveryPortal() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               gap: '6px',
-                              boxShadow: '0 4px 14px rgba(46, 125, 50, 0.4)'
+                              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
                             }}
                           >
-                            <KeyRound size={16} color="#f4c95d" />
-                            <span>4. Verify OTP & Deliver</span>
+                            <Truck size={15} />
+                            <span>Claim & Accept Shipment</span>
                           </button>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Sub-tab: Delivery History */}
+            {deliverySubTab === 'completed' && (
+              <div>
+                {completedOrders.length === 0 ? (
+                  <div style={{
+                    background: 'rgba(20, 16, 10, 0.6)',
+                    border: '1px dashed rgba(55, 189, 120, 0.3)',
+                    borderRadius: '20px',
+                    padding: '60px 20px',
+                    textAlign: 'center',
+                    color: '#a3b899'
+                  }}>
+                    <CheckCircle2 size={48} color="#37bd78" style={{ margin: '0 auto 16px' }} />
+                    <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Completed Deliveries Yet</h3>
+                    <p style={{ margin: 0, fontSize: '13.5px' }}>
+                      Orders delivered and authenticated with customer handover OTP will appear in this ledger.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {completedOrders.map(order => {
+                      const orderId = String(order._id || order.id);
+                      return (
+                        <div
+                          key={orderId}
+                          style={{
+                            background: 'rgba(20, 16, 10, 0.85)',
+                            border: '1px solid rgba(55, 189, 120, 0.3)',
+                            borderRadius: '16px',
+                            padding: '16px 20px',
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '12px'
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ color: '#f4c95d', fontSize: '12px', fontWeight: '800' }}>
+                                #{orderId.slice(-8).toUpperCase()}
+                              </span>
+                              <span style={{
+                                background: 'rgba(55, 189, 120, 0.2)',
+                                border: '1px solid #37bd78',
+                                color: '#8be28b',
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                fontSize: '10.5px',
+                                fontWeight: '800'
+                              }}>
+                                ✓ OTP Authenticated
+                              </span>
+                            </div>
+                            <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700', marginTop: '4px' }}>
+                              {order.items?.map(i => `${i.quantity}x ${i.title}`).join(', ') || 'Fresh Produce'}
+                            </div>
+                            <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
+                              Delivered to: {order.customerLocation?.address || order.customerAddress || 'Customer Address'}
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ color: '#37bd78', fontSize: '18px', fontWeight: '900' }}>
+                              +₹{perDeliveryFee}
+                            </div>
+                            <div style={{ color: '#a3c2b0', fontSize: '11px', marginTop: '2px' }}>
+                              {order.deliveryOtpVerifiedAt
+                                ? new Date(order.deliveryOtpVerifiedAt).toLocaleDateString()
+                                : 'Completed'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* 3D Cold-Chain Telemetry Tab */}
-        {activeNavTab === 'coldchain' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-            <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: 0 }}>
-              3D Cold-Chain Telemetry & Refrigerated Cargo Fleet
-            </h2>
-            <ColdChainTelemetry3D
-              temp={4.1}
-              humidity={89}
-              onBoostCryo={() => showToast('❄️ Rapid Sub-Zero Cryo-Chill Boost activated! Perishable cargo temperature dropping to 2.8°C.', 'success')}
-            />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-              <div style={{ background: 'rgba(20, 16, 10, 0.85)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '16px', padding: '20px' }}>
-                <h4 style={{ color: '#7dd3fc', margin: '0 0 8px 0', fontSize: '15px' }}>Active Perishable Cargo</h4>
-                <p style={{ color: '#c0d9cb', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
-                  Real-time cold-chain sensors active on {orders.length} delivery payload(s). Temperature logs streamed to customer app in real-time.
-                </p>
-              </div>
-              <div style={{ background: 'rgba(20, 16, 10, 0.85)', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '16px', padding: '20px' }}>
-                <h4 style={{ color: '#86efac', margin: '0 0 8px 0', fontSize: '15px' }}>Spoilage Prevention Index</h4>
-                <p style={{ color: '#c0d9cb', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
-                  100% Purity preservation rating. Insulated thermal containment prevents nutrient decay during transit.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Shift Earnings Tab */}
-        {activeNavTab === 'earnings' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{
-              background: 'rgba(20, 16, 10, 0.85)',
-              border: '1.5px solid rgba(244, 201, 93, 0.35)',
-              borderRadius: '20px',
-              padding: '24px'
-            }}>
-              <h3 style={{ color: '#effbe7', fontSize: '20px', margin: '0 0 16px' }}>Shift Payout Breakdown</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
-                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '16px', borderRadius: '12px' }}>
-                  <div style={{ color: '#a3b899', fontSize: '12px' }}>Base Delivery Fares</div>
-                  <div style={{ color: '#effbe7', fontSize: '24px', fontWeight: '900', marginTop: '4px' }}>₹{completedOrders.length * 120}</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '16px', borderRadius: '12px' }}>
-                  <div style={{ color: '#a3b899', fontSize: '12px' }}>Customer Tips & Bonuses</div>
-                  <div style={{ color: '#37bd78', fontSize: '24px', fontWeight: '900', marginTop: '4px' }}>₹80</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '16px', borderRadius: '12px' }}>
-                  <div style={{ color: '#a3b899', fontSize: '12px' }}>Total Instant Balance</div>
-                  <div style={{ color: '#f4c95d', fontSize: '24px', fontWeight: '900', marginTop: '4px' }}>₹{shiftEarnings}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Full-Screen Live Navigation Map View */}
+        {/* 3. Turn-by-Turn Waypoint Map Tab */}
         {activeNavTab === 'map' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Navigation size={22} color="#f4c95d" />
-                  <span>Turn-by-Turn Delivery Waypoint</span>
-                </h2>
-                <p style={{ color: '#a3b899', fontSize: '13px', margin: '4px 0 0 0' }}>
-                  Live GPS telemetry, farm gate routing, and customer destination guidance.
-                </p>
-              </div>
+            <div>
+              <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Navigation size={22} color="#f4c95d" />
+                <span>Turn-by-Turn Delivery Waypoint</span>
+              </h2>
+              <p style={{ color: '#a3b899', fontSize: '13px', margin: '4px 0 0 0' }}>
+                Live GPS telemetry, farm gate routing, and customer destination guidance.
+              </p>
             </div>
 
-            {orders.length === 0 ? (
+            {activeOrders.length === 0 ? (
               <div style={{
                 background: 'rgba(20, 16, 10, 0.6)',
                 border: '1px dashed rgba(244, 201, 93, 0.3)',
@@ -1299,13 +1776,15 @@ export default function DeliveryPortal() {
                 color: '#a3b899'
               }}>
                 <Truck size={48} color="#f4c95d" style={{ margin: '0 auto 16px' }} />
-                <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Active Waypoint</h3>
-                <p style={{ margin: 0, fontSize: '13.5px' }}>Waiting for assigned shipments in dispatch radar.</p>
+                <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Active Route in Progress</h3>
+                <p style={{ margin: 0, fontSize: '13.5px' }}>
+                  Claim an available shipment from the Deliveries tab to activate turn-by-turn guidance.
+                </p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ borderRadius: '18px', overflow: 'hidden', border: '1.5px solid rgba(244, 201, 93, 0.35)', boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
-                  <LiveTrackingMap order={orders[0]} />
+                  <LiveTrackingMap order={activeOrders[0]} />
                 </div>
 
                 <div style={{
@@ -1322,16 +1801,16 @@ export default function DeliveryPortal() {
                       CURRENT ACTIVE DESTINATION
                     </span>
                     <span style={{ background: 'rgba(244, 201, 93, 0.2)', color: '#f4c95d', padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '800' }}>
-                      {orders[0].status?.toUpperCase()}
+                      {activeOrders[0].status?.toUpperCase()}
                     </span>
                   </div>
                   <div style={{ color: '#effbe7', fontSize: '15px', fontWeight: '700' }}>
-                    {orders[0].customerAddress || orders[0].shippingAddress?.address || 'Customer Residence, Mandya District'}
+                    {activeOrders[0].customerLocation?.address || activeOrders[0].customerAddress || 'Customer Address, Mandya Region'}
                   </div>
 
                   <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
                     <a
-                      href={`tel:${orders[0].customerPhone || '9840012345'}`}
+                      href={`tel:${activeOrders[0].customerPhone || '9840012345'}`}
                       style={{
                         flex: 1,
                         minHeight: '44px',
@@ -1353,7 +1832,7 @@ export default function DeliveryPortal() {
                     </a>
 
                     <button
-                      onClick={() => setSelectedHandoverOrder(orders[0])}
+                      onClick={() => setSelectedHandoverOrder(activeOrders[0])}
                       style={{
                         flex: 1,
                         minHeight: '44px',
@@ -1380,7 +1859,82 @@ export default function DeliveryPortal() {
           </div>
         )}
 
-        {/* Dedicated Driver Profile Tab View (Mobile Friendly) */}
+        {/* 4. 3D Cold-Chain Chamber Tab */}
+        {activeNavTab === 'coldchain' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+            <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: 0 }}>
+              3D Cold-Chain Chamber (Interactive WebGL Simulation)
+            </h2>
+            <ColdChainTelemetry3D
+              temp={4.1}
+              humidity={89}
+              onBoostCryo={() => showToast('❄️ Simulated Cryo-Chill Boost activated (demo temperature drop to 2.8°C).', 'info')}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+              <div style={{ background: 'rgba(20, 16, 10, 0.85)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '16px', padding: '20px' }}>
+                <h4 style={{ color: '#7dd3fc', margin: '0 0 8px 0', fontSize: '15px' }}>Perishable Containment Chamber</h4>
+                <p style={{ color: '#c0d9cb', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
+                  Educational WebGL representation of refrigerated cargo containment. IoT hardware probe integration pending.
+                </p>
+              </div>
+              <div style={{ background: 'rgba(20, 16, 10, 0.85)', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '16px', padding: '20px' }}>
+                <h4 style={{ color: '#86efac', margin: '0 0 8px 0', fontSize: '15px' }}>Freshness Retention Standard</h4>
+                <p style={{ color: '#c0d9cb', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
+                  Insulated thermal containment ensures fresh harvest from farm gate reaches customer without spoilage.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. Shift Earnings Tab */}
+        {activeNavTab === 'earnings' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{
+              background: 'rgba(20, 16, 10, 0.85)',
+              border: '1.5px solid rgba(244, 201, 93, 0.35)',
+              borderRadius: '20px',
+              padding: '24px'
+            }}>
+              <h3 style={{ color: '#effbe7', fontSize: '20px', margin: '0 0 16px' }}>Shift Payout Ledger</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '16px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3b899', fontSize: '12px' }}>Total Shift Balance</div>
+                  <div style={{ color: '#37bd78', fontSize: '26px', fontWeight: '900', marginTop: '4px' }}>₹{shiftEarnings}</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '16px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3b899', fontSize: '12px' }}>Verified Deliveries</div>
+                  <div style={{ color: '#effbe7', fontSize: '26px', fontWeight: '900', marginTop: '4px' }}>{completedOrders.length}</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '16px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3b899', fontSize: '12px' }}>Rate per Completed Delivery</div>
+                  <div style={{ color: '#f4c95d', fontSize: '26px', fontWeight: '900', marginTop: '4px' }}>₹{perDeliveryFee}</div>
+                </div>
+              </div>
+
+              <h4 style={{ color: '#effbe7', fontSize: '15px', margin: '0 0 12px' }}>Persisted Delivery Records</h4>
+              {completedOrders.length === 0 ? (
+                <div style={{ color: '#a3c2b0', fontSize: '13px', background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
+                  No completed deliveries recorded yet for this driver. Completed deliveries with verified customer handover OTP will automatically appear here.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {completedOrders.map(o => (
+                    <div key={o._id || o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '10px' }}>
+                      <div>
+                        <div style={{ color: '#f4c95d', fontSize: '12px', fontWeight: '700' }}>#{String(o._id || o.id).slice(-8).toUpperCase()}</div>
+                        <div style={{ color: '#effbe7', fontSize: '13px' }}>{o.customerLocation?.address || o.customerAddress || 'Customer Destination'}</div>
+                      </div>
+                      <div style={{ color: '#37bd78', fontWeight: '900', fontSize: '16px' }}>+₹{perDeliveryFee}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 6. Driver Profile Tab */}
         {activeNavTab === 'profile' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: 0 }}>
@@ -1434,7 +1988,7 @@ export default function DeliveryPortal() {
                 </div>
               </div>
 
-              {/* SOS Emergency Button */}
+              {/* SOS Emergency Button with Honest Warning */}
               <button
                 onClick={triggerSOS}
                 style={{
@@ -1445,7 +1999,7 @@ export default function DeliveryPortal() {
                   border: '1.5px solid #ff1744',
                   color: '#ffffff',
                   fontWeight: '800',
-                  fontSize: '13.5px',
+                  fontSize: '13px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -1455,7 +2009,7 @@ export default function DeliveryPortal() {
                 }}
               >
                 <AlertTriangle size={18} />
-                <span>{sosActive ? '🚨 SOS BEACON BROADCASTING LIVE' : 'Emergency Driver SOS Signal'}</span>
+                <span>{sosActive ? '🚨 DEMO BEACON BROADCASTING' : 'Demo Safety Beacon (Not connected to 112/emergency services)'}</span>
               </button>
             </div>
           </div>
@@ -1485,18 +2039,24 @@ export default function DeliveryPortal() {
 
         <button
           className={`mobile-nav-btn ${activeNavTab === 'dispatch' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('dispatch')}
+          onClick={() => {
+            setActiveNavTab('dispatch');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         >
           <div style={{ position: 'relative', display: 'inline-block' }}>
             <Truck size={20} />
-            {orders.length > 0 && <span className="mobile-nav-badge">{orders.length}</span>}
+            {activeOrders.length > 0 && <span className="mobile-nav-badge">{activeOrders.length}</span>}
           </div>
           <span>Deliveries</span>
         </button>
 
         <button
           className={`mobile-nav-btn ${activeNavTab === 'map' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('map')}
+          onClick={() => {
+            setActiveNavTab('map');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         >
           <Navigation size={20} />
           <span>Map</span>
@@ -1504,7 +2064,10 @@ export default function DeliveryPortal() {
 
         <button
           className={`mobile-nav-btn ${activeNavTab === 'earnings' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('earnings')}
+          onClick={() => {
+            setActiveNavTab('earnings');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         >
           <DollarSign size={20} />
           <span>Earnings</span>
@@ -1512,7 +2075,10 @@ export default function DeliveryPortal() {
 
         <button
           className={`mobile-nav-btn ${activeNavTab === 'profile' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('profile')}
+          onClick={() => {
+            setActiveNavTab('profile');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         >
           <User size={20} />
           <span>Profile</span>
