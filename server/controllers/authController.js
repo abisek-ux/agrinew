@@ -7,6 +7,13 @@ const generateToken = require('../utils/generateToken');
 const { isConnected } = require('../config/db');
 const sendSms = require('../utils/sendSms');
 const sendEmail = require('../utils/sendEmail');
+const {
+  normalizePhoneNumber,
+  maskPhoneNumber,
+  requestPhoneOtp,
+  verifyPhoneOtp,
+  validateVerificationToken
+} = require('../services/phoneOtpService');
 
 const memoryUsersFile = path.join(__dirname, '../data/users.json');
 const OTP_TTL_MINUTES = Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES || 10);
@@ -76,6 +83,42 @@ const lookupUser = async (identifier) => {
 };
 
 const registrationOtps = new Map();
+
+/**
+ * Dedicated Phone OTP Request Endpoint Handler
+ * POST /api/auth/phone-otp/request
+ */
+const requestPhoneOtpHandler = async (req, res) => {
+  try {
+    const { phone, purpose = 'authentication' } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid phone number.' });
+    }
+    const result = await requestPhoneOtp({ phone, purpose });
+    return res.status(result.statusCode || 200).json(result);
+  } catch (error) {
+    console.error('Phone OTP request handler error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to process phone OTP request' });
+  }
+};
+
+/**
+ * Dedicated Phone OTP Verify Endpoint Handler
+ * POST /api/auth/phone-otp/verify
+ */
+const verifyPhoneOtpHandler = async (req, res) => {
+  try {
+    const { phone, otp, purpose = 'authentication' } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ success: false, message: 'Phone number and 6-digit verification code are required.' });
+    }
+    const result = await verifyPhoneOtp({ phone, otp, purpose });
+    return res.status(result.statusCode || 200).json(result);
+  } catch (error) {
+    console.error('Phone OTP verify handler error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to verify phone OTP' });
+  }
+};
 
 const sendRegisterOtp = async (req, res) => {
   try {
@@ -199,7 +242,7 @@ const verifyRegisterOtp = async (req, res) => {
 
 const registerUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password, role, nativePlace, location, emailOtp } = req.body;
+    const { firstName, lastName, email, phone, password, role, nativePlace, location, emailOtp, phoneVerificationToken } = req.body;
     if (!firstName || !lastName || !email || !phone || !password) {
       return res.status(400).json({ message: 'Please fill all required fields' });
     }
@@ -208,16 +251,32 @@ const registerUser = async (req, res) => {
     }
     const cleanEmail = email.toLowerCase().trim();
     const cleanPhone = phone.trim();
+    const normalizedPhone = normalizePhoneNumber(cleanPhone) || cleanPhone;
 
-    // Verify OTP if requested/present
-    const otpRecord = registrationOtps.get(cleanEmail);
-    if (emailOtp) {
+    // Verify OTP via Phone Verification Token OR Email OTP
+    let isVerified = false;
+    if (phoneVerificationToken) {
+      const tokenPhone = validateVerificationToken(phoneVerificationToken);
+      if (tokenPhone && (tokenPhone === cleanPhone || tokenPhone === normalizedPhone)) {
+        isVerified = true;
+      } else {
+        return res.status(400).json({ message: 'Invalid or expired phone verification token. Please verify your phone number.' });
+      }
+    } else if (emailOtp) {
+      const otpRecord = registrationOtps.get(cleanEmail);
       const submittedHash = hashOtp(String(emailOtp).trim());
       const subBuf = Buffer.from(submittedHash);
       const storedBuf = otpRecord ? Buffer.from(otpRecord.hash) : null;
       const isMatch = storedBuf && subBuf.length === storedBuf.length && crypto.timingSafeEqual(subBuf, storedBuf);
-      if (!isMatch && (!otpRecord || !otpRecord.verified)) {
+      if (isMatch || otpRecord?.verified) {
+        isVerified = true;
+      } else {
         return res.status(400).json({ message: 'Invalid or unverified Email OTP. Please check your code.' });
+      }
+    } else {
+      const otpRecord = registrationOtps.get(cleanEmail);
+      if (otpRecord?.verified) {
+        isVerified = true;
       }
     }
 
@@ -306,11 +365,42 @@ const forgotPassword = async (req, res) => {
   try {
     const { identifier } = req.body;
     if (!identifier) return res.status(400).json({ message: 'Enter your registered email address or phone number' });
-    const user = await lookupUser(identifier.trim().toLowerCase());
+    const cleanId = identifier.trim().toLowerCase();
+    const user = await lookupUser(cleanId);
     if (!user || (!user.email && !user.phone)) {
       return res.status(400).json({ message: 'Unable to find an account with this email or phone number' });
     }
     const now = new Date();
+
+    // Check if identifier is a mobile phone number
+    const isPhoneIdentifier = !cleanId.includes('@') && (Boolean(normalizePhoneNumber(cleanId)) || Boolean(user.phone));
+
+    if (isPhoneIdentifier) {
+      const targetPhone = user.phone || cleanId;
+      const phoneRes = await requestPhoneOtp({ phone: targetPhone, purpose: 'password_reset' });
+
+      if (!phoneRes.success) {
+        return res.status(phoneRes.statusCode || 400).json(phoneRes);
+      }
+
+      user.resetOtpLastSentAt = now;
+      await persistUser(user);
+
+      return res.json({
+        success: true,
+        deliveryChannel: 'sms',
+        maskedPhone: phoneRes.phone,
+        targetDestination: phoneRes.phone,
+        expiresInSeconds: phoneRes.expiresInSeconds,
+        resendAvailableInSeconds: phoneRes.resendAvailableInSeconds,
+        smsSent: true,
+        mode: phoneRes.mode,
+        ...(phoneRes.demoOtp ? { demoOtp: phoneRes.demoOtp } : {}),
+        message: phoneRes.message
+      });
+    }
+
+    // Otherwise deliver via Email
     const lastSent = user.resetOtpLastSentAt && new Date(user.resetOtpLastSentAt);
     const cooldownRemaining = lastSent && RESEND_COOLDOWN_SECONDS - Math.ceil((now - lastSent) / 1000);
     if (cooldownRemaining > 0) return res.status(429).json({ message: `Please wait ${cooldownRemaining} seconds before requesting another code`, resendAvailableInSeconds: cooldownRemaining });
@@ -322,12 +412,11 @@ const forgotPassword = async (req, res) => {
     const otp = crypto.randomInt(100000, 1000000).toString();
     let emailSent = false;
     let emailErrorMsg = null;
-    const targetEmail = user.email || (identifier.includes('@') ? identifier.trim().toLowerCase() : null);
+    const targetEmail = user.email || (cleanId.includes('@') ? cleanId : null);
     if (!targetEmail) {
-      return res.status(400).json({ message: 'No registered email found for this account. Please provide your registered email address to receive the verification OTP.' });
+      return res.status(400).json({ message: 'No registered email found for this account. Please provide your registered mobile number or email address.' });
     }
 
-    // Deliver OTP strictly to registered Email ID (never mobile phone / SMS)
     try {
       const emailResult = await sendEmail({
         to: targetEmail,
@@ -358,10 +447,6 @@ const forgotPassword = async (req, res) => {
           : `Could not send verification code to your registered email (${maskedMail}). Please check your connection and try again.`
       });
     }
-
-    console.log(`\n======================================================`);
-    console.log(`🔑 [PASSWORD RESET OTP] Dispatched to email: ${targetEmail}`);
-    console.log(`======================================================\n`);
 
     user.resetOtpHash = hashOtp(otp);
     user.resetOtpExpiresAt = new Date(now.getTime() + OTP_TTL_MINUTES * 60000);
@@ -396,31 +481,59 @@ const resetPassword = async (req, res) => {
     if (!validOtp(resetToken)) return res.status(400).json({ message: 'Enter a valid 6-digit OTP' });
     if (!validPassword(newPassword)) return res.status(400).json({ message: 'New password must be at least 8 characters' });
     const user = await lookupUser(identifier.trim().toLowerCase());
-    if (!user || !user.resetOtpHash || !user.resetOtpExpiresAt) return res.status(400).json({ message: 'Invalid or expired OTP. Request a new code.' });
-    if (new Date() > new Date(user.resetOtpExpiresAt)) {
-      clearOtp(user); await persistUser(user);
-      return res.status(400).json({ message: 'OTP has expired. Request a new code.' });
+    if (!user) return res.status(400).json({ message: 'Invalid or expired OTP. Request a new code.' });
+
+    let verified = false;
+
+    // Check Phone OTP verification first if identifier or user has phone
+    if (!identifier.includes('@') || user.phone) {
+      const phoneVerify = await verifyPhoneOtp({
+        phone: user.phone || identifier,
+        otp: resetToken,
+        purpose: 'password_reset'
+      });
+      if (phoneVerify.verified) {
+        verified = true;
+      }
     }
-    if ((user.resetOtpAttempts || 0) >= MAX_OTP_VERIFY_ATTEMPTS) {
-      clearOtp(user); await persistUser(user);
-      return res.status(429).json({ message: 'Too many incorrect OTP attempts. Request a new code.' });
+
+    // Check Email OTP verification if not verified via phone
+    if (!verified && user.resetOtpHash && user.resetOtpExpiresAt) {
+      if (new Date() > new Date(user.resetOtpExpiresAt)) {
+        clearOtp(user); await persistUser(user);
+        return res.status(400).json({ message: 'OTP has expired. Request a new code.' });
+      }
+      if ((user.resetOtpAttempts || 0) >= MAX_OTP_VERIFY_ATTEMPTS) {
+        clearOtp(user); await persistUser(user);
+        return res.status(429).json({ message: 'Too many incorrect OTP attempts. Request a new code.' });
+      }
+      const submittedHash = hashOtp(resetToken);
+      const subBuf = Buffer.from(submittedHash);
+      const storedBuf = Buffer.from(user.resetOtpHash);
+      const correctOtp = subBuf.length === storedBuf.length && crypto.timingSafeEqual(subBuf, storedBuf);
+      if (correctOtp) {
+        verified = true;
+      } else {
+        user.resetOtpAttempts = (user.resetOtpAttempts || 0) + 1;
+        const exhausted = user.resetOtpAttempts >= MAX_OTP_VERIFY_ATTEMPTS;
+        if (exhausted) clearOtp(user);
+        await persistUser(user);
+        return res.status(exhausted ? 429 : 400).json({ message: exhausted ? 'Too many incorrect OTP attempts. Request a new code.' : 'Incorrect OTP' });
+      }
     }
-    const submittedHash = hashOtp(resetToken);
-    const subBuf = Buffer.from(submittedHash);
-    const storedBuf = Buffer.from(user.resetOtpHash);
-    const correctOtp = subBuf.length === storedBuf.length && crypto.timingSafeEqual(subBuf, storedBuf);
-    if (!correctOtp) {
-      user.resetOtpAttempts = (user.resetOtpAttempts || 0) + 1;
-      const exhausted = user.resetOtpAttempts >= MAX_OTP_VERIFY_ATTEMPTS;
-      if (exhausted) clearOtp(user);
-      await persistUser(user);
-      return res.status(exhausted ? 429 : 400).json({ message: exhausted ? 'Too many incorrect OTP attempts. Request a new code.' : 'Incorrect OTP' });
+
+    if (!verified) {
+      return res.status(400).json({ message: 'Invalid or expired OTP. Request a new code.' });
     }
+
     user.password = isConnected() ? newPassword : await bcrypt.hash(newPassword, 10);
     clearOtp(user);
     await persistUser(user);
     return res.json({ success: true, message: 'Password updated successfully. Please sign in.' });
-  } catch (error) { console.error('Password reset failed:', error.message); return res.status(500).json({ message: 'Unable to reset password' }); }
+  } catch (error) {
+    console.error('Password reset failed:', error.message);
+    return res.status(500).json({ message: 'Unable to reset password' });
+  }
 };
 
 const updateLocation = async (req, res) => {
@@ -450,6 +563,8 @@ module.exports = {
   registerUser,
   sendRegisterOtp,
   verifyRegisterOtp,
+  requestPhoneOtpHandler,
+  verifyPhoneOtpHandler,
   loginUser,
   forgotPassword,
   resetPassword,

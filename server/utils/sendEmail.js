@@ -15,13 +15,10 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
     socketTimeout: 8000      // 8s max for socket activity
   };
 
-  const DEFAULT_EMAIL_USER = 'mgowres@gmail.com';
-  const DEFAULT_EMAIL_PASS = 'jbxe dlnp mazj rfzs';
-
   // Support both EMAIL_PASS and EMAIL_PASSWORD environment variable names and strip spaces (Google App Passwords)
-  const rawPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || DEFAULT_EMAIL_PASS;
+  const rawPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || '';
   const cleanPass = rawPass.replace(/\s+/g, '');
-  const emailUser = (process.env.EMAIL_USER || DEFAULT_EMAIL_USER).trim();
+  const emailUser = (process.env.EMAIL_USER || '').trim();
   const hasCredentials = Boolean(emailUser && cleanPass);
 
   if (hasCredentials) {

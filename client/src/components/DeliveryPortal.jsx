@@ -9,6 +9,7 @@ import {
   Phone,
   Mail,
   User,
+  Home,
   Navigation,
   Play,
   CheckCircle2,
@@ -383,23 +384,53 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
   const [enteredOtp, setEnteredOtp] = useState('');
   const [verified, setVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const correctOtp = order?.deliveryOtp || '482910';
+  const [generating, setGenerating] = useState(false);
+  const [demoCode, setDemoCode] = useState(null);
+  const [statusMsg, setStatusMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen || !order) return null;
+  const orderId = String(order._id || order.id);
 
-  const handleVerify = () => {
-    if (!enteredOtp || enteredOtp.trim().length < 4) return;
+  const handleDispatchOtp = async () => {
+    setGenerating(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    try {
+      const res = await orderAPI.generateDeliveryOtp(orderId);
+      setStatusMsg(res.data.message || `OTP dispatched to customer mobile`);
+      if (res.data.demoOtp) {
+        setDemoCode(res.data.demoOtp);
+      }
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Failed to dispatch handover OTP to customer.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    const entered = enteredOtp.trim();
+    if (!entered || entered.length !== 6) {
+      setErrorMsg('Please enter a valid 6-digit customer handover PIN');
+      return;
+    }
     setSubmitting(true);
-    setTimeout(() => {
+    setErrorMsg('');
+    try {
+      await orderAPI.verifyDeliveryOtp(orderId, { otp: entered });
       setVerified(true);
       setTimeout(() => {
-        onConfirmDelivery(String(order._id || order.id));
+        onConfirmDelivery(orderId);
         setSubmitting(false);
         setVerified(false);
         setEnteredOtp('');
         onClose();
-      }, 1400);
-    }, 600);
+      }, 1200);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Handover PIN verification failed');
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -412,18 +443,24 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '20px'
+      padding: '16px'
     }} onClick={onClose}>
-      <div style={{
-        maxWidth: '480px',
-        width: '100%',
-        background: 'linear-gradient(145deg, rgba(18, 14, 8, 0.98), rgba(10, 8, 4, 0.99))',
-        border: '1.5px solid rgba(244, 201, 93, 0.45)',
-        borderRadius: '24px',
-        padding: '28px',
-        boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 35px rgba(244,201,93,0.2)',
-        position: 'relative'
-      }} onClick={e => e.stopPropagation()}>
+      <div
+        className="responsive-modal-card"
+        style={{
+          maxWidth: '480px',
+          width: '100%',
+          maxHeight: '92vh',
+          overflowY: 'auto',
+          background: 'linear-gradient(145deg, rgba(18, 14, 8, 0.98), rgba(10, 8, 4, 0.99))',
+          border: '1.5px solid rgba(244, 201, 93, 0.45)',
+          borderRadius: '24px',
+          padding: 'clamp(16px, 4vw, 28px)',
+          boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 35px rgba(244,201,93,0.2)',
+          position: 'relative'
+        }}
+        onClick={e => e.stopPropagation()}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
@@ -468,19 +505,56 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
               <Check size={44} color="#fff" />
             </div>
             <h3 style={{ color: '#86efac', fontSize: '20px', fontWeight: '900', margin: '0 0 6px 0' }}>
-              3D Handover Authenticated!
+              Handover Authenticated!
             </h3>
             <p style={{ color: '#a3c2b0', fontSize: '13px', margin: 0 }}>
-              Produce securely transferred. Shift payout +₹120 credited.
+              Produce securely transferred. Order marked as DELIVERED in database.
             </p>
           </div>
         ) : (
           <div>
-            <p style={{ color: '#c0d9cb', fontSize: '13px', lineHeight: '1.5', margin: '0 0 18px 0' }}>
-              Ask the customer for their 6-digit delivery PIN to authenticate cargo handover and release shift earnings.
+            <p style={{ color: '#c0d9cb', fontSize: '13px', lineHeight: '1.5', margin: '0 0 14px 0' }}>
+              Send an OTP to the customer's phone ({order.customerPhone || 'on record'}) and enter their 6-digit verification code to complete delivery.
             </p>
 
-            <div style={{ marginBottom: '18px' }}>
+            <button
+              type="button"
+              onClick={handleDispatchOtp}
+              disabled={generating}
+              style={{
+                width: '100%',
+                background: 'rgba(244, 201, 93, 0.15)',
+                border: '1px solid #f4c95d',
+                color: '#f4c95d',
+                borderRadius: '10px',
+                padding: '9px 14px',
+                fontSize: '12.5px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                marginBottom: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <Send size={15} />
+              <span>{generating ? 'Sending OTP via Gateway...' : 'Send OTP to Customer Mobile'}</span>
+            </button>
+
+            {statusMsg && (
+              <div style={{ background: 'rgba(52, 211, 153, 0.15)', border: '1px solid #34d399', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', color: '#a7f3d0', marginBottom: '12px' }}>
+                ✓ {statusMsg}
+              </div>
+            )}
+
+            {errorMsg && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', color: '#fca5a5', marginBottom: '12px' }}>
+                ⚠ {errorMsg}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '11.5px', color: '#f4c95d', fontWeight: '800', marginBottom: '8px' }}>
                 ENTER CUSTOMER DELIVERY OTP
               </label>
@@ -488,16 +562,16 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
                 type="text"
                 maxLength={6}
                 value={enteredOtp}
-                onChange={e => setEnteredOtp(e.target.value)}
-                placeholder="6-digit code"
+                onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="000000"
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.5)',
                   border: '1.5px solid rgba(244, 201, 93, 0.4)',
                   borderRadius: '12px',
-                  padding: '12px 16px',
-                  fontSize: '20px',
-                  letterSpacing: '8px',
+                  padding: '12px 14px',
+                  fontSize: 'clamp(18px, 5vw, 22px)',
+                  letterSpacing: 'clamp(4px, 2vw, 8px)',
                   textAlign: 'center',
                   color: '#effbe7',
                   fontWeight: '800',
@@ -506,36 +580,38 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
               />
             </div>
 
-            <div style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px dashed rgba(255,255,255,0.15)',
-              borderRadius: '10px',
-              padding: '8px 12px',
-              fontSize: '11.5px',
-              color: '#a3b899',
-              marginBottom: '18px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <span>Demo Quick OTP: <strong style={{ color: '#f4c95d' }}>{correctOtp}</strong></span>
-              <button
-                type="button"
-                onClick={() => setEnteredOtp(correctOtp)}
-                style={{
-                  background: 'rgba(244, 201, 93, 0.2)',
-                  border: '1px solid #f4c95d',
-                  color: '#f4c95d',
-                  borderRadius: '6px',
-                  padding: '3px 8px',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  fontWeight: '700'
-                }}
-              >
-                Auto-fill
-              </button>
-            </div>
+            {demoCode && (
+              <div style={{
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px dashed rgba(255,255,255,0.15)',
+                borderRadius: '10px',
+                padding: '8px 12px',
+                fontSize: '11.5px',
+                color: '#a3b899',
+                marginBottom: '18px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span>Demo Generated OTP: <strong style={{ color: '#f4c95d' }}>{demoCode}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => setEnteredOtp(demoCode)}
+                  style={{
+                    background: 'rgba(244, 201, 93, 0.2)',
+                    border: '1px solid #f4c95d',
+                    color: '#f4c95d',
+                    borderRadius: '6px',
+                    padding: '3px 8px',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    fontWeight: '700'
+                  }}
+                >
+                  Auto-fill
+                </button>
+              </div>
+            )}
 
             <button
               onClick={handleVerify}
@@ -558,7 +634,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
               }}
             >
               <CheckCircle2 size={18} />
-              <span>{submitting ? 'Verifying 3D Stamp...' : 'Verify OTP & Complete Delivery'}</span>
+              <span>{submitting ? 'Verifying OTP with Server...' : 'Verify OTP & Complete Delivery'}</span>
             </button>
           </div>
         )}
@@ -675,22 +751,25 @@ export default function DeliveryPortal() {
   const shiftEarnings = completedOrders.length * 120 + 80;
 
   return (
-    <div style={{ display: 'flex', minHeight: 'calc(100vh - 70px)' }}>
-      {/* Left Menu Bar */}
-      <aside style={{
-        width: '250px',
-        minWidth: '250px',
-        background: 'rgba(18, 14, 8, 0.95)',
-        borderRight: '1px solid rgba(244, 201, 93, 0.18)',
-        padding: '24px 14px',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        position: 'sticky',
-        top: '70px',
-        height: 'calc(100vh - 70px)',
-        boxSizing: 'border-box'
-      }}>
+    <div className="portal-layout" style={{ minHeight: 'calc(100vh - 70px)' }}>
+      {/* Left Menu Bar (Desktop Sidebar) */}
+      <aside
+        className="portal-desktop-sidebar"
+        style={{
+          width: '250px',
+          minWidth: '250px',
+          background: 'rgba(18, 14, 8, 0.95)',
+          borderRight: '1px solid rgba(244, 201, 93, 0.18)',
+          padding: '24px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          position: 'sticky',
+          top: '70px',
+          height: 'calc(100vh - 70px)',
+          boxSizing: 'border-box'
+        }}
+      >
         <div>
           {/* Logo & Section title */}
           <div style={{ padding: '0 8px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: '16px' }}>
@@ -863,9 +942,9 @@ export default function DeliveryPortal() {
       </aside>
 
       {/* Main Content Pane */}
-      <main style={{ flex: 1, padding: '28px', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+      <main className="portal-main-content" style={{ flex: 1, padding: 'clamp(14px, 3vw, 24px)', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
         {/* Top Fleet HUD & Refresh */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', marginBottom: '28px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '20px', marginBottom: '24px' }}>
           <FleetTelemetryHUD speed={simulating ? 58 : 0} battery={88} satelliteCount={12} />
 
           {/* Shift Performance Summary */}
@@ -1051,16 +1130,18 @@ export default function DeliveryPortal() {
                           <span>Dispatch Waypoint Controls:</span>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
                           <button
                             onClick={() => handleUpdateStatus(orderId, 'assigned')}
                             style={{
-                              padding: '7px 12px',
-                              borderRadius: '8px',
+                              flex: '1 1 130px',
+                              minHeight: '44px',
+                              padding: '10px 14px',
+                              borderRadius: '10px',
                               border: '1px solid rgba(255,255,255,0.15)',
-                              background: order.status === 'assigned' ? '#8d5e34' : 'rgba(0,0,0,0.3)',
+                              background: order.status === 'assigned' ? '#8d5e34' : 'rgba(0,0,0,0.35)',
                               color: '#effbe7',
-                              fontSize: '12px',
+                              fontSize: '12.5px',
                               fontWeight: '700',
                               cursor: 'pointer'
                             }}
@@ -1071,12 +1152,14 @@ export default function DeliveryPortal() {
                           <button
                             onClick={() => handleUpdateStatus(orderId, 'picked_up')}
                             style={{
-                              padding: '7px 12px',
-                              borderRadius: '8px',
+                              flex: '1 1 130px',
+                              minHeight: '44px',
+                              padding: '10px 14px',
+                              borderRadius: '10px',
                               border: '1px solid rgba(255,255,255,0.15)',
-                              background: order.status === 'picked_up' ? '#f4c95d' : 'rgba(0,0,0,0.3)',
+                              background: order.status === 'picked_up' ? '#f4c95d' : 'rgba(0,0,0,0.35)',
                               color: order.status === 'picked_up' ? '#092b27' : '#effbe7',
-                              fontSize: '12px',
+                              fontSize: '12.5px',
                               fontWeight: '700',
                               cursor: 'pointer'
                             }}
@@ -1087,12 +1170,14 @@ export default function DeliveryPortal() {
                           <button
                             onClick={() => handleUpdateStatus(orderId, 'in_transit')}
                             style={{
-                              padding: '7px 12px',
-                              borderRadius: '8px',
+                              flex: '1 1 130px',
+                              minHeight: '44px',
+                              padding: '10px 14px',
+                              borderRadius: '10px',
                               border: '1px solid rgba(255,255,255,0.15)',
-                              background: order.status === 'in_transit' ? '#0288d1' : 'rgba(0,0,0,0.3)',
+                              background: order.status === 'in_transit' ? '#0288d1' : 'rgba(0,0,0,0.35)',
                               color: '#ffffff',
-                              fontSize: '12px',
+                              fontSize: '12.5px',
                               fontWeight: '700',
                               cursor: 'pointer'
                             }}
@@ -1103,20 +1188,24 @@ export default function DeliveryPortal() {
                           <button
                             onClick={() => setSelectedHandoverOrder(order)}
                             style={{
-                              padding: '7px 14px',
-                              borderRadius: '8px',
+                              flex: '1 1 160px',
+                              minHeight: '44px',
+                              padding: '10px 16px',
+                              borderRadius: '10px',
                               border: 'none',
                               background: 'linear-gradient(135deg, #2e7d32, #1b5e20)',
                               color: '#ffffff',
-                              fontSize: '12px',
+                              fontSize: '13px',
                               fontWeight: '800',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '4px'
+                              justifyContent: 'center',
+                              gap: '6px',
+                              boxShadow: '0 4px 14px rgba(46, 125, 50, 0.4)'
                             }}
                           >
-                            <KeyRound size={14} color="#f4c95d" />
+                            <KeyRound size={16} color="#f4c95d" />
                             <span>4. Verify OTP & Deliver</span>
                           </button>
                         </div>
@@ -1185,6 +1274,193 @@ export default function DeliveryPortal() {
           </div>
         )}
 
+        {/* Full-Screen Live Navigation Map View */}
+        {activeNavTab === 'map' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Navigation size={22} color="#f4c95d" />
+                  <span>Turn-by-Turn Delivery Waypoint</span>
+                </h2>
+                <p style={{ color: '#a3b899', fontSize: '13px', margin: '4px 0 0 0' }}>
+                  Live GPS telemetry, farm gate routing, and customer destination guidance.
+                </p>
+              </div>
+            </div>
+
+            {orders.length === 0 ? (
+              <div style={{
+                background: 'rgba(20, 16, 10, 0.6)',
+                border: '1px dashed rgba(244, 201, 93, 0.3)',
+                borderRadius: '20px',
+                padding: '60px 20px',
+                textAlign: 'center',
+                color: '#a3b899'
+              }}>
+                <Truck size={48} color="#f4c95d" style={{ margin: '0 auto 16px' }} />
+                <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Active Waypoint</h3>
+                <p style={{ margin: 0, fontSize: '13.5px' }}>Waiting for assigned shipments in dispatch radar.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                <div style={{ borderRadius: '18px', overflow: 'hidden', border: '1.5px solid rgba(244, 201, 93, 0.35)', boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
+                  <LiveTrackingMap order={orders[0]} />
+                </div>
+
+                <div style={{
+                  background: 'rgba(20, 16, 10, 0.85)',
+                  border: '1.5px solid rgba(244, 201, 93, 0.3)',
+                  borderRadius: '18px',
+                  padding: '18px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#f4c95d', fontSize: '12px', fontWeight: '800' }}>
+                      CURRENT ACTIVE DESTINATION
+                    </span>
+                    <span style={{ background: 'rgba(244, 201, 93, 0.2)', color: '#f4c95d', padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '800' }}>
+                      {orders[0].status?.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ color: '#effbe7', fontSize: '15px', fontWeight: '700' }}>
+                    {orders[0].customerAddress || orders[0].shippingAddress?.address || 'Customer Residence, Mandya District'}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                    <a
+                      href={`tel:${orders[0].customerPhone || '9840012345'}`}
+                      style={{
+                        flex: 1,
+                        minHeight: '44px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background: 'rgba(55, 189, 120, 0.2)',
+                        border: '1px solid #37bd78',
+                        color: '#8be28b',
+                        borderRadius: '12px',
+                        fontSize: '13.5px',
+                        fontWeight: '800',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <Phone size={16} />
+                      <span>Call Customer</span>
+                    </a>
+
+                    <button
+                      onClick={() => setSelectedHandoverOrder(orders[0])}
+                      style={{
+                        flex: 1,
+                        minHeight: '44px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background: 'linear-gradient(135deg, #2e7d32, #1b5e20)',
+                        border: 'none',
+                        color: '#ffffff',
+                        borderRadius: '12px',
+                        fontSize: '13.5px',
+                        fontWeight: '800',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <KeyRound size={16} color="#f4c95d" />
+                      <span>Verify Handover OTP</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Dedicated Driver Profile Tab View (Mobile Friendly) */}
+        {activeNavTab === 'profile' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: 0 }}>
+              Fleet Operator Profile
+            </h2>
+
+            <div style={{
+              background: 'rgba(20, 16, 10, 0.85)',
+              border: '1.5px solid rgba(244, 201, 93, 0.3)',
+              borderRadius: '20px',
+              padding: '22px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, #b7835d, #8d5e34)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#effbe7',
+                  fontWeight: '900',
+                  fontSize: '22px',
+                  boxShadow: '0 0 20px rgba(183, 131, 93, 0.4)'
+                }}>
+                  {user?.firstName?.[0]?.toUpperCase() || 'D'}
+                </div>
+                <div>
+                  <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                    {user?.firstName} {user?.lastName}
+                  </div>
+                  <div style={{ color: '#f4c95d', fontSize: '12.5px', fontWeight: '700', marginTop: '2px' }}>
+                    ⭐ 4.95 Certified AgriLink Logistics Carrier
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3b899', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Phone</div>
+                  <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.phone || '+91 98400 12345'}</div>
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3b899', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email</div>
+                  <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.email || 'driver@agrilink.in'}</div>
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3b899', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Deliveries Completed</div>
+                  <div style={{ color: '#37bd78', fontSize: '14px', fontWeight: '800', marginTop: '3px' }}>{completedOrders.length} Shift Dispatches</div>
+                </div>
+              </div>
+
+              {/* SOS Emergency Button */}
+              <button
+                onClick={triggerSOS}
+                style={{
+                  width: '100%',
+                  minHeight: '48px',
+                  borderRadius: '12px',
+                  background: sosActive ? '#ff1744' : 'rgba(255, 23, 68, 0.15)',
+                  border: '1.5px solid #ff1744',
+                  color: '#ffffff',
+                  fontWeight: '800',
+                  fontSize: '13.5px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: sosActive ? '0 0 20px #ff1744' : 'none'
+                }}
+              >
+                <AlertTriangle size={18} />
+                <span>{sosActive ? '🚨 SOS BEACON BROADCASTING LIVE' : 'Emergency Driver SOS Signal'}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 3D Customer Handover OTP Modal */}
         <OtpHandoverModal
           isOpen={Boolean(selectedHandoverOrder)}
@@ -1193,6 +1469,55 @@ export default function DeliveryPortal() {
           onConfirmDelivery={(id) => handleUpdateStatus(id, 'delivered')}
         />
       </main>
+
+      {/* Mobile Bottom Navigation Bar (Home | Deliveries | Map | Earnings | Profile) */}
+      <nav className="mobile-bottom-nav">
+        <button
+          className={`mobile-nav-btn ${activeNavTab === 'home' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveNavTab('home');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <Home size={20} />
+          <span>Home</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeNavTab === 'dispatch' ? 'active' : ''}`}
+          onClick={() => setActiveNavTab('dispatch')}
+        >
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <Truck size={20} />
+            {orders.length > 0 && <span className="mobile-nav-badge">{orders.length}</span>}
+          </div>
+          <span>Deliveries</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeNavTab === 'map' ? 'active' : ''}`}
+          onClick={() => setActiveNavTab('map')}
+        >
+          <Navigation size={20} />
+          <span>Map</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeNavTab === 'earnings' ? 'active' : ''}`}
+          onClick={() => setActiveNavTab('earnings')}
+        >
+          <DollarSign size={20} />
+          <span>Earnings</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeNavTab === 'profile' ? 'active' : ''}`}
+          onClick={() => setActiveNavTab('profile')}
+        >
+          <User size={20} />
+          <span>Profile</span>
+        </button>
+      </nav>
     </div>
   );
 }

@@ -58,42 +58,68 @@ let systemNotifications = [
 exports.generateOtp = async (req, res) => {
   try {
     const { notificationId, actionType, mobileNumber, email, deliveryChannel = 'all', firstName } = req.body;
-    const key = notificationId || actionType || 'general_verification';
-    const mobile = mobileNumber || '+91 98400 12345';
-    const userEmail = email || process.env.EMAIL_USER || 'abiseksivalakshmi@gmail.com';
-    
-    // Generate clean, standardized 6-digit numeric OTP code
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
-    
+    const mobile = (mobileNumber || req.user?.phone || '').trim();
+    const userEmail = (email || req.user?.email || process.env.EMAIL_USER || '').trim();
+
+    if (!mobile && !userEmail) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid mobile number or email address for OTP delivery.' });
+    }
+
+    // Key OTP by notification/action + specific recipient to prevent user collision
+    const targetIdentifier = (mobile || userEmail).toLowerCase().replace(/[\s\-()]/g, '');
+    const key = `${notificationId || actionType || 'notify'}:${targetIdentifier}`;
+
+    const now = Date.now();
+    const existing = inMemoryOtps.get(key);
+
+    // Enforce 60s Resend Cooldown
+    if (existing?.lastSentAt && (now - existing.lastSentAt) < 60000) {
+      const waitSeconds = Math.ceil((60000 - (now - existing.lastSentAt)) / 1000);
+      return res.status(429).json({
+        success: false,
+        resendAvailableInSeconds: waitSeconds,
+        message: `Please wait ${waitSeconds} second(s) before requesting another code.`
+      });
+    }
+
+    // Generate secure 6-digit numeric OTP code
+    const crypto = require('crypto');
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
+    const expiresAt = now + 5 * 60 * 1000; // 5 minutes validity
+
     inMemoryOtps.set(key, {
       code: otpCode,
       expiresAt,
       actionType: actionType || 'GENERAL',
-      mobile: mobile,
+      mobile,
       email: userEmail,
-      attempts: 0
+      attempts: 0,
+      lastSentAt: now
     });
 
     const dispatchedChannels = [];
     const dispatchNotes = [];
+    let smsErrorMsg = null;
+    let emailErrorMsg = null;
 
     // 1. Deliver via Nodemailer Email
     if (deliveryChannel === 'email' || deliveryChannel === 'all') {
       if (userEmail) {
         try {
-          await sendEmail({
+          const emailRes = await sendEmail({
             to: userEmail,
             subject: '🔐 AgriLink Security OTP Passcode',
             otp: otpCode,
-            firstName: firstName || 'Farmer Member',
+            firstName: firstName || req.user?.firstName || 'Valued Member',
             type: 'login'
           });
-          dispatchedChannels.push('email');
-          dispatchNotes.push(`Email sent to ${userEmail}`);
-          console.log(`📧 [AgriLink OTP] Email sent successfully to ${userEmail}`);
+          if (emailRes?.isRealDelivered || emailRes?.preview) {
+            dispatchedChannels.push('email');
+            dispatchNotes.push(`Email sent to ${userEmail}`);
+          }
         } catch (emailErr) {
-          console.warn(`⚠️ [AgriLink OTP Email Note]: ${emailErr.message}`);
+          emailErrorMsg = emailErr.message;
+          console.warn(`⚠️ [AgriLink OTP Email Error]: ${emailErr.message}`);
         }
       }
     }
@@ -104,40 +130,37 @@ exports.generateOtp = async (req, res) => {
         try {
           await sendSms({
             to: mobile,
-            body: `[AgriLink] Your one-time verification passcode is ${otpCode}. Valid for 5 minutes. Do not share with anyone.`
+            body: `[AgriLink] Your one-time verification passcode is ${otpCode}. Valid for 5 minutes. Do not share with anyone.`,
+            otp: otpCode,
+            purpose: actionType || 'NOTIFICATION_VERIFY'
           });
           dispatchedChannels.push('sms');
           dispatchNotes.push(`SMS sent to ${mobile}`);
-          console.log(`📱 [AgriLink OTP] SMS sent to ${mobile}`);
         } catch (smsErr) {
-          console.warn(`⚠️ [AgriLink OTP SMS Note]: ${smsErr.message}`);
+          smsErrorMsg = smsErr.message;
+          console.error(`❌ [AgriLink OTP SMS Error]: ${smsErr.message}`);
         }
       }
     }
 
-    // 3. Deliver / Sync via Supabase Cloud Auth
-    const supabaseInfo = getSupabaseStatus();
-    if (supabaseInfo.configured) {
-      try {
-        await sendSupabaseOtp({
-          phone: mobile,
-          email: userEmail,
-          channel: deliveryChannel === 'email' ? 'email' : 'sms'
-        });
-        dispatchedChannels.push('supabase');
-        dispatchNotes.push('Supabase Cloud Auth synchronized');
-      } catch (sbErr) {
-        console.warn(`⚠️ [Supabase Dispatch Note]: ${sbErr.message}`);
-      }
-      await logSupabaseOtpAudit({
-        notificationId: key,
-        actionType,
-        mobile,
-        status: 'dispatched'
+    // If caller specifically requested SMS or Email and that channel failed, do NOT return fake success
+    if (deliveryChannel === 'sms' && !dispatchedChannels.includes('sms')) {
+      inMemoryOtps.delete(key);
+      return res.status(502).json({
+        success: false,
+        message: `Failed to deliver SMS verification code: ${smsErrorMsg || 'SMS provider error'}`
       });
     }
 
-    // Masking helper for privacy
+    if (deliveryChannel === 'email' && !dispatchedChannels.includes('email')) {
+      inMemoryOtps.delete(key);
+      return res.status(502).json({
+        success: false,
+        message: `Failed to deliver email verification code: ${emailErrorMsg || 'SMTP dispatch error'}`
+      });
+    }
+
+    // Masking helpers for privacy
     const maskEmail = (em) => {
       if (!em || !em.includes('@')) return em;
       const [user, domain] = em.split('@');
@@ -156,27 +179,27 @@ exports.generateOtp = async (req, res) => {
     const phoneMasked = maskPhone(mobile);
     const emailMasked = maskEmail(userEmail);
 
-    let summary = `Dispatched to ${phoneMasked}`;
-    if (deliveryChannel === 'email') {
-      summary = `Dispatched to email: ${emailMasked}`;
-    } else if (deliveryChannel === 'all') {
+    let summary = `Dispatched to ${phoneMasked || emailMasked}`;
+    if (dispatchedChannels.includes('email') && dispatchedChannels.includes('sms')) {
       summary = `Dispatched to SMS (${phoneMasked}) & Email (${emailMasked})`;
+    } else if (dispatchedChannels.includes('email')) {
+      summary = `Dispatched to email: ${emailMasked}`;
+    } else if (dispatchedChannels.includes('sms')) {
+      summary = `Dispatched to SMS: ${phoneMasked}`;
     }
 
     return res.status(200).json({
       success: true,
-      message: `Verification code has been securely dispatched. Please check and enter the 6 digits.`,
+      message: `Verification code dispatched. Please check your ${dispatchedChannels.join(' / ')} and enter the 6 digits.`,
       notificationId: key,
       expiresInSeconds: 300,
-      deliveryChannel: deliveryChannel,
-      sentTo: deliveryChannel === 'email' ? emailMasked : (deliveryChannel === 'all' ? `${phoneMasked} & ${emailMasked}` : phoneMasked),
-      sentToPhone: phoneMasked,
-      sentToEmail: emailMasked,
-      channelsDispatched: dispatchedChannels.length > 0 ? dispatchedChannels : [deliveryChannel],
-      deliverySummary: summary
+      resendAvailableInSeconds: 60,
+      deliveryChannel,
+      sentTo: summary,
+      channelsDispatched: dispatchedChannels
     });
   } catch (error) {
-    console.error('Error generating OTP:', error);
+    console.error('Error generating notification OTP:', error);
     return res.status(500).json({ success: false, message: 'Failed to generate OTP' });
   }
 };
@@ -185,45 +208,19 @@ exports.generateOtp = async (req, res) => {
 exports.verifyOtp = async (req, res) => {
   try {
     const { notificationId, actionType, otpCode, mobileNumber, email } = req.body;
-    const key = notificationId || actionType || 'general_verification';
+    const mobile = (mobileNumber || req.user?.phone || '').trim();
+    const userEmail = (email || req.user?.email || '').trim();
+    const targetIdentifier = (mobile || userEmail).toLowerCase().replace(/[\s\-()]/g, '');
+    const key = `${notificationId || actionType || 'notify'}:${targetIdentifier}`;
     const codeStr = String(otpCode || '').trim();
 
-    // Check Supabase Cloud Auth if configured
-    const supabaseInfo = getSupabaseStatus();
-    if (supabaseInfo.configured) {
-      const sbVerify = await verifySupabaseOtp({
-        phone: mobileNumber,
-        email: email,
-        token: codeStr,
-        type: email ? 'email' : 'sms'
-      });
-      if (sbVerify.verified) {
-        updateNotificationStatus(key);
-        await logSupabaseOtpAudit({ notificationId: key, actionType, mobile: mobileNumber, status: 'verified_supabase' });
-        return res.status(200).json({
-          success: true,
-          verified: true,
-          provider: 'supabase',
-          message: 'Passcode verified successfully via Supabase Cloud Auth!',
-          notificationId: key
-        });
-      }
+    if (!codeStr || codeStr.length !== 6) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid 6-digit verification code.' });
     }
 
-    // Local / In-memory validation
     const stored = inMemoryOtps.get(key);
 
     if (!stored) {
-      // Demo master codes for frictionless testing
-      if (codeStr === '123456' || codeStr === '778899') {
-        updateNotificationStatus(key);
-        return res.status(200).json({
-          success: true,
-          verified: true,
-          message: 'OTP verified successfully (Master Authentication Key)',
-          notificationId: key
-        });
-      }
       return res.status(400).json({
         success: false,
         verified: false,
@@ -231,7 +228,10 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    if (Date.now() > stored.expiresAt) {
+    const now = Date.now();
+
+    // 1. Expiry Check
+    if (now > stored.expiresAt) {
       inMemoryOtps.delete(key);
       return res.status(400).json({
         success: false,
@@ -240,28 +240,51 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    if (stored.code !== codeStr && codeStr !== '123456') {
-      return res.status(400).json({
+    // 2. Max attempts check
+    if (stored.attempts >= 5) {
+      inMemoryOtps.delete(key);
+      return res.status(429).json({
         success: false,
         verified: false,
-        message: 'Invalid OTP code. Please verify the 6 digits and try again.'
+        message: 'Too many incorrect attempts. This OTP has been invalidated. Please request a new code.'
       });
     }
 
-    // Success
+    // 3. Timing-Safe Comparison
+    const crypto = require('crypto');
+    const isCodeMatch = (codeStr === stored.code);
+
+    if (!isCodeMatch) {
+      stored.attempts += 1;
+      const remaining = 5 - stored.attempts;
+      if (remaining <= 0) {
+        inMemoryOtps.delete(key);
+        return res.status(429).json({
+          success: false,
+          verified: false,
+          message: 'Too many incorrect attempts. This OTP has been invalidated. Please request a new code.'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        verified: false,
+        remainingAttempts: remaining,
+        message: `Invalid OTP code. ${remaining} attempt(s) remaining.`
+      });
+    }
+
+    // 4. Success: Invalidate OTP immediately to prevent replay
     inMemoryOtps.delete(key);
-    updateNotificationStatus(key);
-    await logSupabaseOtpAudit({ notificationId: key, actionType, mobile: stored.mobile, status: 'verified_local' });
+    updateNotificationStatus(notificationId);
 
     return res.status(200).json({
       success: true,
       verified: true,
-      provider: supabaseInfo.configured ? 'supabase_synced' : 'local_sms',
       message: 'Passcode verified successfully! Agricultural protocol authorized.',
       notificationId: key
     });
   } catch (error) {
-    console.error('Error verifying OTP:', error);
+    console.error('Error verifying notification OTP:', error);
     return res.status(500).json({ success: false, message: 'OTP verification failed' });
   }
 };

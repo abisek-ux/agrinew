@@ -24,6 +24,8 @@ export const authAPI = {
   register: (data) => axios.post(`${API_BASE}/auth/register`, data),
   sendRegisterOtp: (data) => axios.post(`${API_BASE}/auth/register/send-otp`, data),
   verifyRegisterOtp: (data) => axios.post(`${API_BASE}/auth/register/verify-otp`, data),
+  requestPhoneOtp: (data) => axios.post(`${API_BASE}/auth/phone-otp/request`, data),
+  verifyPhoneOtp: (data) => axios.post(`${API_BASE}/auth/phone-otp/verify`, data),
   login: (data) => axios.post(`${API_BASE}/auth/login`, data),
   forgotPassword: (data) => axios.post(`${API_BASE}/auth/forgot-password`, data),
   resetPassword: (data) => axios.post(`${API_BASE}/auth/reset-password`, data),
@@ -33,6 +35,7 @@ export const authAPI = {
 
 export const productAPI = {
   getProducts: (params) => axios.get(`${API_BASE}/products`, { params }),
+  getProductById: (id) => axios.get(`${API_BASE}/products/${id}`),
   addProduct: (data) => axios.post(`${API_BASE}/products`, data, { headers: getAuthHeaders() }),
   updateProduct: (id, data) => axios.put(`${API_BASE}/products/${id}`, data, { headers: getAuthHeaders() }),
   deleteProduct: (id) => axios.delete(`${API_BASE}/products/${id}`, { headers: getAuthHeaders() })
@@ -42,7 +45,15 @@ export const orderAPI = {
   createOrder: (data) => axios.post(`${API_BASE}/orders`, data, { headers: getAuthHeaders() }),
   getOrders: (params) => axios.get(`${API_BASE}/orders`, { headers: getAuthHeaders(), params }),
   updateStatus: (id, data) => axios.put(`${API_BASE}/orders/${id}/status`, data, { headers: getAuthHeaders() }),
-  updateLocation: (id, data) => axios.put(`${API_BASE}/orders/${id}/location`, data, { headers: getAuthHeaders() })
+  assignDriver: (id) => axios.put(`${API_BASE}/orders/${id}/assign`, {}, { headers: getAuthHeaders() }),
+  updateLocation: (id, data) => axios.put(`${API_BASE}/orders/${id}/location`, data, { headers: getAuthHeaders() }),
+  generateDeliveryOtp: (id) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/generate`, {}, { headers: getAuthHeaders() }),
+  verifyDeliveryOtp: (id, data) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/verify`, data, { headers: getAuthHeaders() })
+};
+
+export const reviewAPI = {
+  createReview: (data) => axios.post(`${API_BASE}/reviews`, data, { headers: getAuthHeaders() }),
+  getProductReviews: (productId) => axios.get(`${API_BASE}/reviews/product/${productId}`)
 };
 
 export const notificationAPI = {

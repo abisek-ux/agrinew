@@ -4,6 +4,8 @@ const {
     registerUser,
     sendRegisterOtp,
     verifyRegisterOtp,
+    requestPhoneOtpHandler,
+    verifyPhoneOtpHandler,
     loginUser,
     forgotPassword,
     resetPassword,
@@ -17,6 +19,10 @@ router.post('/register', registerUser);
 router.post('/register/send-otp', sendRegisterOtp);
 router.post('/register/verify-otp', verifyRegisterOtp);
 router.post('/login', loginUser);
+
+// Dedicated Phone OTP Service Endpoints
+router.post('/phone-otp/request', requestPhoneOtpHandler);
+router.post('/phone-otp/verify', verifyPhoneOtpHandler);
 
 // Password Reset Flow Endpoints
 router.post('/forgot-password', forgotPassword);

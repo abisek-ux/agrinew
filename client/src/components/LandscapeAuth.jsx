@@ -229,7 +229,10 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
   const [resendAvailableIn, setResendAvailableIn] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Registration Email OTP Verification States
+  // Registration OTP Verification States (Phone & Email)
+  const [verificationChannel, setVerificationChannel] = useState('phone'); // 'phone' | 'email'
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState('');
   const [emailOtp, setEmailOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
@@ -372,7 +375,65 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
     }
   };
 
-  // Send OTP for Registration
+  // Send Phone OTP for Registration
+  const handleSendPhoneOtp = async (e) => {
+    e?.preventDefault();
+    const cleanPh = phone.replace(/[\s\-()]/g, '');
+    if (!cleanPh || cleanPh.length < 10) {
+      showToast('Please enter a valid 10-digit mobile number first', 'error');
+      return;
+    }
+    setSendingOtp(true);
+    try {
+      const res = await authAPI.requestPhoneOtp({
+        phone: cleanPh,
+        purpose: 'registration'
+      });
+      if (res.data.success) {
+        setOtpSent(true);
+        setOtpCooldown(res.data.resendAvailableInSeconds || 60);
+        setPhoneOtp('');
+        const demoNote = res.data.demoOtp ? ` [Demo OTP: ${res.data.demoOtp}]` : '';
+        showToast((res.data.message || 'OTP sent to mobile phone!') + demoNote, 'success');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Could not send SMS verification code';
+      const cooldown = err.response?.data?.resendAvailableInSeconds;
+      if (cooldown) setOtpCooldown(cooldown);
+      showToast(msg, 'error');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  // Verify Phone OTP for Registration
+  const handleVerifyPhoneOtp = async (e) => {
+    e?.preventDefault();
+    if (!phoneOtp.trim() || phoneOtp.trim().length !== 6) {
+      showToast('Please enter the 6-digit OTP code received on your phone', 'error');
+      return;
+    }
+    setVerifyingOtp(true);
+    try {
+      const res = await authAPI.verifyPhoneOtp({
+        phone: phone.trim(),
+        otp: phoneOtp.trim(),
+        purpose: 'registration'
+      });
+      if (res.data.verified) {
+        setOtpVerified(true);
+        setPhoneVerificationToken(res.data.verificationToken || '');
+        showToast('Mobile number verified successfully! ✅ You can now complete registration.', 'success');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Invalid or expired OTP';
+      showToast(msg, 'error');
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  // Send Email OTP for Registration
   const handleSendRegisterOtp = async (e) => {
     e?.preventDefault();
     if (!email.trim() || !email.includes('@')) {
@@ -399,7 +460,7 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
     }
   };
 
-  // Verify OTP for Registration
+  // Verify Email OTP for Registration
   const handleVerifyRegisterOtp = async (e) => {
     e?.preventDefault();
     if (!emailOtp.trim() || emailOtp.trim().length !== 6) {
@@ -440,13 +501,11 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
 
     if (!otpVerified) {
       if (!otpSent) {
-        showToast('Please click "Send OTP" to verify your email address before registering', 'error');
+        showToast(`Please click "Send OTP" to verify your ${verificationChannel === 'phone' ? 'phone number' : 'email address'} before registering`, 'error');
         return;
       }
-      if (!emailOtp.trim() || emailOtp.trim().length !== 6) {
-        showToast('Please enter the 6-digit verification OTP sent to your email', 'error');
-        return;
-      }
+      showToast(`Please complete the 6-digit ${verificationChannel === 'phone' ? 'Phone' : 'Email'} OTP verification step`, 'error');
+      return;
     }
 
     setLoading(true);
@@ -460,14 +519,15 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
         role,
         nativePlace: nativePlace.trim(),
         location,
-        emailOtp: emailOtp.trim()
+        phoneVerificationToken: verificationChannel === 'phone' ? phoneVerificationToken : undefined,
+        emailOtp: verificationChannel === 'email' ? emailOtp.trim() : undefined
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // Request OTP
+  // Request OTP (Forgot Password)
   const handleRequestOtp = async (e) => {
     e?.preventDefault();
     if (!identifier.trim()) {
@@ -479,12 +539,17 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
     try {
       const res = await authAPI.forgotPassword({ identifier: identifier.trim() });
       if (res.data.success) {
-        const emailMask = res.data.maskedEmail || '';
-        setMaskedEmail(emailMask);
-        setDeliveryChannel('email');
+        const isSms = res.data.deliveryChannel === 'sms';
+        setDeliveryChannel(isSms ? 'sms' : 'email');
+        if (isSms) {
+          setMaskedPhone(res.data.maskedPhone || '');
+        } else {
+          setMaskedEmail(res.data.maskedEmail || '');
+        }
         setResendAvailableIn(res.data.resendAvailableInSeconds || 0);
         setResetToken('');
-        showToast(res.data.message || `Verification code sent to your email (${emailMask})! Please check your inbox.`, 'success');
+        const demoNote = res.data.demoOtp ? ` [Demo OTP: ${res.data.demoOtp}]` : '';
+        showToast((res.data.message || 'Verification code sent!') + demoNote, 'success');
         setForgotStep(2);
       }
     } catch (err) {
@@ -897,7 +962,7 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
                     </div>
                   </div>
 
-                  {/* Email OTP Verification Section */}
+                  {/* Dual Phone SMS / Email OTP Verification Section */}
                   <div style={{
                     background: otpVerified
                       ? 'rgba(46, 125, 50, 0.18)'
@@ -915,33 +980,73 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
                     padding: '12px 14px',
                     marginBottom: '14px'
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: otpSent && !otpVerified ? '10px' : '0' }}>
+                    {/* Channel Selector Toggle */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <ShieldCheck size={16} color={otpVerified ? '#4caf50' : '#8be28b'} />
                         <span style={{ fontSize: '12px', fontWeight: '700', color: '#effbe7' }}>
                           {otpVerified
-                            ? 'Email Verified Successfully ✅'
-                            : 'Email OTP Security Verification'}
+                            ? `${verificationChannel === 'phone' ? 'Phone' : 'Email'} Verified Successfully ✅`
+                            : 'Security Verification (Required)'}
                         </span>
                       </div>
 
                       {!otpVerified && (
+                        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '2px', gap: '3px' }}>
+                          <button
+                            type="button"
+                            onClick={() => { setVerificationChannel('phone'); setOtpSent(false); }}
+                            style={{
+                              background: verificationChannel === 'phone' ? '#2e7d32' : 'transparent',
+                              border: 'none',
+                              color: verificationChannel === 'phone' ? '#fff' : '#9db5aa',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '10.5px',
+                              fontWeight: '700',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            📱 Phone SMS
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setVerificationChannel('email'); setOtpSent(false); }}
+                            style={{
+                              background: verificationChannel === 'email' ? '#2e7d32' : 'transparent',
+                              border: 'none',
+                              color: verificationChannel === 'email' ? '#fff' : '#9db5aa',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '10.5px',
+                              fontWeight: '700',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            📧 Email
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!otpVerified && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: otpSent ? '10px' : '0' }}>
                         <button
                           type="button"
-                          onClick={handleSendRegisterOtp}
+                          onClick={verificationChannel === 'phone' ? handleSendPhoneOtp : handleSendRegisterOtp}
                           disabled={sendingOtp || otpCooldown > 0}
                           style={{
                             background: otpCooldown > 0 ? 'rgba(255, 255, 255, 0.08)' : 'linear-gradient(135deg, #2e7d32, #1b5e20)',
                             border: '1px solid rgba(255, 255, 255, 0.2)',
                             color: '#ffffff',
-                            padding: '6px 12px',
+                            padding: '6px 14px',
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: '700',
                             cursor: otpCooldown > 0 || sendingOtp ? 'not-allowed' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '4px'
+                            gap: '5px'
                           }}
                         >
                           {sendingOtp ? (
@@ -954,11 +1059,11 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
                           ) : otpSent ? (
                             'Resend Code'
                           ) : (
-                            'Send OTP to Email'
+                            `Send OTP to ${verificationChannel === 'phone' ? 'Phone' : 'Email'}`
                           )}
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {otpSent && !otpVerified && (
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
@@ -966,9 +1071,13 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
                           <input
                             type="text"
                             maxLength={6}
-                            value={emailOtp}
-                            onChange={e => setEmailOtp(e.target.value.replace(/\D/g, ''))}
-                            placeholder="Enter 6-digit Email OTP"
+                            value={verificationChannel === 'phone' ? phoneOtp : emailOtp}
+                            onChange={e => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              if (verificationChannel === 'phone') setPhoneOtp(val);
+                              else setEmailOtp(val);
+                            }}
+                            placeholder={`Enter 6-digit ${verificationChannel === 'phone' ? 'SMS' : 'Email'} OTP`}
                             style={{
                               width: '100%',
                               padding: '8px 12px',
@@ -985,24 +1094,26 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
                         </div>
                         <button
                           type="button"
-                          onClick={handleVerifyRegisterOtp}
-                          disabled={verifyingOtp || emailOtp.length !== 6}
+                          onClick={verificationChannel === 'phone' ? handleVerifyPhoneOtp : handleVerifyRegisterOtp}
+                          disabled={verifyingOtp || (verificationChannel === 'phone' ? phoneOtp.length !== 6 : emailOtp.length !== 6)}
                           style={{
-                            background: emailOtp.length === 6 ? 'linear-gradient(135deg, #00897b, #004d40)' : 'rgba(255, 255, 255, 0.08)',
+                            background: ((verificationChannel === 'phone' ? phoneOtp.length : emailOtp.length) === 6)
+                              ? 'linear-gradient(135deg, #00897b, #004d40)'
+                              : 'rgba(255, 255, 255, 0.08)',
                             border: 'none',
                             color: '#ffffff',
                             padding: '9px 14px',
                             borderRadius: '8px',
                             fontSize: '12px',
                             fontWeight: '700',
-                            cursor: emailOtp.length === 6 ? 'pointer' : 'not-allowed',
+                            cursor: ((verificationChannel === 'phone' ? phoneOtp.length : emailOtp.length) === 6) ? 'pointer' : 'not-allowed',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px'
                           }}
                         >
                           {verifyingOtp ? <Loader2 size={12} className="la-spin" /> : <CheckCircle size={14} />}
-                          Verify OTP
+                          Verify Code
                         </button>
                       </div>
                     )}

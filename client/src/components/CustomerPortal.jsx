@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { productAPI, orderAPI } from '../services/api';
+import { productAPI, orderAPI, reviewAPI } from '../services/api';
 import LiveTrackingMap from './LiveTrackingMap';
 import {
   ShoppingCart,
@@ -33,6 +33,7 @@ import {
   RefreshCw,
   Clock,
   Compass,
+  Home,
   DollarSign,
   Send,
   Radio,
@@ -43,6 +44,7 @@ import {
   Video,
   Camera,
   Snowflake,
+  Star,
   X
 } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
@@ -240,18 +242,21 @@ function Produce3DInspector({ product, onClose, onAddToCart }) {
       justifyContent: 'center',
       padding: '20px'
     }}>
-      <div style={{
-        background: 'linear-gradient(145deg, rgba(13, 38, 30, 0.95), rgba(7, 21, 17, 0.98))',
-        border: '1.5px solid rgba(76, 175, 80, 0.4)',
-        borderRadius: '24px',
-        width: '100%',
-        maxWidth: '880px',
-        maxHeight: '92vh',
-        overflowY: 'auto',
-        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(76, 175, 80, 0.25)',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      <div
+        className="responsive-modal-card"
+        style={{
+          background: 'linear-gradient(145deg, rgba(13, 38, 30, 0.95), rgba(7, 21, 17, 0.98))',
+          border: '1.5px solid rgba(76, 175, 80, 0.4)',
+          borderRadius: '24px',
+          width: '100%',
+          maxWidth: '880px',
+          maxHeight: '92vh',
+          overflowY: 'auto',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(76, 175, 80, 0.25)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
         {/* Modal Header */}
         <div style={{
           padding: '20px 24px',
@@ -314,7 +319,7 @@ function Produce3DInspector({ product, onClose, onAddToCart }) {
         </div>
 
         {/* Modal Body */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', padding: '24px' }}>
+        <div className="modal-responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', padding: 'clamp(14px, 3vw, 24px)' }}>
           {/* Left: 3D Interactive Canvas */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div
@@ -572,15 +577,18 @@ function BargainOfferModal({ product, onClose, onOfferAccepted }) {
       justifyContent: 'center',
       padding: '20px'
     }}>
-      <div style={{
-        background: 'linear-gradient(145deg, #092b27, #061917)',
-        border: '1.5px solid rgba(244, 201, 93, 0.4)',
-        borderRadius: '24px',
-        width: '100%',
-        maxWidth: '520px',
-        padding: '28px',
-        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(244, 201, 93, 0.2)'
-      }}>
+      <div
+        className="responsive-modal-card"
+        style={{
+          background: 'linear-gradient(145deg, #092b27, #061917)',
+          border: '1.5px solid rgba(244, 201, 93, 0.4)',
+          borderRadius: '24px',
+          width: '100%',
+          maxWidth: '520px',
+          padding: 'clamp(16px, 4vw, 28px)',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(244, 201, 93, 0.2)'
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
@@ -848,17 +856,21 @@ function LiveFarmCamModal({ isOpen, onClose }) {
       justifyContent: 'center',
       padding: '20px'
     }} onClick={onClose}>
-      <div style={{
-        maxWidth: '920px',
-        width: '100%',
-        background: 'linear-gradient(145deg, rgba(8, 28, 22, 0.98), rgba(4, 16, 13, 0.99))',
-        border: '1.5px solid rgba(74, 222, 128, 0.45)',
-        borderRadius: '26px',
-        overflow: 'hidden',
-        boxShadow: '0 25px 70px rgba(0,0,0,0.8), 0 0 35px rgba(74,222,128,0.25)',
-        display: 'flex',
-        flexDirection: 'column'
-      }} onClick={e => e.stopPropagation()}>
+      <div
+        className="responsive-modal-card"
+        style={{
+          maxWidth: '920px',
+          width: '100%',
+          background: 'linear-gradient(145deg, rgba(8, 28, 22, 0.98), rgba(4, 16, 13, 0.99))',
+          border: '1.5px solid rgba(74, 222, 128, 0.45)',
+          borderRadius: '26px',
+          overflow: 'hidden',
+          boxShadow: '0 25px 70px rgba(0,0,0,0.8), 0 0 35px rgba(74,222,128,0.25)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div style={{
           padding: '16px 24px',
@@ -991,6 +1003,13 @@ export default function CustomerPortal() {
   const [showLiveCam, setShowLiveCam] = useState(false);
   const [favorites, setFavorites] = useState([]);
 
+  // Reviews State
+  const [reviewingItem, setReviewingItem] = useState(null); // { orderId, productId, title, farmerId }
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewedKeys, setReviewedKeys] = useState([]);
+
   useEffect(() => {
     fetchProducts();
     fetchOrders();
@@ -1021,6 +1040,31 @@ export default function CustomerPortal() {
       setOrders(res.data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleSubmitReview = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!reviewingItem) return;
+    setSubmittingReview(true);
+    try {
+      await reviewAPI.createReview({
+        orderId: reviewingItem.orderId,
+        productId: reviewingItem.productId,
+        rating: Number(reviewRating),
+        comment: reviewComment
+      });
+      const key = `${reviewingItem.orderId}_${reviewingItem.productId}`;
+      setReviewedKeys(prev => [...prev, key]);
+      showToast('⭐ Verified purchase review submitted successfully!', 'success');
+      setReviewingItem(null);
+      setReviewComment('');
+      fetchProducts();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to submit review';
+      showToast(msg, 'error');
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -1093,7 +1137,7 @@ export default function CustomerPortal() {
     const orderPayload = {
       customerId: user?._id || user?.id,
       customerName: `${user?.firstName || 'Customer'} ${user?.lastName || 'Shopper'}`.trim(),
-      customerPhone: user?.phone || '+1 555-019-2834',
+      customerPhone: user?.phone || '+91 98400 12345',
       customerEmail: user?.email || 'customer@agrilink.io',
       customerLocation: user?.location || { lat: 12.9716, lng: 77.5946, address: 'Bengaluru Delivery Address, Karnataka, India' },
       farmerId: firstItem.farmerId || 'farmer_1',
@@ -1107,17 +1151,26 @@ export default function CustomerPortal() {
         price: Number(i.price),
         quantity: i.quantity,
         unit: i.unit || 'kg',
-        image: i.image
+        image: i.image,
+        farmerId: i.farmerId
       })),
-      totalAmount
+      totalAmount,
+      expressDelivery
     };
 
     try {
       const res = await orderAPI.createOrder(orderPayload);
-      setOrders(currentOrders => [res.data, ...currentOrders]);
+      const newOrders = Array.isArray(res.data)
+        ? res.data
+        : (res.data?.orders || [res.data]);
+      setOrders(currentOrders => [...newOrders, ...currentOrders]);
       setCart([]);
       setActiveTab('orders');
-      showToast('🎉 Order placed successfully! Direct farm dispatch & GPS tracking activated.', 'success');
+      if (newOrders.length > 1) {
+        showToast(`🎉 Order placed! Multi-farm cart was split into ${newOrders.length} direct-farm dispatches.`, 'success');
+      } else {
+        showToast('🎉 Order placed successfully! Direct farm dispatch & GPS tracking activated.', 'success');
+      }
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Checkout failed. Please try again.';
       showToast(msg, 'error');
@@ -1145,7 +1198,7 @@ export default function CustomerPortal() {
   const cartTotalPrice = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
 
   return (
-    <div style={{ display: 'flex', minHeight: 'calc(100vh - 70px)' }}>
+    <div className="portal-layout" style={{ minHeight: 'calc(100vh - 70px)' }}>
       {/* 3D Inspector Modal */}
       {inspectProduct && (
         <Produce3DInspector
@@ -1170,21 +1223,24 @@ export default function CustomerPortal() {
         onClose={() => setShowLiveCam(false)}
       />
 
-      {/* Left Menu Bar */}
-      <aside style={{
-        width: '250px',
-        minWidth: '250px',
-        background: 'rgba(7, 24, 20, 0.95)',
-        borderRight: '1px solid rgba(110, 219, 208, 0.18)',
-        padding: '24px 14px',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        position: 'sticky',
-        top: '70px',
-        height: 'calc(100vh - 70px)',
-        boxSizing: 'border-box'
-      }}>
+      {/* Left Menu Bar (Desktop Sidebar) */}
+      <aside
+        className="portal-desktop-sidebar"
+        style={{
+          width: '250px',
+          minWidth: '250px',
+          background: 'rgba(7, 24, 20, 0.95)',
+          borderRight: '1px solid rgba(110, 219, 208, 0.18)',
+          padding: '24px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          position: 'sticky',
+          top: '70px',
+          height: 'calc(100vh - 70px)',
+          boxSizing: 'border-box'
+        }}
+      >
         <div>
           {/* Logo & Section title */}
           <div style={{ padding: '0 8px 14px 8px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: '16px' }}>
@@ -1396,7 +1452,7 @@ export default function CustomerPortal() {
       </aside>
 
       {/* Main Content Pane */}
-      <main style={{ flex: 1, padding: '28px', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+      <main className="portal-main-content" style={{ flex: 1, padding: '24px', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
         {/* Marketplace View */}
         {(activeTab === 'marketplace' || activeTab === 'favorites') && (
           <div>
@@ -1406,19 +1462,20 @@ export default function CustomerPortal() {
               backdropFilter: 'blur(16px)',
               border: '1px solid rgba(110, 219, 208, 0.25)',
               borderRadius: '20px',
-              padding: '20px 24px',
-              marginBottom: '28px',
+              padding: 'clamp(14px, 3vw, 24px)',
+              marginBottom: '24px',
               display: 'flex',
               flexWrap: 'wrap',
-              gap: '16px',
+              gap: '14px',
               alignItems: 'center',
               justifyContent: 'space-between',
               boxShadow: '0 12px 32px rgba(0,0,0,0.3)'
             }}>
               {/* Search input */}
-              <div style={{ position: 'relative', flex: '1 1 300px' }}>
+              <div style={{ position: 'relative', flex: '1 1 260px' }}>
                 <Search size={18} color="#6edbd0" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
+                  id="customer-search-input"
                   type="text"
                   placeholder="Search organic crops, fruits, vegetables, seeds, or farmer location..."
                   value={searchQuery}
@@ -1489,7 +1546,7 @@ export default function CustomerPortal() {
             </div>
 
             {/* Produce Grid & Cart Split */}
-            <div style={{ display: 'grid', gridTemplateColumns: cart.length > 0 ? '1fr 360px' : '1fr', gap: '28px' }}>
+            <div className={`customer-produce-grid-wrapper ${cart.length > 0 ? 'has-cart' : ''}`} style={{ gap: '24px' }}>
               {/* Produce Cards Grid */}
               <div>
                 {loading ? (
@@ -1513,8 +1570,8 @@ export default function CustomerPortal() {
                 ) : (
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                    gap: '22px'
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
+                    gap: '20px'
                   }}>
                     {filteredProducts.map(product => {
                       const prodId = getProductId(product);
@@ -1614,18 +1671,36 @@ export default function CustomerPortal() {
                               <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: '#effbe7' }}>
                                 {product.title}
                               </h3>
-                              <span style={{
-                                background: 'rgba(55, 189, 120, 0.15)',
-                                border: '1px solid rgba(55, 189, 120, 0.35)',
-                                color: '#8be28b',
-                                fontSize: '11px',
-                                fontWeight: '700',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                textTransform: 'capitalize'
-                              }}>
-                                {product.category || 'Organic'}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                {product.rating > 0 ? (
+                                  <span style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    color: '#facc15',
+                                    fontSize: '11px',
+                                    fontWeight: '800',
+                                    background: 'rgba(250, 204, 21, 0.15)',
+                                    border: '1px solid rgba(250, 204, 21, 0.3)',
+                                    padding: '2px 6px',
+                                    borderRadius: '10px'
+                                  }}>
+                                    ★ {product.rating} <span style={{ opacity: 0.8, fontSize: '10px' }}>({product.numReviews || 1})</span>
+                                  </span>
+                                ) : null}
+                                <span style={{
+                                  background: 'rgba(55, 189, 120, 0.15)',
+                                  border: '1px solid rgba(55, 189, 120, 0.35)',
+                                  color: '#8be28b',
+                                  fontSize: '11px',
+                                  fontWeight: '700',
+                                  padding: '2px 8px',
+                                  borderRadius: '12px',
+                                  textTransform: 'capitalize'
+                                }}>
+                                  {product.category || 'Organic'}
+                                </span>
+                              </div>
                             </div>
 
                             <p style={{
@@ -1715,21 +1790,24 @@ export default function CustomerPortal() {
                 )}
               </div>
 
-              {/* Floating Slide-in Cart Sidebar */}
+              {/* Floating Slide-in Cart Sidebar (Desktop) */}
               {cart.length > 0 && (
-                <div style={{
-                  background: 'rgba(7, 26, 22, 0.95)',
-                  backdropFilter: 'blur(16px)',
-                  border: '1.5px solid rgba(110, 219, 208, 0.3)',
-                  borderRadius: '20px',
-                  padding: '22px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  maxHeight: 'calc(100vh - 140px)',
-                  position: 'sticky',
-                  top: '90px',
-                  boxShadow: '0 16px 40px rgba(0,0,0,0.5)'
-                }}>
+                <div
+                  className="desktop-only-cart-pane"
+                  style={{
+                    background: 'rgba(7, 26, 22, 0.95)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1.5px solid rgba(110, 219, 208, 0.3)',
+                    borderRadius: '20px',
+                    padding: '22px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    maxHeight: 'calc(100vh - 140px)',
+                    position: 'sticky',
+                    top: '90px',
+                    boxShadow: '0 16px 40px rgba(0,0,0,0.5)'
+                  }}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <ShoppingCart size={20} color="#6edbd0" />
@@ -1995,6 +2073,98 @@ export default function CustomerPortal() {
                       <LiveTrackingMap order={order} />
                     </div>
 
+                    {/* Status Pipeline Tracker */}
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      {[
+                        { key: 'pending', label: '1. Placed' },
+                        { key: 'confirmed', label: '2. Confirmed' },
+                        { key: 'packed', label: '3. Packed' },
+                        { key: 'in_transit', label: '4. Out for Delivery' },
+                        { key: 'delivered', label: '5. Delivered' }
+                      ].map((step, idx) => {
+                        const rankMap = {
+                          pending: 1,
+                          confirmed: 2,
+                          accepted: 2,
+                          packed: 3,
+                          assigned: 4,
+                          picked_up: 4,
+                          in_transit: 4,
+                          arrived: 4,
+                          delivered: 5
+                        };
+                        const currentRank = rankMap[order.status] || 1;
+                        const isDone = currentRank >= (idx + 1);
+                        const isCurrent = currentRank === (idx + 1);
+                        return (
+                          <div key={step.key} style={{
+                            padding: '4px 10px',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            background: isCurrent ? 'rgba(244, 201, 93, 0.25)' : isDone ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255,255,255,0.04)',
+                            color: isCurrent ? '#f4c95d' : isDone ? '#34d399' : '#6b7280',
+                            border: `1px solid ${isCurrent ? '#f4c95d' : isDone ? '#34d399' : 'rgba(255,255,255,0.08)'}`
+                          }}>
+                            {isDone && !isCurrent ? '✓ ' : ''}{step.label}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Ordered Items & Reviews */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                      {(order.items || []).map((item, idx) => {
+                        const itemKey = `${order._id || order.id}_${item.productId}`;
+                        const isReviewed = reviewedKeys.includes(itemKey);
+                        return (
+                          <div key={idx} style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            background: 'rgba(255,255,255,0.03)',
+                            padding: '8px 12px',
+                            borderRadius: '10px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              {item.image && <img src={item.image} alt={item.title} style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover' }} />}
+                              <div>
+                                <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '700' }}>{item.title}</div>
+                                <div style={{ color: '#a3c2b0', fontSize: '11.5px' }}>₹{item.price} × {item.quantity} {item.unit || 'kg'}</div>
+                              </div>
+                            </div>
+                            {order.status === 'delivered' && (
+                              <button
+                                onClick={() => setReviewingItem({
+                                  orderId: order._id || order.id,
+                                  productId: item.productId,
+                                  title: item.title,
+                                  farmerId: order.farmerId
+                                })}
+                                disabled={isReviewed}
+                                style={{
+                                  background: isReviewed ? 'rgba(52, 211, 153, 0.2)' : 'rgba(244, 201, 93, 0.2)',
+                                  border: `1px solid ${isReviewed ? '#34d399' : '#f4c95d'}`,
+                                  color: isReviewed ? '#34d399' : '#f4c95d',
+                                  padding: '5px 12px',
+                                  borderRadius: '8px',
+                                  fontSize: '11.5px',
+                                  fontWeight: '700',
+                                  cursor: isReviewed ? 'default' : 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                <Star size={13} fill={isReviewed ? '#34d399' : '#f4c95d'} />
+                                <span>{isReviewed ? '✓ Reviewed' : 'Review Produce'}</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
                     {/* Contact details */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', fontSize: '12.5px', color: '#a3c2b0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -2072,7 +2242,539 @@ export default function CustomerPortal() {
             </div>
           </div>
         )}
+      {/* Verified Purchase Review Modal */}
+      {reviewingItem && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(4, 14, 12, 0.85)',
+          backdropFilter: 'blur(16px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }} onClick={() => setReviewingItem(null)}>
+          <div style={{
+            maxWidth: '440px',
+            width: '100%',
+            background: 'linear-gradient(145deg, rgba(9, 43, 39, 0.98), rgba(6, 28, 26, 0.99))',
+            border: '1.5px solid rgba(55, 189, 120, 0.45)',
+            borderRadius: '24px',
+            padding: '28px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.8)'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                Rate & Review {reviewingItem.title}
+              </h3>
+              <button onClick={() => setReviewingItem(null)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <p style={{ color: '#a3c2b0', fontSize: '13px', margin: '0 0 16px' }}>
+              Verified Purchase Review for Order #{String(reviewingItem.orderId).slice(-8).toUpperCase()}
+            </p>
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setReviewRating(star)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px'
+                  }}
+                >
+                  <Star
+                    size={28}
+                    color={star <= reviewRating ? '#facc15' : '#4b5563'}
+                    fill={star <= reviewRating ? '#facc15' : 'none'}
+                  />
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={reviewComment}
+              onChange={e => setReviewComment(e.target.value)}
+              placeholder="Share your experience regarding freshness, taste, and packaging quality..."
+              rows={4}
+              style={{
+                width: '100%',
+                background: 'rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '12px',
+                padding: '12px',
+                color: '#effbe7',
+                fontSize: '13.5px',
+                boxSizing: 'border-box',
+                marginBottom: '18px',
+                resize: 'vertical'
+              }}
+            />
+
+            <button
+              onClick={handleSubmitReview}
+              disabled={submittingReview}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
+                border: '1px solid #34d399',
+                color: '#ffffff',
+                padding: '12px',
+                borderRadius: '12px',
+                fontSize: '14px',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              {submittingReview ? 'Publishing Review...' : 'Publish Verified Review'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated Cart Tab View (Ideal for Mobile / Standalone View) */}
+      {activeTab === 'cart' && (
+        <div style={{ padding: '4px 0 30px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ShoppingCart size={22} color="#6edbd0" />
+              <span>Your Farm Cart ({cartItemCount})</span>
+            </h2>
+            {cart.length > 0 && (
+              <button
+                onClick={() => setCart([])}
+                style={{ background: 'none', border: 'none', color: '#ff6b6b', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+
+          {cart.length === 0 ? (
+            <div style={{
+              background: 'rgba(9, 43, 39, 0.5)',
+              border: '1px dashed rgba(110, 219, 208, 0.3)',
+              borderRadius: '20px',
+              padding: '60px 20px',
+              textAlign: 'center',
+              color: '#a3c2b0'
+            }}>
+              <ShoppingCart size={48} color="#6edbd0" style={{ margin: '0 auto 16px' }} />
+              <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>Your Cart is Empty</h3>
+              <p style={{ margin: '0 0 20px', fontSize: '13.5px' }}>Explore fresh direct-from-farm organic harvest.</p>
+              <button
+                onClick={() => setActiveTab('marketplace')}
+                style={{
+                  background: 'linear-gradient(135deg, #00897b, #004d40)',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '12px 24px',
+                  borderRadius: '12px',
+                  fontWeight: '800',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                Browse Fresh Harvest
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{
+                background: 'rgba(7, 26, 22, 0.95)',
+                border: '1px solid rgba(110, 219, 208, 0.25)',
+                borderRadius: '18px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                {cart.map(item => {
+                  const id = getProductId(item);
+                  return (
+                    <div
+                      key={id}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: '12px',
+                        padding: '12px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '10px'
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {item.title}
+                        </div>
+                        <div style={{ color: '#37bd78', fontSize: '12.5px', fontWeight: '700', marginTop: '2px' }}>
+                          ₹{item.price} × {item.quantity} = ₹{item.price * item.quantity}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          onClick={() => updateQuantity(id, -1)}
+                          style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            color: '#effbe7',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontWeight: '700',
+                            fontSize: '16px'
+                          }}
+                        >
+                          -
+                        </button>
+                        <span style={{ color: '#effbe7', fontWeight: '800', minWidth: '20px', textAlign: 'center', fontSize: '14px' }}>
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateQuantity(id, 1)}
+                          style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            color: '#effbe7',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontWeight: '700',
+                            fontSize: '16px'
+                          }}
+                        >
+                          +
+                        </button>
+                        <button
+                          onClick={() => removeFromCart(id)}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#ff6b6b',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginLeft: '4px'
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Express Courier Option */}
+              <div
+                onClick={() => setExpressDelivery(!expressDelivery)}
+                style={{
+                  background: expressDelivery ? 'rgba(55, 189, 120, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                  border: `1px solid ${expressDelivery ? 'rgba(55, 189, 120, 0.4)' : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius: '14px',
+                  padding: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Zap size={18} color={expressDelivery ? '#37bd78' : '#a3c2b0'} />
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
+                      Green Express Courier (2-Hour Dispatch)
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#a3c2b0' }}>Temperature-monitored refrigerated EV fleet</div>
+                  </div>
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: '#f4c95d' }}>+₹49</span>
+              </div>
+
+              {/* Delivery Address Details */}
+              <div style={{
+                background: 'rgba(7, 26, 22, 0.95)',
+                border: '1px solid rgba(110, 219, 208, 0.25)',
+                borderRadius: '16px',
+                padding: '16px'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '800', color: '#6edbd0', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={14} />
+                  <span>Deliver To</span>
+                </div>
+                <div style={{ color: '#effbe7', fontSize: '13.5px', fontWeight: '600' }}>
+                  {user?.address || user?.location?.address || 'Mandya Hub, Karnataka • Verified Residence'}
+                </div>
+              </div>
+
+              {/* Checkout Card */}
+              <div style={{
+                background: 'rgba(7, 26, 22, 0.95)',
+                border: '1.5px solid rgba(55, 189, 120, 0.4)',
+                borderRadius: '18px',
+                padding: '20px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <span style={{ color: '#a3c2b0', fontSize: '15px', fontWeight: '600' }}>Total Amount:</span>
+                  <span style={{ color: '#37bd78', fontSize: '26px', fontWeight: '900' }}>
+                    ₹{expressDelivery ? cartTotalPrice + 49 : cartTotalPrice}
+                  </span>
+                </div>
+
+                <button
+                  onClick={checkoutCart}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #2e7d32, #1b5e20)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontSize: '16px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    boxShadow: '0 6px 22px rgba(46, 125, 50, 0.5)'
+                  }}
+                >
+                  <span>Place Multi-Farm Order</span>
+                  <ArrowRight size={18} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Dedicated Profile Tab View (Mobile Friendly) */}
+      {activeTab === 'profile' && (
+        <div style={{ padding: '4px 0 30px' }}>
+          <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: '0 0 20px 0' }}>
+            Customer Profile & Hub
+          </h2>
+
+          <div style={{
+            background: 'rgba(7, 26, 22, 0.95)',
+            border: '1.5px solid rgba(110, 219, 208, 0.25)',
+            borderRadius: '20px',
+            padding: '22px',
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '18px' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, #00897b, #004d40)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#effbe7',
+                fontWeight: '900',
+                fontSize: '22px',
+                boxShadow: '0 0 20px rgba(0, 137, 123, 0.4)'
+              }}>
+                {user?.firstName?.[0]?.toUpperCase() || 'C'}
+              </div>
+              <div>
+                <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                  {user?.firstName} {user?.lastName}
+                </div>
+                <div style={{ color: '#6edbd0', fontSize: '12px', fontWeight: '700', marginTop: '2px' }}>
+                  ✓ Verified Farm Customer
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email</div>
+                <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.email || 'customer@agrilink.in'}</div>
+              </div>
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Phone</div>
+                <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.phone || '+91 98400 12345'}</div>
+              </div>
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Orders Placed</div>
+                <div style={{ color: '#37bd78', fontSize: '14px', fontWeight: '800', marginTop: '3px' }}>{orders.length} Dispatches</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Eco-Impact Card */}
+          <div style={{
+            background: 'rgba(55, 189, 120, 0.1)',
+            border: '1px solid rgba(55, 189, 120, 0.35)',
+            borderRadius: '18px',
+            padding: '18px',
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#37bd78', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', marginBottom: '6px' }}>
+              <Leaf size={16} />
+              <span>Your Green Eco-Impact</span>
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: '900', color: '#8be28b' }}>
+              {(orders.length * 2.4).toFixed(1)} kg CO₂ Saved
+            </div>
+            <p style={{ color: '#a3c2b0', fontSize: '12px', margin: '4px 0 0 0' }}>
+              Eliminating intermediaries reduces transportation logistics emission by 42%.
+            </p>
+          </div>
+
+          {/* Quick Menu Options */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              onClick={() => setActiveTab('favorites')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 18px',
+                borderRadius: '14px',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#effbe7',
+                fontSize: '14px',
+                fontWeight: '700',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Heart size={18} color="#ec4899" />
+                <span>Saved Farm Produce</span>
+              </div>
+              <ChevronRight size={18} color="#9db5aa" />
+            </button>
+
+            <button
+              onClick={() => setActiveTab('recipes')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 18px',
+                borderRadius: '14px',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#effbe7',
+                fontSize: '14px',
+                fontWeight: '700',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <ChefHat size={18} color="#f4c95d" />
+                <span>AI Recipe Studio</span>
+              </div>
+              <ChevronRight size={18} color="#9db5aa" />
+            </button>
+
+            <button
+              onClick={() => setShowLiveCam(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 18px',
+                borderRadius: '14px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5',
+                fontSize: '14px',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Video size={18} color="#ef4444" />
+                <span>Live 24/7 Farm-Cam Telemetry</span>
+              </div>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} />
+            </button>
+          </div>
+        </div>
+      )}
       </main>
+
+      {/* Mobile Bottom Navigation Bar (Home | Search | Cart | Orders | Profile) */}
+      <nav className="mobile-bottom-nav">
+        <button
+          className={`mobile-nav-btn ${activeTab === 'marketplace' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('marketplace');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <Home size={20} />
+          <span>Home</span>
+        </button>
+
+        <button
+          className="mobile-nav-btn"
+          onClick={() => {
+            setActiveTab('marketplace');
+            setTimeout(() => {
+              const el = document.getElementById('customer-search-input');
+              if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }, 100);
+          }}
+        >
+          <Search size={20} />
+          <span>Search</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeTab === 'cart' ? 'active' : ''}`}
+          onClick={() => setActiveTab('cart')}
+        >
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <ShoppingCart size={20} />
+            {cartItemCount > 0 && <span className="mobile-nav-badge">{cartItemCount}</span>}
+          </div>
+          <span>Cart</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
+          onClick={() => setActiveTab('orders')}
+        >
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <Truck size={20} />
+            {orders.length > 0 && <span className="mobile-nav-badge">{orders.length}</span>}
+          </div>
+          <span>Orders</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeTab === 'profile' ? 'active' : ''}`}
+          onClick={() => setActiveTab('profile')}
+        >
+          <User size={20} />
+          <span>Profile</span>
+        </button>
+      </nav>
     </div>
   );
 }

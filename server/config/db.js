@@ -9,22 +9,27 @@ if (dns.setDefaultResultOrder) {
 
 let isConnectedToMongo = false;
 
-const DEFAULT_MONGODB_URI = 'mongodb+srv://mgowres_db_user:ABISEK%402008@cluster0.r31p3y1.mongodb.net/agrinexus?retryWrites=true&w=majority';
-
 const connectDB = async () => {
-  const uri = process.env.MONGODB_URI || DEFAULT_MONGODB_URI;
+  const uri = process.env.MONGODB_URI;
+
+  if (!uri) {
+    console.warn(`ℹ️ No MONGODB_URI found in environment variables.`);
+    console.warn(`Fallback Memory Active: Operating with stateful in-memory store.`);
+    isConnectedToMongo = false;
+    return false;
+  }
 
   try {
     const conn = await mongoose.connect(uri, {
-      dbName: 'agrinexus',
+      dbName: process.env.DB_NAME || 'agrinexus',
       serverSelectionTimeoutMS: 10000
     });
     isConnectedToMongo = true;
     console.log(`MongoDB Connected: ${conn.connection.host}`);
     return true;
   } catch (error) {
-    console.warn(`⚠️ MongoDB Local Notice: ${error.message}`);
-    console.warn(`Fallback Memory Active: Operating with stateful in-memory store (Ready for Atlas MONGODB_URI)`);
+    console.warn(`⚠️ MongoDB Connection Error: ${error.message}`);
+    console.warn(`Fallback Memory Active: Operating with stateful in-memory store.`);
     isConnectedToMongo = false;
     return false;
   }

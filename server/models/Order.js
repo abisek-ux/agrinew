@@ -43,9 +43,10 @@ const orderSchema = new mongoose.Schema(
     totalAmount: { type: Number, required: true },
     status: {
       type: String,
-      enum: ['pending', 'accepted', 'picked_up', 'in_transit', 'delivered'],
+      enum: ['pending', 'confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'arrived', 'delivered', 'cancelled'],
       default: 'pending'
-    }
+    },
+    deliveryOtpVerifiedAt: { type: Date, default: null }
   },
   { timestamps: true }
 );
