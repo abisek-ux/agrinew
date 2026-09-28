@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { productAPI, orderAPI, reviewAPI } from '../services/api';
+import { productAPI, orderAPI, reviewAPI, authAPI, notificationAPI } from '../services/api';
 import LiveTrackingMap from './LiveTrackingMap';
 import {
   ShoppingCart,
@@ -45,7 +45,11 @@ import {
   Camera,
   Snowflake,
   Star,
-  X
+  X,
+  Bell,
+  Edit2,
+  Check,
+  Filter
 } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
 
@@ -984,24 +988,500 @@ function LiveFarmCamModal({ isOpen, onClose }) {
 /* ─────────────────────────────────────────────────────────────
    Main Customer Portal Component
 ───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   Product Details & Farmer Information Modal
+───────────────────────────────────────────────────────────── */
+function ProductDetailsModal({ product, allProducts, onClose, onAddToCart, onOpen3DScan }) {
+  const [selectedQty, setSelectedQty] = useState(1);
+  if (!product) return null;
+
+  const otherFarmerProducts = (allProducts || []).filter(
+    p => String(p.farmerId) === String(product.farmerId) && getProductId(p) !== getProductId(product)
+  );
+
+  const formattedHarvest = product.harvestDate
+    ? new Date(product.harvestDate).toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    : 'Fresh Batch';
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(2, 10, 8, 0.85)',
+      backdropFilter: 'blur(16px)',
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px'
+    }}>
+      <div
+        className="responsive-modal-card"
+        style={{
+          background: 'linear-gradient(145deg, rgba(13, 38, 30, 0.98), rgba(7, 21, 17, 0.98))',
+          border: '1.5px solid rgba(110, 219, 208, 0.35)',
+          borderRadius: '24px',
+          width: '100%',
+          maxWidth: '820px',
+          maxHeight: '92vh',
+          overflowY: 'auto',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(55, 189, 120, 0.2)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '18px 24px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{
+              background: 'rgba(55, 189, 120, 0.15)',
+              border: '1px solid rgba(55, 189, 120, 0.35)',
+              color: '#8be28b',
+              padding: '3px 10px',
+              borderRadius: '20px',
+              fontSize: '11px',
+              fontWeight: '800',
+              textTransform: 'uppercase'
+            }}>
+              {product.category || 'Produce'}
+            </span>
+            <span style={{ color: '#a3c2b0', fontSize: '13px' }}>
+              Direct Harvest Produce
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#effbe7',
+              borderRadius: '10px',
+              width: '32px',
+              height: '32px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+            {/* Left: Product Image & 3D button */}
+            <div>
+              <div style={{
+                position: 'relative',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                height: '240px',
+                background: 'rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <img
+                  src={product.image || 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b'}
+                  alt={product.title}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <button
+                  onClick={() => {
+                    onClose();
+                    if (onOpen3DScan) onOpen3DScan(product);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    bottom: '12px',
+                    left: '12px',
+                    background: 'rgba(0, 30, 25, 0.9)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(55, 189, 120, 0.5)',
+                    borderRadius: '20px',
+                    padding: '6px 14px',
+                    color: '#8be28b',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Eye size={14} />
+                  <span>3D Bio-Purity Scan</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Right: Real Details & Price */}
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                  <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: '0 0 6px 0' }}>
+                    {product.title}
+                  </h2>
+                  {product.rating > 0 && (
+                    <span style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: '#facc15',
+                      fontWeight: '800',
+                      fontSize: '12px',
+                      background: 'rgba(250, 204, 21, 0.15)',
+                      padding: '3px 8px',
+                      borderRadius: '12px'
+                    }}>
+                      ★ {product.rating} <span style={{ opacity: 0.8, fontSize: '11px' }}>({product.numReviews} reviews)</span>
+                    </span>
+                  )}
+                </div>
+
+                <p style={{ color: '#a3c2b0', fontSize: '13.5px', lineHeight: '1.5', margin: '8px 0 16px 0' }}>
+                  {product.description || 'Grown with organic standards, naturally harvested and dispatched directly from farm origin.'}
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '12px' }}>
+                    <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Available Stock</div>
+                    <div style={{ color: Number(product.stock) > 0 ? '#8be28b' : '#fca5a5', fontSize: '15px', fontWeight: '800', marginTop: '2px' }}>
+                      {product.stock} {product.unit || 'kg'} in stock
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '12px' }}>
+                    <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Harvest Date</div>
+                    <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700', marginTop: '2px' }}>
+                      {formattedHarvest}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Price & Quantity & Add to Cart */}
+              <div style={{
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '16px',
+                padding: '16px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <div>
+                    <span style={{ color: '#37bd78', fontSize: '26px', fontWeight: '900' }}>₹{product.price}</span>
+                    <span style={{ color: '#a3c2b0', fontSize: '13px' }}> / {product.unit || 'kg'}</span>
+                  </div>
+
+                  {/* Quantity selector */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', padding: '4px 8px' }}>
+                    <button
+                      onClick={() => setSelectedQty(q => Math.max(1, q - 1))}
+                      style={{ background: 'none', border: 'none', color: '#effbe7', cursor: 'pointer', padding: '4px' }}
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span style={{ color: '#effbe7', fontWeight: '800', minWidth: '24px', textAlign: 'center' }}>
+                      {selectedQty}
+                    </span>
+                    <button
+                      onClick={() => setSelectedQty(q => Math.min(Number(product.stock) || 1, q + 1))}
+                      style={{ background: 'none', border: 'none', color: '#effbe7', cursor: 'pointer', padding: '4px' }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  disabled={Number(product.stock) <= 0}
+                  onClick={() => {
+                    onAddToCart(product, selectedQty);
+                    onClose();
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '12px',
+                    background: Number(product.stock) > 0 ? 'linear-gradient(135deg, #00897b, #004d40)' : 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    fontSize: '14px',
+                    cursor: Number(product.stock) > 0 ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <ShoppingCart size={16} />
+                  <span>{Number(product.stock) > 0 ? `Add ${selectedQty} to Cart • ₹${product.price * selectedQty}` : 'Out of Stock'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Farmer Information Card */}
+          <div style={{
+            background: 'rgba(55, 189, 120, 0.08)',
+            border: '1px solid rgba(55, 189, 120, 0.25)',
+            borderRadius: '16px',
+            padding: '18px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sprout size={18} color="#37bd78" />
+                <span style={{ color: '#effbe7', fontWeight: '800', fontSize: '15px' }}>
+                  Producer: {product.farmerName || 'Mandya Organic Producer'}
+                </span>
+                <span style={{
+                  background: 'rgba(55, 189, 120, 0.2)',
+                  border: '1px solid rgba(55, 189, 120, 0.4)',
+                  color: '#8be28b',
+                  fontSize: '10.5px',
+                  fontWeight: '700',
+                  padding: '2px 8px',
+                  borderRadius: '12px'
+                }}>
+                  ✓ Verified Farmer
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#d9c7a0', fontSize: '12.5px', marginBottom: '14px' }}>
+              <MapPin size={14} color="#37bd78" />
+              <span>{product.location?.address || product.farmerNative || 'Mandya Organic Farm, Karnataka, India'}</span>
+            </div>
+
+            {/* Other produce from this farmer */}
+            {otherFarmerProducts.length > 0 && (
+              <div>
+                <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '8px' }}>
+                  More Fresh Harvests From This Farmer ({otherFarmerProducts.length})
+                </div>
+                <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {otherFarmerProducts.map(fp => (
+                    <div
+                      key={getProductId(fp)}
+                      style={{
+                        minWidth: '160px',
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '12px',
+                        padding: '8px 10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <img
+                        src={fp.image || 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b'}
+                        alt={fp.title}
+                        style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover' }}
+                      />
+                      <div style={{ overflow: 'hidden' }}>
+                        <div style={{ color: '#effbe7', fontSize: '12px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {fp.title}
+                        </div>
+                        <div style={{ color: '#37bd78', fontSize: '11px', fontWeight: '800' }}>
+                          ₹{fp.price} / {fp.unit || 'kg'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Customer Notifications Drawer / Modal
+───────────────────────────────────────────────────────────── */
+function NotificationDrawer({ isOpen, onClose, notifications, onRefresh }) {
+  if (!isOpen) return null;
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(2, 10, 8, 0.75)',
+      backdropFilter: 'blur(12px)',
+      zIndex: 9999,
+      display: 'flex',
+      justifyContent: 'flex-end'
+    }}>
+      <div
+        className="responsive-modal-card"
+        style={{
+          width: '100%',
+          maxWidth: '420px',
+          height: '100%',
+          background: 'rgba(9, 32, 27, 0.98)',
+          borderLeft: '1.5px solid rgba(110, 219, 208, 0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '-10px 0 35px rgba(0,0,0,0.6)'
+        }}
+      >
+        <div style={{
+          padding: '20px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Bell size={20} color="#6edbd0" />
+            <h3 style={{ color: '#effbe7', fontSize: '17px', fontWeight: '800', margin: 0 }}>
+              Order & Marketplace Alerts
+            </h3>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={onRefresh}
+              title="Refresh alerts"
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: '#effbe7',
+                borderRadius: '8px',
+                width: '30px',
+                height: '30px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <RefreshCw size={14} />
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: '#effbe7',
+                borderRadius: '8px',
+                width: '30px',
+                height: '30px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {notifications.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '50px 20px', color: '#a3c2b0' }}>
+              <Bell size={36} color="#6edbd0" style={{ margin: '0 auto 12px', opacity: 0.6 }} />
+              <div style={{ color: '#effbe7', fontWeight: '700' }}>All Caught Up</div>
+              <div style={{ fontSize: '12.5px', marginTop: '4px' }}>Marketplace and order status updates will appear here in real time.</div>
+            </div>
+          ) : (
+            notifications.map((notif, idx) => (
+              <div
+                key={notif.id || idx}
+                style={{
+                  background: notif.category === 'delivery'
+                    ? 'rgba(244, 201, 93, 0.08)'
+                    : notif.priority === 'HIGH' || notif.priority === 'URGENT'
+                      ? 'rgba(55, 189, 120, 0.12)'
+                      : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${notif.category === 'delivery' ? 'rgba(244, 201, 93, 0.3)' : 'rgba(110, 219, 208, 0.2)'}`,
+                  borderRadius: '14px',
+                  padding: '14px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                  <div style={{ color: '#effbe7', fontSize: '13.5px', fontWeight: '800' }}>
+                    {notif.title}
+                  </div>
+                  <span style={{ color: '#a3c2b0', fontSize: '10.5px' }}>
+                    {notif.timestamp ? new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </span>
+                </div>
+                <div style={{ color: '#a3c2b0', fontSize: '12px', lineHeight: '1.4' }}>
+                  {notif.message}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Main Customer Portal Component
+───────────────────────────────────────────────────────────── */
 export default function CustomerPortal() {
-  const { user, showToast } = useAuth();
+  const { user, showToast, updateUserProfile } = useAuth();
   const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState([]);
+
+  // Cart persisted per customer account in localStorage
+  const cartStorageKey = `agrilink_cart_${user?._id || user?.id || 'customer'}`;
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem(cartStorageKey);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [orders, setOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState('marketplace'); // 'marketplace' | 'orders' | 'recipes' | 'favorites'
+  const [activeTab, setActiveTab] = useState('marketplace'); // 'marketplace' | 'orders' | 'recipes' | 'favorites' | 'profile' | 'cart'
+
+  // Advanced Filters
   const [filterCategory, setFilterCategory] = useState('all');
+  const [filterFarmerId, setFilterFarmerId] = useState('all');
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('default');
+
   const [loading, setLoading] = useState(true);
   const [refreshingOrders, setRefreshingOrders] = useState(false);
   const [expressDelivery, setExpressDelivery] = useState(false);
 
-  // Modals
+  // Modals & Drawers
   const [inspectProduct, setInspectProduct] = useState(null);
+  const [detailsProduct, setDetailsProduct] = useState(null);
   const [bargainProduct, setBargainProduct] = useState(null);
   const [showLiveCam, setShowLiveCam] = useState(false);
   const [favorites, setFavorites] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Profile Edit State
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileFirstName, setProfileFirstName] = useState(user?.firstName || '');
+  const [profileLastName, setProfileLastName] = useState(user?.lastName || '');
+  const [profilePhone, setProfilePhone] = useState(user?.phone || '');
+  const [profileAddress, setProfileAddress] = useState(user?.location?.address || '');
+  const [profileNative, setProfileNative] = useState(user?.nativePlace || '');
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Reviews State
   const [reviewingItem, setReviewingItem] = useState(null); // { orderId, productId, title, farmerId }
@@ -1010,16 +1490,53 @@ export default function CustomerPortal() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewedKeys, setReviewedKeys] = useState([]);
 
+  // Sync cart to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(cartStorageKey, JSON.stringify(cart));
+    } catch {}
+  }, [cart, cartStorageKey]);
+
   useEffect(() => {
     fetchProducts();
     fetchOrders();
-  }, []);
+    fetchWishlist();
+    fetchNotifications();
+  }, [user]);
 
+  // Synchronize cart with latest live database stock & prices
+  useEffect(() => {
+    if (products.length > 0 && cart.length > 0) {
+      setCart(currentCart => currentCart.map(item => {
+        const matching = products.find(p => isSameProduct(p, getProductId(item)));
+        if (matching) {
+          const freshPrice = Number(matching.price);
+          const freshStock = Number(matching.stock);
+          const freshQty = Math.min(item.quantity, freshStock);
+          return {
+            ...item,
+            price: freshPrice,
+            stock: freshStock,
+            quantity: freshQty > 0 ? freshQty : 1
+          };
+        }
+        return item;
+      }));
+    }
+  }, [products]);
+
+  // Periodic polling for live order radar updates
   useEffect(() => {
     if (activeTab !== 'orders') return;
     const interval = setInterval(fetchOrders, 5000);
     return () => clearInterval(interval);
   }, [activeTab]);
+
+  // Periodic polling for customer notifications
+  useEffect(() => {
+    const interval = setInterval(fetchNotifications, 8000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const fetchProducts = async () => {
     try {
@@ -1040,6 +1557,29 @@ export default function CustomerPortal() {
       setOrders(res.data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchWishlist = async () => {
+    if (!user) return;
+    try {
+      const res = await authAPI.getWishlist();
+      if (res.data?.wishlist) {
+        setFavorites(res.data.wishlist);
+      }
+    } catch (e) {
+      if (user?.wishlist) setFavorites(user.wishlist);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await notificationAPI.getNotifications();
+      if (res.data?.notifications) {
+        setNotifications(res.data.notifications);
+      }
+    } catch (e) {
+      console.warn('Failed to load notifications:', e);
     }
   };
 
@@ -1068,11 +1608,23 @@ export default function CustomerPortal() {
     }
   };
 
-  const toggleFavorite = (productId) => {
+  const toggleFavorite = async (productId) => {
+    const pId = String(productId);
+    // Optimistic UI toggle
     setFavorites(prev =>
-      prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]
+      prev.includes(pId) ? prev.filter(id => id !== pId) : [...prev, pId]
     );
-    showToast(favorites.includes(productId) ? 'Removed from favorites' : 'Saved to favorites ❤️', 'info');
+
+    try {
+      const res = await authAPI.toggleWishlist({ productId: pId });
+      if (res.data?.wishlist) {
+        setFavorites(res.data.wishlist);
+      }
+      showToast(res.data?.isSaved ? 'Saved to favorites ❤️' : 'Removed from favorites', 'info');
+    } catch (err) {
+      fetchWishlist();
+      showToast('Could not sync favorites with cloud', 'error');
+    }
   };
 
   const addToCart = (product, customQty = 1) => {
@@ -1132,19 +1684,13 @@ export default function CustomerPortal() {
     if (cart.length === 0) return;
     const baseTotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
     const totalAmount = expressDelivery ? baseTotal + 49 : baseTotal;
-    const firstItem = cart[0];
 
     const orderPayload = {
       customerId: user?._id || user?.id,
       customerName: `${user?.firstName || 'Customer'} ${user?.lastName || 'Shopper'}`.trim(),
       customerPhone: user?.phone || '+91 98400 12345',
-      customerEmail: user?.email || 'customer@agrilink.io',
-      customerLocation: user?.location || { lat: 12.9716, lng: 77.5946, address: 'Bengaluru Delivery Address, Karnataka, India' },
-      farmerId: firstItem.farmerId || 'farmer_1',
-      farmerName: firstItem.farmerName || 'Greenfield Farms',
-      farmerPhone: firstItem.farmerPhone || '+1 555-019-9988',
-      farmerEmail: firstItem.farmerEmail || 'farmer@nexus.io',
-      farmerLocation: firstItem.location || { lat: 12.5222, lng: 76.9004, address: 'Mandya Organic Farm, Karnataka, India' },
+      customerEmail: user?.email || '',
+      customerLocation: user?.location || { lat: 12.9716, lng: 77.5946, address: 'Customer Address, Bengaluru' },
       items: cart.map(i => ({
         productId: getProductId(i),
         title: i.title,
@@ -1166,6 +1712,7 @@ export default function CustomerPortal() {
       setOrders(currentOrders => [...newOrders, ...currentOrders]);
       setCart([]);
       setActiveTab('orders');
+      fetchNotifications();
       if (newOrders.length > 1) {
         showToast(`🎉 Order placed! Multi-farm cart was split into ${newOrders.length} direct-farm dispatches.`, 'success');
       } else {
@@ -1177,25 +1724,51 @@ export default function CustomerPortal() {
     }
   };
 
-  // Filter and Sort Logic
+  // Derive available farmers from products
+  const availableFarmers = React.useMemo(() => {
+    const map = new Map();
+    products.forEach(p => {
+      if (p.farmerId && p.farmerName && !map.has(String(p.farmerId))) {
+        map.set(String(p.farmerId), { id: String(p.farmerId), name: p.farmerName, location: p.location?.address });
+      }
+    });
+    return Array.from(map.values());
+  }, [products]);
+
+  // Filter and Sort Logic with Price, Farmer, Stock, Category & Search
   const filteredProducts = products.filter(p => {
     const matchesCategory = filterCategory === 'all' || p.category === filterCategory;
+    const matchesFarmer = filterFarmerId === 'all' || String(p.farmerId) === String(filterFarmerId);
+    const matchesStock = !inStockOnly || Number(p.stock) > 0;
+    const matchesMinPrice = !minPrice || Number(p.price) >= Number(minPrice);
+    const matchesMaxPrice = !maxPrice || Number(p.price) <= Number(maxPrice);
     const matchesSearch = !searchQuery.trim() ||
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (p.farmerName && p.farmerName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (p.location?.address && p.location.address.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesFavorites = activeTab === 'favorites' ? favorites.includes(getProductId(p)) : true;
-    return matchesCategory && matchesSearch && matchesFavorites;
+    return matchesCategory && matchesFarmer && matchesStock && matchesMinPrice && matchesMaxPrice && matchesSearch && matchesFavorites;
   }).sort((a, b) => {
     if (sortBy === 'price-low') return Number(a.price) - Number(b.price);
     if (sortBy === 'price-high') return Number(b.price) - Number(a.price);
     if (sortBy === 'title') return a.title.localeCompare(b.title);
+    if (sortBy === 'rating') return Number(b.rating || 0) - Number(a.rating || 0);
     return 0;
   });
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotalPrice = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
+
+  const clearAllFilters = () => {
+    setFilterCategory('all');
+    setFilterFarmerId('all');
+    setInStockOnly(false);
+    setMinPrice('');
+    setMaxPrice('');
+    setSearchQuery('');
+    setSortBy('default');
+  };
 
   return (
     <div className="portal-layout" style={{ minHeight: 'calc(100vh - 70px)' }}>
@@ -1207,6 +1780,25 @@ export default function CustomerPortal() {
           onAddToCart={(p) => addToCart(p, 1)}
         />
       )}
+
+      {/* Product Details & Real Farmer Information Modal */}
+      {detailsProduct && (
+        <ProductDetailsModal
+          product={detailsProduct}
+          allProducts={products}
+          onClose={() => setDetailsProduct(null)}
+          onAddToCart={(p, qty) => addToCart(p, qty)}
+          onOpen3DScan={(p) => setInspectProduct(p)}
+        />
+      )}
+
+      {/* Real Customer Notifications Drawer */}
+      <NotificationDrawer
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={notifications}
+        onRefresh={fetchNotifications}
+      />
 
       {/* Bargain Offer Modal */}
       {bargainProduct && (
@@ -1496,12 +2088,12 @@ export default function CustomerPortal() {
 
               {/* Category Pills */}
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {['all', 'vegetable', 'fruit', 'grain', 'seed'].map(cat => (
+                {['all', 'vegetable', 'fruit', 'grain', 'seed', 'dairy', 'spices'].map(cat => (
                   <button
                     key={cat}
                     onClick={() => setFilterCategory(cat)}
                     style={{
-                      padding: '8px 16px',
+                      padding: '8px 14px',
                       borderRadius: '20px',
                       border: '1px solid',
                       borderColor: filterCategory === cat ? '#37bd78' : 'rgba(255,255,255,0.15)',
@@ -1519,29 +2111,152 @@ export default function CustomerPortal() {
                 ))}
               </div>
 
-              {/* Sort Selector */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <SlidersHorizontal size={16} color="#6edbd0" />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
+              {/* Farmer, Price & Stock Filters Toolbar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {/* Farmer Selection Filter */}
+                {availableFarmers.length > 0 && (
+                  <select
+                    value={filterFarmerId}
+                    onChange={(e) => setFilterFarmerId(e.target.value)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(0, 0, 0, 0.4)',
+                      border: '1px solid rgba(110, 219, 208, 0.3)',
+                      color: '#effbe7',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="all" style={{ background: '#092b27' }}>🧑‍🌾 All Farmers ({availableFarmers.length})</option>
+                    {availableFarmers.map(f => (
+                      <option key={f.id} value={f.id} style={{ background: '#092b27' }}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Price Range Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span style={{ color: '#a3c2b0', fontSize: '11px', fontWeight: '700' }}>₹</span>
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={minPrice}
+                    onChange={(e) => setMinPrice(e.target.value)}
+                    style={{
+                      width: '60px',
+                      padding: '6px 8px',
+                      borderRadius: '8px',
+                      background: 'rgba(0, 0, 0, 0.4)',
+                      border: '1px solid rgba(110, 219, 208, 0.3)',
+                      color: '#effbe7',
+                      fontSize: '12px',
+                      outline: 'none'
+                    }}
+                  />
+                  <span style={{ color: '#a3c2b0', fontSize: '11px' }}>-</span>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    style={{
+                      width: '60px',
+                      padding: '6px 8px',
+                      borderRadius: '8px',
+                      background: 'rgba(0, 0, 0, 0.4)',
+                      border: '1px solid rgba(110, 219, 208, 0.3)',
+                      color: '#effbe7',
+                      fontSize: '12px',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+
+                {/* In Stock Only Toggle */}
+                <button
+                  onClick={() => setInStockOnly(prev => !prev)}
                   style={{
-                    padding: '8px 12px',
+                    padding: '7px 12px',
                     borderRadius: '10px',
-                    background: 'rgba(0, 0, 0, 0.4)',
-                    border: '1px solid rgba(110, 219, 208, 0.3)',
-                    color: '#effbe7',
-                    fontSize: '12.5px',
-                    fontWeight: '600',
-                    outline: 'none',
-                    cursor: 'pointer'
+                    border: '1px solid',
+                    borderColor: inStockOnly ? '#37bd78' : 'rgba(255,255,255,0.18)',
+                    background: inStockOnly ? 'rgba(55, 189, 120, 0.25)' : 'rgba(0,0,0,0.35)',
+                    color: inStockOnly ? '#8be28b' : '#a3c2b0',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
                   }}
                 >
-                  <option value="default" style={{ background: '#092b27' }}>Sort: Default</option>
-                  <option value="price-low" style={{ background: '#092b27' }}>Price: Low to High</option>
-                  <option value="price-high" style={{ background: '#092b27' }}>Price: High to Low</option>
-                  <option value="title" style={{ background: '#092b27' }}>Name: A-Z</option>
-                </select>
+                  <Check size={13} color={inStockOnly ? '#8be28b' : 'transparent'} />
+                  <span>In Stock</span>
+                </button>
+
+                {/* Sort Selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <SlidersHorizontal size={15} color="#6edbd0" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(0, 0, 0, 0.4)',
+                      border: '1px solid rgba(110, 219, 208, 0.3)',
+                      color: '#effbe7',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="default" style={{ background: '#092b27' }}>Sort: Default</option>
+                    <option value="price-low" style={{ background: '#092b27' }}>Price: Low to High</option>
+                    <option value="price-high" style={{ background: '#092b27' }}>Price: High to Low</option>
+                    <option value="title" style={{ background: '#092b27' }}>Name: A-Z</option>
+                    <option value="rating" style={{ background: '#092b27' }}>Rating: High to Low</option>
+                  </select>
+                </div>
+
+                {/* Alerts / Notifications Drawer Trigger */}
+                <button
+                  onClick={() => setShowNotifications(true)}
+                  title="Customer Notifications & Order Updates"
+                  style={{
+                    position: 'relative',
+                    background: 'rgba(0, 0, 0, 0.35)',
+                    border: '1px solid rgba(110, 219, 208, 0.3)',
+                    borderRadius: '10px',
+                    padding: '8px 12px',
+                    color: '#effbe7',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Bell size={15} color="#6edbd0" />
+                  <span style={{ fontSize: '12px', fontWeight: '700' }}>Alerts</span>
+                  {notifications.length > 0 && (
+                    <span style={{
+                      background: '#37bd78',
+                      color: '#071814',
+                      fontSize: '10px',
+                      fontWeight: '900',
+                      borderRadius: '10px',
+                      padding: '1px 6px'
+                    }}>
+                      {notifications.length}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -1565,7 +2280,24 @@ export default function CustomerPortal() {
                   }}>
                     <Sprout size={48} color="#37bd78" style={{ margin: '0 auto 16px' }} />
                     <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Farm Produce Found</h3>
-                    <p style={{ margin: 0, fontSize: '13.5px' }}>Try adjusting your search query or category filters.</p>
+                    <p style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
+                      Try adjusting your search query, price range, or category/farmer filters.
+                    </p>
+                    <button
+                      onClick={clearAllFilters}
+                      style={{
+                        background: 'rgba(55, 189, 120, 0.2)',
+                        border: '1px solid rgba(55, 189, 120, 0.5)',
+                        color: '#8be28b',
+                        padding: '8px 16px',
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Clear All Filters
+                    </button>
                   </div>
                 ) : (
                   <div style={{
@@ -1736,12 +2468,33 @@ export default function CustomerPortal() {
                                 </span>
                               </div>
 
-                              <div style={{ display: 'flex', gap: '8px' }}>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                <button
+                                  onClick={() => setDetailsProduct(product)}
+                                  title="View full farmer & produce details"
+                                  style={{
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(110, 219, 208, 0.15)',
+                                    border: '1px solid rgba(110, 219, 208, 0.4)',
+                                    color: '#6edbd0',
+                                    fontWeight: '700',
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <Eye size={13} />
+                                  <span>Details</span>
+                                </button>
+
                                 <button
                                   onClick={() => setBargainProduct(product)}
                                   title="Offer custom bulk price directly to farmer"
                                   style={{
-                                    padding: '10px',
+                                    padding: '10px 12px',
                                     borderRadius: '10px',
                                     background: 'rgba(244, 201, 93, 0.15)',
                                     border: '1px solid rgba(244, 201, 93, 0.4)',
@@ -1754,31 +2507,32 @@ export default function CustomerPortal() {
                                     gap: '4px'
                                   }}
                                 >
-                                  <DollarSign size={14} />
+                                  <DollarSign size={13} />
                                   <span>Bargain</span>
                                 </button>
 
                                 <button
+                                  disabled={Number(product.stock) <= 0}
                                   onClick={() => addToCart(product, 1)}
                                   style={{
-                                    flex: 1,
+                                    flex: '1 1 110px',
                                     padding: '10px',
                                     borderRadius: '10px',
-                                    background: 'linear-gradient(135deg, #00897b, #004d40)',
+                                    background: Number(product.stock) > 0 ? 'linear-gradient(135deg, #00897b, #004d40)' : 'rgba(255,255,255,0.1)',
                                     border: 'none',
                                     color: '#ffffff',
                                     fontWeight: '800',
                                     fontSize: '13px',
-                                    cursor: 'pointer',
+                                    cursor: Number(product.stock) > 0 ? 'pointer' : 'not-allowed',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: '6px',
-                                    boxShadow: '0 4px 14px rgba(0, 137, 123, 0.3)'
+                                    boxShadow: Number(product.stock) > 0 ? '0 4px 14px rgba(0, 137, 123, 0.3)' : 'none'
                                   }}
                                 >
                                   <ShoppingCart size={15} />
-                                  <span>Add to Cart</span>
+                                  <span>{Number(product.stock) > 0 ? 'Add to Cart' : 'Out of Stock'}</span>
                                 </button>
                               </div>
                             </div>
@@ -2073,14 +2827,22 @@ export default function CustomerPortal() {
                       <LiveTrackingMap order={order} />
                     </div>
 
-                    {/* Status Pipeline Tracker */}
-                    <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* Order Details Header Info */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', marginBottom: '14px', fontSize: '12px', color: '#a3c2b0' }}>
+                      <div>🧑‍🌾 <strong>Farmer:</strong> <span style={{ color: '#effbe7' }}>{order.farmerName || 'Partner Farm'}</span></div>
+                      <div>📅 <strong>Order Date:</strong> <span style={{ color: '#effbe7' }}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent'}</span></div>
+                      <div>🚚 <strong>Courier:</strong> <span style={{ color: '#effbe7' }}>{order.deliveryName || 'Pending Assignment'}</span></div>
+                    </div>
+
+                    {/* Status Pipeline Tracker (6 Stages) */}
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
                       {[
                         { key: 'pending', label: '1. Placed' },
                         { key: 'confirmed', label: '2. Confirmed' },
                         { key: 'packed', label: '3. Packed' },
-                        { key: 'in_transit', label: '4. Out for Delivery' },
-                        { key: 'delivered', label: '5. Delivered' }
+                        { key: 'assigned', label: '4. Driver Assigned' },
+                        { key: 'in_transit', label: '5. Out for Delivery' },
+                        { key: 'delivered', label: '6. Delivered' }
                       ].map((step, idx) => {
                         const rankMap = {
                           pending: 1,
@@ -2088,10 +2850,10 @@ export default function CustomerPortal() {
                           accepted: 2,
                           packed: 3,
                           assigned: 4,
-                          picked_up: 4,
-                          in_transit: 4,
-                          arrived: 4,
-                          delivered: 5
+                          picked_up: 5,
+                          in_transit: 5,
+                          arrived: 5,
+                          delivered: 6
                         };
                         const currentRank = rankMap[order.status] || 1;
                         const isDone = currentRank >= (idx + 1);
@@ -2111,6 +2873,28 @@ export default function CustomerPortal() {
                         );
                       })}
                     </div>
+
+                    {/* Handover OTP Security Banner */}
+                    {order.status !== 'delivered' && (
+                      <div style={{
+                        background: 'rgba(244, 201, 93, 0.08)',
+                        border: '1px solid rgba(244, 201, 93, 0.25)',
+                        borderRadius: '12px',
+                        padding: '10px 14px',
+                        marginBottom: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        fontSize: '12px',
+                        color: '#effbe7'
+                      }}>
+                        <ShieldCheck size={18} color="#f4c95d" style={{ flexShrink: 0 }} />
+                        <div>
+                          <span style={{ fontWeight: '800', color: '#f4c95d' }}>Secure Handover Verification: </span>
+                          <span>When the delivery partner arrives, provide the verification code sent to your phone to authenticate delivery handover.</span>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Ordered Items & Reviews */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
@@ -2578,46 +3362,232 @@ export default function CustomerPortal() {
             padding: '22px',
             marginBottom: '20px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '18px' }}>
-              <div style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '16px',
-                background: 'linear-gradient(135deg, #00897b, #004d40)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#effbe7',
-                fontWeight: '900',
-                fontSize: '22px',
-                boxShadow: '0 0 20px rgba(0, 137, 123, 0.4)'
-              }}>
-                {user?.firstName?.[0]?.toUpperCase() || 'C'}
-              </div>
-              <div>
-                <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
-                  {user?.firstName} {user?.lastName}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, #00897b, #004d40)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#effbe7',
+                  fontWeight: '900',
+                  fontSize: '22px',
+                  boxShadow: '0 0 20px rgba(0, 137, 123, 0.4)'
+                }}>
+                  {user?.firstName?.[0]?.toUpperCase() || 'C'}
                 </div>
-                <div style={{ color: '#6edbd0', fontSize: '12px', fontWeight: '700', marginTop: '2px' }}>
-                  ✓ Verified Farm Customer
+                <div>
+                  <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                    {user?.firstName} {user?.lastName}
+                  </div>
+                  <div style={{ color: '#6edbd0', fontSize: '12px', fontWeight: '700', marginTop: '2px' }}>
+                    ✓ Verified Farm Customer
+                  </div>
                 </div>
               </div>
+
+              <button
+                onClick={() => {
+                  setProfileFirstName(user?.firstName || '');
+                  setProfileLastName(user?.lastName || '');
+                  setProfilePhone(user?.phone || '');
+                  setProfileAddress(user?.location?.address || '');
+                  setProfileNative(user?.nativePlace || '');
+                  setIsEditingProfile(prev => !prev);
+                }}
+                style={{
+                  background: isEditingProfile ? 'rgba(255, 255, 255, 0.08)' : 'rgba(110, 219, 208, 0.15)',
+                  border: '1px solid rgba(110, 219, 208, 0.4)',
+                  color: '#6edbd0',
+                  padding: '8px 14px',
+                  borderRadius: '10px',
+                  fontSize: '12.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Edit2 size={14} />
+                <span>{isEditingProfile ? 'Cancel Edit' : 'Edit Profile'}</span>
+              </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
-                <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email</div>
-                <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.email || 'customer@agrilink.in'}</div>
+            {isEditingProfile ? (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setSavingProfile(true);
+                await updateUserProfile({
+                  firstName: profileFirstName,
+                  lastName: profileLastName,
+                  phone: profilePhone,
+                  nativePlace: profileNative,
+                  location: {
+                    address: profileAddress,
+                    placeName: profileNative || 'Bengaluru'
+                  }
+                });
+                setSavingProfile(false);
+                setIsEditingProfile(false);
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>First Name</label>
+                    <input
+                      type="text"
+                      value={profileFirstName}
+                      onChange={(e) => setProfileFirstName(e.target.value)}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(110, 219, 208, 0.3)',
+                        color: '#effbe7',
+                        fontSize: '13px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Last Name</label>
+                    <input
+                      type="text"
+                      value={profileLastName}
+                      onChange={(e) => setProfileLastName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(110, 219, 208, 0.3)',
+                        color: '#effbe7',
+                        fontSize: '13px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Phone Number</label>
+                    <input
+                      type="text"
+                      value={profilePhone}
+                      onChange={(e) => setProfilePhone(e.target.value)}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(110, 219, 208, 0.3)',
+                        color: '#effbe7',
+                        fontSize: '13px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Region / Native Place</label>
+                    <input
+                      type="text"
+                      value={profileNative}
+                      onChange={(e) => setProfileNative(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(110, 219, 208, 0.3)',
+                        color: '#effbe7',
+                        fontSize: '13px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Default Delivery Address</label>
+                  <input
+                    type="text"
+                    value={profileAddress}
+                    onChange={(e) => setProfileAddress(e.target.value)}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px solid rgba(110, 219, 208, 0.3)',
+                      color: '#effbe7',
+                      fontSize: '13px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingProfile(false)}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#effbe7',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #00897b, #004d40)',
+                      border: 'none',
+                      color: '#ffffff',
+                      fontWeight: '800',
+                      cursor: savingProfile ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <Check size={16} />
+                    <span>{savingProfile ? 'Saving Changes...' : 'Save Profile'}</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email</div>
+                  <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.email || 'customer@agrilink.in'}</div>
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Phone</div>
+                  <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.phone || '+91 98400 12345'}</div>
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Delivery Address</div>
+                  <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.location?.address || user?.nativePlace || 'Bengaluru, Karnataka'}</div>
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                  <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Orders Placed</div>
+                  <div style={{ color: '#37bd78', fontSize: '14px', fontWeight: '800', marginTop: '3px' }}>{orders.length} Dispatches</div>
+                </div>
               </div>
-              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
-                <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Phone</div>
-                <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.phone || '+91 98400 12345'}</div>
-              </div>
-              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
-                <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Orders Placed</div>
-                <div style={{ color: '#37bd78', fontSize: '14px', fontWeight: '800', marginTop: '3px' }}>{orders.length} Dispatches</div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Eco-Impact Card */}

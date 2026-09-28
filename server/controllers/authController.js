@@ -42,7 +42,18 @@ const maskPhone = (phone) => {
   const p = String(phone || '');
   return p.length >= 4 ? `******${p.slice(-4)}` : '******';
 };
-const formatUserResponse = (user, token) => ({ _id: user._id || user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, role: user.role, nativePlace: user.nativePlace, location: user.location, token });
+const formatUserResponse = (user, token) => ({
+  _id: user._id || user.id,
+  firstName: user.firstName,
+  lastName: user.lastName,
+  email: user.email,
+  phone: user.phone,
+  role: user.role,
+  nativePlace: user.nativePlace,
+  location: user.location,
+  wishlist: user.wishlist || [],
+  token
+});
 
 const otpPepper = () => {
   return process.env.RESET_OTP_PEPPER || process.env.JWT_SECRET || 'agrilink_secret_otp_pepper_2026';
@@ -60,6 +71,13 @@ const persistUser = async (user) => {
     } catch (saveErr) {
       console.warn('⚠️ user.save() notice, applying direct updateOne:', saveErr.message);
       const updateData = {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        name: user.name,
+        phone: user.phone,
+        nativePlace: user.nativePlace,
+        location: user.location,
+        wishlist: user.wishlist,
         resetOtpHash: user.resetOtpHash,
         resetOtpExpiresAt: user.resetOtpExpiresAt,
         resetOtpAttempts: user.resetOtpAttempts,
@@ -547,6 +565,114 @@ const updateLocation = async (req, res) => {
   } catch (error) { console.error('Location update failed:', error.message); return res.status(500).json({ message: 'Unable to update location' }); }
 };
 
+const getWishlist = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const user = isConnected()
+      ? await User.findById(userId)
+      : findMemoryUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    return res.json({ success: true, wishlist: user.wishlist || [] });
+  } catch (error) {
+    console.error('getWishlist error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to retrieve wishlist' });
+  }
+};
+
+const toggleWishlist = async (req, res) => {
+  try {
+    const { productId } = req.body;
+    if (!productId) {
+      return res.status(400).json({ success: false, message: 'Product ID is required' });
+    }
+    const userId = req.user?.id || req.user?._id;
+    const user = isConnected()
+      ? await User.findById(userId)
+      : findMemoryUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    user.wishlist = user.wishlist || [];
+    const pIdStr = String(productId);
+    const existingIndex = user.wishlist.findIndex(id => String(id) === pIdStr);
+    let isSaved = false;
+
+    if (existingIndex >= 0) {
+      user.wishlist.splice(existingIndex, 1);
+      isSaved = false;
+    } else {
+      user.wishlist.push(pIdStr);
+      isSaved = true;
+    }
+
+    await persistUser(user);
+    return res.json({
+      success: true,
+      isSaved,
+      wishlist: user.wishlist,
+      message: isSaved ? 'Product added to wishlist' : 'Product removed from wishlist'
+    });
+  } catch (error) {
+    console.error('toggleWishlist error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to update wishlist' });
+  }
+};
+
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const user = isConnected()
+      ? await User.findById(userId)
+      : findMemoryUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const { firstName, lastName, phone, nativePlace, location } = req.body;
+
+    // Prohibit privilege escalation and tamper attempts
+    if (firstName !== undefined && typeof firstName === 'string') user.firstName = firstName.trim();
+    if (lastName !== undefined && typeof lastName === 'string') user.lastName = lastName.trim();
+    user.name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
+
+    if (phone !== undefined && typeof phone === 'string' && phone.trim()) {
+      const cleanPhone = phone.trim();
+      const normPhone = normalizePhone(cleanPhone) || cleanPhone;
+      const existing = isConnected()
+        ? await User.findOne({
+            $or: [{ phone: cleanPhone }, { phone: normPhone }],
+            _id: { $ne: user._id }
+          })
+        : memoryUsers.find(u => (u.phone === cleanPhone || u.phone === normPhone) && String(u.id || u._id) !== String(userId));
+
+      if (existing) {
+        return res.status(400).json({ success: false, message: 'This phone number is already registered to another account' });
+      }
+      user.phone = cleanPhone;
+    }
+
+    if (nativePlace !== undefined && typeof nativePlace === 'string') {
+      user.nativePlace = nativePlace.trim();
+    }
+
+    if (location && typeof location === 'object') {
+      user.location = {
+        lat: Number(location.lat) || user.location?.lat || 12.9716,
+        lng: Number(location.lng) || user.location?.lng || 77.5946,
+        address: location.address || user.location?.address || 'Bengaluru, Karnataka',
+        placeName: location.placeName || user.location?.placeName || user.nativePlace || 'Bengaluru'
+      };
+    }
+
+    await persistUser(user);
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: formatUserResponse(user)
+    });
+  } catch (error) {
+    console.error('updateProfile error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to update profile' });
+  }
+};
+
 const migrateMemoryPasswords = async () => {
   let changed = false;
   for (const user of memoryUsers) {
@@ -569,6 +695,9 @@ module.exports = {
   forgotPassword,
   resetPassword,
   updateLocation,
+  getWishlist,
+  toggleWishlist,
+  updateProfile,
   seedMemoryUser,
   migrateMemoryPasswords,
   findMemoryUserById

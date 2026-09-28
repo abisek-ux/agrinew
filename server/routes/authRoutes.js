@@ -9,7 +9,10 @@ const {
     loginUser,
     forgotPassword,
     resetPassword,
-    updateLocation
+    updateLocation,
+    getWishlist,
+    toggleWishlist,
+    updateProfile
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const { getDBStatus } = require('../config/db');
@@ -30,6 +33,9 @@ router.post('/reset-password', resetPassword);
 
 // Authenticated User Endpoints
 router.put('/location', protect, updateLocation);
+router.put('/profile', protect, updateProfile);
+router.get('/wishlist', protect, getWishlist);
+router.put('/wishlist/toggle', protect, toggleWishlist);
 router.get('/status', (req, res) => res.json(getDBStatus()));
 
 module.exports = router;

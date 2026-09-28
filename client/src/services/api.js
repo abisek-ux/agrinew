@@ -30,6 +30,9 @@ export const authAPI = {
   forgotPassword: (data) => axios.post(`${API_BASE}/auth/forgot-password`, data),
   resetPassword: (data) => axios.post(`${API_BASE}/auth/reset-password`, data),
   updateLocation: (data) => axios.put(`${API_BASE}/auth/location`, data, { headers: getAuthHeaders() }),
+  updateProfile: (data) => axios.put(`${API_BASE}/auth/profile`, data, { headers: getAuthHeaders() }),
+  getWishlist: () => axios.get(`${API_BASE}/auth/wishlist`, { headers: getAuthHeaders() }),
+  toggleWishlist: (data) => axios.put(`${API_BASE}/auth/wishlist/toggle`, data, { headers: getAuthHeaders() }),
   getStatus: () => axios.get(`${API_BASE}/auth/status`)
 };
 

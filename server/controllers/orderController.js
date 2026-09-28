@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const { isConnected } = require('../config/db');
 const { getMemoryProducts } = require('./productController');
 const phoneOtpService = require('../services/phoneOtpService');
+const { pushNotification } = require('./notificationController');
 
 const memoryOrders = [];
 
@@ -171,6 +172,16 @@ const createOrder = async (req, res) => {
         memoryOrders.push(order);
         createdOrders.push(order);
       }
+
+      pushNotification({
+        recipientId: currentUserId,
+        recipientRole: 'customer',
+        orderId: orderPayload.orderId,
+        title: '📦 Order Placed Successfully',
+        message: `Your farm produce order ${orderPayload.orderId} for ₹${totalAmount} has been placed with ${group.farmerName}.`,
+        category: 'order',
+        priority: 'NORMAL'
+      });
     }
 
     // Support single order backward compatibility and multi-order array response
@@ -351,6 +362,35 @@ const updateOrderStatus = async (req, res) => {
     if (isConnected()) {
       await order.save();
     }
+
+    // Send customer notification on status milestone
+    let notifTitle = '';
+    let notifMsg = '';
+    if (status === 'confirmed' || status === 'accepted') {
+      notifTitle = '✅ Farmer Confirmed Order';
+      notifMsg = `Farmer ${order.farmerName || 'Origin'} has accepted and confirmed your order ${order.orderId || order._id || order.id}.`;
+    } else if (status === 'packed') {
+      notifTitle = '📦 Order Packed';
+      notifMsg = `Your order ${order.orderId || order._id || order.id} is packed and ready for dispatch at ${order.farmerName}'s farm.`;
+    } else if (status === 'in_transit' || status === 'picked_up') {
+      notifTitle = '🛵 Out for Delivery';
+      notifMsg = `Order ${order.orderId || order._id || order.id} is out for delivery! Driver: ${order.deliveryName || 'Courier'}.`;
+    } else if (status === 'arrived') {
+      notifTitle = '📍 Delivery Partner Arrived';
+      notifMsg = `Driver ${order.deliveryName || 'Courier'} has arrived at your address with order ${order.orderId || order._id || order.id}.`;
+    }
+    if (notifTitle) {
+      pushNotification({
+        recipientId: order.customerId,
+        recipientRole: 'customer',
+        orderId: order.orderId || order._id || order.id,
+        title: notifTitle,
+        message: notifMsg,
+        category: 'order',
+        priority: status === 'arrived' ? 'URGENT' : 'NORMAL'
+      });
+    }
+
     return res.json(order);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -399,6 +439,17 @@ const assignDeliveryDriver = async (req, res) => {
     if (isConnected()) {
       await order.save();
     }
+
+    pushNotification({
+      recipientId: order.customerId,
+      recipientRole: 'customer',
+      orderId: order.orderId || order._id || order.id,
+      title: '🚚 Delivery Courier Assigned',
+      message: `Courier ${driverName} has been assigned to deliver order ${order.orderId || order._id || order.id}.`,
+      category: 'delivery',
+      priority: 'NORMAL'
+    });
+
     return res.json({ success: true, message: 'Order successfully assigned to driver', order });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -557,6 +608,16 @@ const verifyDeliveryOtp = async (req, res) => {
     if (isConnected()) {
       await order.save();
     }
+
+    pushNotification({
+      recipientId: order.customerId,
+      recipientRole: 'customer',
+      orderId: order.orderId || order._id || order.id,
+      title: '🎉 Order Delivered Successfully',
+      message: `Order ${order.orderId || order._id || order.id} has been delivered and authenticated via OTP. Thank you for buying direct from farmers!`,
+      category: 'order',
+      priority: 'HIGH'
+    });
 
     return res.json({
       success: true,

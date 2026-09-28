@@ -5,15 +5,24 @@ const memoryProducts = [];
 
 const getProducts = async (req, res) => {
   try {
-    const { category, farmerId, search, sortBy } = req.query;
+    const { category, farmerId, search, sortBy, minPrice, maxPrice, inStock } = req.query;
 
     if (isConnected()) {
       let query = {};
       if (category && typeof category === 'string' && category !== 'all') {
         query.category = category;
       }
-      if (farmerId && typeof farmerId === 'string') {
+      if (farmerId && typeof farmerId === 'string' && farmerId !== 'all') {
         query.farmerId = farmerId;
+      }
+      if (minPrice !== undefined && minPrice !== '' && !isNaN(Number(minPrice))) {
+        query.price = { ...(query.price || {}), $gte: Number(minPrice) };
+      }
+      if (maxPrice !== undefined && maxPrice !== '' && !isNaN(Number(maxPrice))) {
+        query.price = { ...(query.price || {}), $lte: Number(maxPrice) };
+      }
+      if (inStock === 'true' || inStock === true) {
+        query.stock = { $gt: 0 };
       }
       if (search && typeof search === 'string' && search.trim()) {
         const regex = new RegExp(search.trim(), 'i');
@@ -38,8 +47,17 @@ const getProducts = async (req, res) => {
       if (category && typeof category === 'string' && category !== 'all') {
         filtered = filtered.filter(p => p.category === category);
       }
-      if (farmerId && typeof farmerId === 'string') {
+      if (farmerId && typeof farmerId === 'string' && farmerId !== 'all') {
         filtered = filtered.filter(p => String(p.farmerId) === String(farmerId));
+      }
+      if (minPrice !== undefined && minPrice !== '' && !isNaN(Number(minPrice))) {
+        filtered = filtered.filter(p => Number(p.price) >= Number(minPrice));
+      }
+      if (maxPrice !== undefined && maxPrice !== '' && !isNaN(Number(maxPrice))) {
+        filtered = filtered.filter(p => Number(p.price) <= Number(maxPrice));
+      }
+      if (inStock === 'true' || inStock === true) {
+        filtered = filtered.filter(p => Number(p.stock) > 0);
       }
       if (search && typeof search === 'string' && search.trim()) {
         const s = search.trim().toLowerCase();

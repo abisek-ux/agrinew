@@ -120,6 +120,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUserProfile = async (profileData) => {
+    try {
+      const res = await authAPI.updateProfile(profileData);
+      if (res.data.success && res.data.user) {
+        const updatedUser = { ...user, ...res.data.user };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        showToast('Customer profile updated successfully', 'success');
+        return { success: true, user: updatedUser };
+      }
+      return { success: false, message: res.data.message };
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to update profile';
+      showToast(msg, 'error');
+      return { success: false, message: msg };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -131,6 +149,7 @@ export const AuthProvider = ({ children }) => {
       register,
       logout,
       updateUserLocation,
+      updateUserProfile,
       setUser
     }}>
       {children}

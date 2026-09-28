@@ -297,20 +297,59 @@ exports.getSupabaseStatus = (req, res) => {
   });
 };
 
-// Get all system notifications
+// Get system notifications (filtered for authenticated user or general)
 exports.getNotifications = (req, res) => {
+  const userId = req.user ? String(req.user.id || req.user._id) : (req.query.userId ? String(req.query.userId) : null);
+  const userRole = req.user?.role || req.query.role || null;
+
+  let list = systemNotifications;
+  if (userId) {
+    list = systemNotifications.filter(n => {
+      // General alert for everyone
+      if (!n.recipientId && !n.recipientRole) return true;
+      // Alert matching role
+      if (!n.recipientId && n.recipientRole && userRole && n.recipientRole.toLowerCase() === userRole.toLowerCase()) return true;
+      // Alert matching this user
+      if (n.recipientId && n.recipientId === userId) return true;
+      return false;
+    });
+  }
+
   return res.status(200).json({
     success: true,
-    notifications: systemNotifications
+    notifications: list
   });
+};
+
+// Push an internal notification to the system (e.g. from orders or status transitions)
+exports.pushNotification = ({ recipientId, recipientRole, orderId, title, message, category, priority, details }) => {
+  const newNotif = {
+    id: `notif_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    recipientId: recipientId ? String(recipientId) : null,
+    recipientRole: recipientRole || null,
+    orderId: orderId || null,
+    title: title || 'Agricultural Notification',
+    message: message || '',
+    category: category || 'order',
+    priority: priority || 'NORMAL',
+    requiresOtp: false,
+    status: 'unread',
+    timestamp: new Date().toISOString(),
+    details: details || ''
+  };
+  systemNotifications.unshift(newNotif);
+  return newNotif;
 };
 
 // Create a new notification (e.g. from orders or disease alerts)
 exports.createNotification = (req, res) => {
   try {
-    const { title, message, category, priority, requiresOtp, otpType, details } = req.body;
+    const { title, message, category, priority, requiresOtp, otpType, details, recipientId, recipientRole, orderId } = req.body;
     const newNotif = {
       id: `notif_${Date.now()}`,
+      recipientId: recipientId ? String(recipientId) : (req.user ? String(req.user.id || req.user._id) : null),
+      recipientRole: recipientRole || null,
+      orderId: orderId || null,
       title: title || 'Agricultural Notification',
       message: message || '',
       category: category || 'general',
@@ -336,3 +375,4 @@ function updateNotificationStatus(id) {
     return n;
   });
 }
+

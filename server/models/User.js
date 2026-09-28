@@ -54,6 +54,7 @@ const userSchema = new mongoose.Schema(
       address: { type: String, default: 'Bengaluru, Karnataka, India' },
       placeName: { type: String, default: 'Bengaluru, Karnataka' }
     },
+    wishlist: [{ type: String }],
 
     // Password Reset & OTP Fields
     resetOtpHash: { type: String, default: null },
