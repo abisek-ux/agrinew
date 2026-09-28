@@ -153,18 +153,27 @@ exports.generateOtp = async (req, res) => {
       return ph;
     };
 
-    const targetMasked = deliveryChannel === 'email' ? maskEmail(userEmail) : maskPhone(mobile);
+    const phoneMasked = maskPhone(mobile);
+    const emailMasked = maskEmail(userEmail);
+
+    let summary = `Dispatched to ${phoneMasked}`;
+    if (deliveryChannel === 'email') {
+      summary = `Dispatched to email: ${emailMasked}`;
+    } else if (deliveryChannel === 'all') {
+      summary = `Dispatched to SMS (${phoneMasked}) & Email (${emailMasked})`;
+    }
 
     return res.status(200).json({
       success: true,
-      message: `Verification code has been securely dispatched to your ${deliveryChannel === 'email' ? 'email inbox' : 'mobile number via SMS'}. Please check and enter the 6 digits.`,
+      message: `Verification code has been securely dispatched. Please check and enter the 6 digits.`,
       notificationId: key,
       expiresInSeconds: 300,
       deliveryChannel: deliveryChannel,
-      sentTo: targetMasked,
+      sentTo: deliveryChannel === 'email' ? emailMasked : (deliveryChannel === 'all' ? `${phoneMasked} & ${emailMasked}` : phoneMasked),
+      sentToPhone: phoneMasked,
+      sentToEmail: emailMasked,
       channelsDispatched: dispatchedChannels.length > 0 ? dispatchedChannels : [deliveryChannel],
-      deliverySummary: `Dispatched to ${targetMasked}`,
-      otpCode: otpCode
+      deliverySummary: summary
     });
   } catch (error) {
     console.error('Error generating OTP:', error);
