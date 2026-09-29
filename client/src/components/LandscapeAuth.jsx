@@ -223,6 +223,9 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
   const [forgotStep, setForgotStep] = useState(1);
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [maskedEmail, setMaskedEmail] = useState('');
   const [maskedPhone, setMaskedPhone] = useState('');
   const [deliveryChannel, setDeliveryChannel] = useState('email');
@@ -575,6 +578,11 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
       return;
     }
 
+    if (newPassword !== confirmPassword) {
+      showToast('Passwords do not match.', 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await authAPI.resetPassword({
@@ -584,13 +592,15 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
       });
 
       if (res.data.success) {
-        showToast('Password updated successfully! Please login with your new password.', 'success');
+        showToast('Password changed successfully. Please log in with your new password.', 'success');
         setMode('login');
         setForgotStep(1);
         setIdentifier('');
         setResetToken('');
         setNewPassword('');
+        setConfirmPassword('');
         setMaskedPhone('');
+        setMaskedEmail('');
       }
     } catch (err) {
       showToast(err.response?.data?.message || 'Password reset failed', 'error');
@@ -1273,18 +1283,75 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
                       </div>
 
                       <div className="la-field">
-                        <label className="la-label">Create New Password</label>
+                        <label className="la-label">New Password</label>
                         <div className="la-input-wrap">
                           <span className="la-input-icon"><Lock size={16} /></span>
                           <input
-                            type="password"
+                            type={showNewPassword ? "text" : "password"}
                             value={newPassword}
                             onChange={e => setNewPassword(e.target.value)}
                             placeholder="New password (min 8 chars)"
                             className="la-input"
                             required
                           />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                            tabIndex={-1}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#9ca3af',
+                              cursor: 'pointer',
+                              padding: '0 8px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
                         </div>
+                        <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                          Password must be at least 8 characters long
+                        </div>
+                      </div>
+
+                      <div className="la-field">
+                        <label className="la-label">Confirm Password</label>
+                        <div className="la-input-wrap">
+                          <span className="la-input-icon"><Lock size={16} /></span>
+                          <input
+                            type={showConfirmPassword ? "text" : "password"}
+                            value={confirmPassword}
+                            onChange={e => setConfirmPassword(e.target.value)}
+                            placeholder="Re-enter new password"
+                            className="la-input"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                            tabIndex={-1}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#9ca3af',
+                              cursor: 'pointer',
+                              padding: '0 8px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        {confirmPassword && newPassword !== confirmPassword && (
+                          <div style={{ fontSize: '11px', color: '#f87171', marginTop: '4px', fontWeight: '600' }}>
+                            Passwords do not match.
+                          </div>
+                        )}
                       </div>
 
                       <button type="submit" disabled={loading} className="la-btn-primary">

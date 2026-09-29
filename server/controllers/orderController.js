@@ -1,9 +1,16 @@
+const crypto = require('crypto');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const User = require('../models/User');
+const Bargain = require('../models/Bargain');
 const { isConnected } = require('../config/db');
 const { getMemoryProducts } = require('./productController');
 const phoneOtpService = require('../services/phoneOtpService');
 const { pushNotification } = require('./notificationController');
+const sendEmail = require('../utils/sendEmail');
+
+const otpPepper = () => process.env.RESET_OTP_PEPPER || 'agrilink_secret_otp_pepper_2026';
+const hashOtp = (otp) => crypto.createHmac('sha256', otpPepper()).update(String(otp).trim()).digest('hex');
 
 const memoryOrders = [];
 
@@ -80,11 +87,40 @@ const createOrder = async (req, res) => {
         });
       }
 
+      let effectivePrice = Number(product.price);
+      if (item.price && Number(item.price) < effectivePrice) {
+        let acceptedBargain = null;
+        if (isConnected()) {
+          acceptedBargain = await Bargain.findOne({
+            customerId: currentUserId,
+            productId: String(product._id || product.id),
+            status: 'ACCEPTED'
+          }).sort({ updatedAt: -1 });
+        } else {
+          try {
+            const { getMemoryBargains } = require('./bargainController');
+            const mBargains = getMemoryBargains();
+            acceptedBargain = mBargains.find(b =>
+              String(b.customerId) === currentUserId &&
+              String(b.productId) === String(product._id || product.id) &&
+              b.status === 'ACCEPTED'
+            );
+          } catch {}
+        }
+
+        if (acceptedBargain) {
+          const negotiatedRate = Number(acceptedBargain.counterPrice || acceptedBargain.proposedPrice);
+          if (negotiatedRate > 0 && Math.abs(Number(item.price) - negotiatedRate) < 0.5) {
+            effectivePrice = negotiatedRate;
+          }
+        }
+      }
+
       resolvedItems.push({
         productDoc: product,
         productId: String(product._id || product.id),
         title: product.title,
-        price: Number(product.price),
+        price: effectivePrice,
         quantity: qty,
         unit: product.unit || 'kg',
         image: product.image || item.image || '',
@@ -310,7 +346,7 @@ const updateOrderStatus = async (req, res) => {
     const userId = String(req.user.id || req.user._id);
     const userRole = String(req.user.role || '').toLowerCase();
 
-    const validStatuses = ['pending', 'confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'arrived', 'delivered', 'cancelled'];
+    const validStatuses = ['pending', 'confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: `Invalid status: ${status}` });
     }
@@ -370,11 +406,40 @@ const updateOrderStatus = async (req, res) => {
           }
         }
       }
+    } else if (userRole === 'customer') {
+      // Customer cancellation support
+      if (String(order.customerId) !== userId && (!req.user.email || order.customerEmail?.toLowerCase() !== req.user.email.toLowerCase())) {
+        return res.status(403).json({ success: false, message: 'You are not authorized to cancel this order' });
+      }
+      if (status !== 'cancelled') {
+        return res.status(403).json({ success: false, message: 'Customers can only cancel cancellable orders' });
+      }
+      if (!['pending', 'confirmed', 'accepted'].includes(order.status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot cancel order at stage "${order.status}". Only orders that have not yet been packed or dispatched can be cancelled.`
+        });
+      }
+
+      // Replenish product stock on inventory
+      for (const item of order.items || []) {
+        const prodId = item.productId || item.product;
+        if (prodId) {
+          const pDoc = await findProduct(prodId);
+          if (pDoc) {
+            await saveProductStock(pDoc, (Number(pDoc.stock) || 0) + Number(item.quantity));
+          }
+        }
+      }
+
+      // Unassign delivery if it was assigned
+      order.deliveryId = null;
+      order.deliveryName = 'Unassigned';
     } else if (userRole === 'delivery') {
       if (order.deliveryId && order.deliveryId !== 'Unassigned' && String(order.deliveryId) !== userId) {
         return res.status(403).json({ success: false, message: 'This order is assigned to another delivery agent' });
       }
-      if (!['assigned', 'picked_up', 'in_transit', 'arrived'].includes(status)) {
+      if (!['assigned', 'picked_up', 'in_transit', 'arrived', 'out_for_delivery'].includes(status)) {
         return res.status(403).json({
           success: false,
           message: `Delivery drivers can only update delivery transit stages (requested: ${status})`
@@ -389,15 +454,16 @@ const updateOrderStatus = async (req, res) => {
         accepted: ['assigned'],
         packed: ['assigned', 'picked_up'],
         assigned: ['picked_up', 'in_transit'],
-        picked_up: ['in_transit'],
-        in_transit: ['arrived'],
+        picked_up: ['in_transit', 'out_for_delivery'],
+        in_transit: ['arrived', 'out_for_delivery'],
+        out_for_delivery: ['arrived'],
         arrived: []
       };
 
       if (!allowedNext[currentStatus] || !allowedNext[currentStatus].includes(status)) {
         return res.status(400).json({
           success: false,
-          message: `Invalid status transition from "${currentStatus}" to "${status}". Must follow delivery logistics stages: packed -> assigned -> picked_up -> in_transit -> arrived -> delivered (via OTP).`
+          message: `Invalid status transition from "${currentStatus}" to "${status}". Must follow delivery logistics stages: packed -> assigned -> picked_up -> in_transit -> arrived/out_for_delivery -> delivered (via OTP).`
         });
       }
 
@@ -406,10 +472,13 @@ const updateOrderStatus = async (req, res) => {
       if (deliveryPhone) order.deliveryPhone = deliveryPhone;
       if (deliveryEmail) order.deliveryEmail = deliveryEmail;
     } else if (userRole !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Customers cannot modify order status' });
+      return res.status(403).json({ success: false, message: 'Unauthorized role to modify order status' });
     }
 
     order.status = status;
+    if (status === 'cancelled') {
+      order.cancellationReason = req.body.cancellationReason || 'Order cancelled by user';
+    }
     if (deliveryLocation) {
       order.deliveryLocation = deliveryLocation;
     }
@@ -599,7 +668,7 @@ const updateDeliveryLocation = async (req, res) => {
 
 /**
  * POST /api/orders/:id/delivery-otp/generate
- * Driver triggers OTP dispatch to customer at doorstep
+ * Driver triggers OTP dispatch to customer's verified email at doorstep
  */
 const generateDeliveryOtp = async (req, res) => {
   try {
@@ -627,27 +696,84 @@ const generateDeliveryOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Order is already marked as delivered' });
     }
 
-    const customerPhone = order.customerPhone;
-    if (!customerPhone) {
-      return res.status(400).json({ success: false, message: 'Order has no customer phone number on record' });
+    // Resolve customer's verified email address
+    let customerEmail = (order.customerEmail || '').trim();
+    if (!customerEmail && order.customerId) {
+      const custUser = isConnected()
+        ? await User.findById(order.customerId)
+        : null;
+      if (custUser && custUser.email) {
+        customerEmail = custUser.email;
+        order.customerEmail = customerEmail;
+      }
     }
 
-    const otpPurpose = `delivery_${order._id || order.id}`;
-    const result = await phoneOtpService.requestOtp({
-      phone: customerPhone,
-      purpose: otpPurpose
+    if (!customerEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order has no customer email address on record for delivery handover.'
+      });
+    }
+
+    // Rate-limiting: 60 seconds cooldown between OTP generation requests
+    const now = Date.now();
+    if (order.deliveryOtpLastSentAt) {
+      const elapsed = Math.floor((now - new Date(order.deliveryOtpLastSentAt).getTime()) / 1000);
+      const cooldownRemaining = 60 - elapsed;
+      if (cooldownRemaining > 0) {
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${cooldownRemaining}s before requesting a new handover code.`,
+          cooldownSeconds: cooldownRemaining
+        });
+      }
+    }
+
+    // Generate secure cryptographically random 6-digit OTP
+    const rawOtp = crypto.randomInt(100000, 1000000).toString();
+    const otpHash = hashOtp(rawOtp);
+
+    order.deliveryOtpHash = otpHash;
+    order.deliveryOtpExpiresAt = new Date(now + 10 * 60 * 1000); // 10 minutes expiry
+    order.deliveryOtpAttempts = 0;
+    order.deliveryOtpLastSentAt = new Date(now);
+
+    if (isConnected()) {
+      await order.save();
+    }
+
+    // Dispatch OTP to customer's verified email via Google Apps Script Webhook / Nodemailer SMTP
+    const emailResult = await sendEmail({
+      to: customerEmail,
+      subject: `📦 [Handover Code] Order ${order.orderId || order._id || order.id} Has Arrived`,
+      otp: rawOtp,
+      firstName: order.customerName,
+      type: 'delivery'
     });
 
-    if (!result.success) {
-      return res.status(result.statusCode || 400).json(result);
+    // Also support SMS as secondary fallback if phone exists
+    if (order.customerPhone) {
+      try {
+        const otpPurpose = `delivery_${order._id || order.id}`;
+        await phoneOtpService.requestOtp({ phone: order.customerPhone, purpose: otpPurpose });
+      } catch (smsErr) {
+        console.warn('SMS handover backup notice:', smsErr.message);
+      }
     }
+
+    console.log(`\n======================================================`);
+    console.log(`🔑 [DELIVERY EMAIL OTP] Handover code dispatched to ${customerEmail}`);
+    console.log(`======================================================\n`);
+
+    const maskedMail = customerEmail.replace(/^(.)(.*)(@.*)$/, (_, a, b, c) => a + '*'.repeat(Math.min(b.length, 5)) + c);
 
     return res.json({
       success: true,
-      message: 'Delivery handover OTP sent to customer mobile',
+      message: `Delivery handover OTP dispatched to customer's verified email (${maskedMail})`,
       orderId: order._id || order.id,
-      cooldownSeconds: result.cooldownSeconds,
-      ...(result.demoOtp ? { demoOtp: result.demoOtp } : {})
+      customerEmail: maskedMail,
+      cooldownSeconds: 60,
+      expiresInMinutes: 10
     });
   } catch (error) {
     const status = error.statusCode || (error.message?.includes('cooldown') ? 429 : 500);
@@ -669,9 +795,11 @@ const verifyDeliveryOtp = async (req, res) => {
     const { otp } = req.body;
     const driverId = String(req.user.id || req.user._id);
 
-    if (!otp || typeof otp !== 'string') {
-      return res.status(400).json({ success: false, message: '6-digit OTP code is required' });
+    if (!otp || typeof otp !== 'string' || !/^\d{6}$/.test(otp.trim())) {
+      return res.status(400).json({ success: false, message: 'Valid 6-digit OTP code is required' });
     }
+
+    const cleanOtp = otp.trim();
 
     let order;
     if (isConnected()) {
@@ -690,22 +818,55 @@ const verifyDeliveryOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: 'This order has already been authenticated and delivered' });
     }
 
-    const customerPhone = order.customerPhone;
-    const otpPurpose = `delivery_${order._id || order.id}`;
+    let verified = false;
 
-    const verifyResult = await phoneOtpService.verifyOtp({
-      phone: customerPhone,
-      otp,
-      purpose: otpPurpose
-    });
+    // 1. Verify primary Email OTP hash
+    if (order.deliveryOtpHash && order.deliveryOtpExpiresAt) {
+      if (new Date() > new Date(order.deliveryOtpExpiresAt)) {
+        order.deliveryOtpHash = null;
+        if (isConnected()) await order.save();
+        return res.status(400).json({ success: false, message: 'Handover OTP has expired. Please request a new code.' });
+      }
 
-    if (!verifyResult.verified) {
-      return res.status(400).json({ success: false, message: verifyResult.message || 'Invalid delivery OTP' });
+      if ((order.deliveryOtpAttempts || 0) >= 5) {
+        order.deliveryOtpHash = null;
+        if (isConnected()) await order.save();
+        return res.status(429).json({ success: false, message: 'Too many incorrect attempts. Please request a new code.' });
+      }
+
+      const submittedHash = hashOtp(cleanOtp);
+      const subBuf = Buffer.from(submittedHash);
+      const storedBuf = Buffer.from(order.deliveryOtpHash);
+
+      if (subBuf.length === storedBuf.length && crypto.timingSafeEqual(subBuf, storedBuf)) {
+        verified = true;
+      } else {
+        order.deliveryOtpAttempts = (order.deliveryOtpAttempts || 0) + 1;
+        if (isConnected()) await order.save();
+      }
+    }
+
+    // 2. Secondary fallback via phone OTP service if configured
+    if (!verified && order.customerPhone) {
+      const otpPurpose = `delivery_${order._id || order.id}`;
+      const verifyResult = await phoneOtpService.verifyOtp({
+        phone: order.customerPhone,
+        otp: cleanOtp,
+        purpose: otpPurpose
+      });
+      if (verifyResult.verified) {
+        verified = true;
+      }
+    }
+
+    if (!verified) {
+      return res.status(400).json({ success: false, message: 'Invalid delivery handover OTP code' });
     }
 
     // Mark as delivered
     order.status = 'delivered';
     order.deliveryOtpVerifiedAt = new Date();
+    order.deliveryOtpHash = null;
 
     if (isConnected()) {
       await order.save();
@@ -716,7 +877,7 @@ const verifyDeliveryOtp = async (req, res) => {
       recipientRole: 'customer',
       orderId: order.orderId || order._id || order.id,
       title: '🎉 Order Delivered Successfully',
-      message: `Order ${order.orderId || order._id || order.id} has been delivered and authenticated via OTP. Thank you for buying direct from farmers!`,
+      message: `Order ${order.orderId || order._id || order.id} has been delivered and authenticated via Email OTP. Thank you for buying direct from farmers!`,
       category: 'order',
       priority: 'HIGH'
     });
@@ -753,6 +914,91 @@ const verifyDeliveryOtp = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/orders/:id/dispatch-signal
+ * POST /api/orders/dispatch-signal
+ * Farmer signals dispatch for packed orders to summon regional courier fleet
+ */
+const confirmDispatchSignal = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'farmer') {
+      return res.status(403).json({ success: false, message: 'Only registered farmers can signal produce dispatch' });
+    }
+
+    const farmerId = String(req.user.id || req.user._id);
+    const { id } = req.params;
+    const { orderIds } = req.body;
+
+    let targetOrders = [];
+    if (id && id !== 'batch') {
+      let order = isConnected() ? await Order.findById(id) : memoryOrders.find(o => String(o.id || o._id) === String(id));
+      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+      if (String(order.farmerId) !== farmerId && req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'You are not authorized to dispatch another farmer\'s order' });
+      }
+      targetOrders = [order];
+    } else if (Array.isArray(orderIds) && orderIds.length > 0) {
+      if (isConnected()) {
+        targetOrders = await Order.find({ _id: { $in: orderIds }, farmerId });
+      } else {
+        targetOrders = memoryOrders.filter(o => orderIds.includes(String(o.id || o._id)) && String(o.farmerId) === farmerId);
+      }
+    } else {
+      // Dispatch all packed/confirmed orders for this farmer
+      if (isConnected()) {
+        targetOrders = await Order.find({ farmerId, status: { $in: ['confirmed', 'accepted', 'packed'] } });
+      } else {
+        targetOrders = memoryOrders.filter(o => String(o.farmerId) === farmerId && ['confirmed', 'accepted', 'packed'].includes(o.status));
+      }
+    }
+
+    if (targetOrders.length === 0) {
+      return res.status(400).json({ success: false, message: 'No confirmed or packed orders available to dispatch' });
+    }
+
+    const now = new Date();
+    for (const order of targetOrders) {
+      order.status = 'packed';
+      order.dispatchSignaledAt = now;
+      if (isConnected()) {
+        await order.save();
+      }
+
+      // Notify customer
+      pushNotification({
+        recipientId: order.customerId,
+        recipientRole: 'customer',
+        orderId: order.orderId || order._id || order.id,
+        title: '📦 Farm Produce Packed & Dispatch Signaled',
+        message: `Farmer ${order.farmerName} has packed order ${order.orderId || order._id || order.id} and signaled the regional courier fleet for farm gate pickup!`,
+        category: 'order',
+        priority: 'HIGH'
+      });
+
+      // Notify farmer
+      pushNotification({
+        recipientId: order.farmerId,
+        recipientRole: 'farmer',
+        orderId: order.orderId || order._id || order.id,
+        title: '🛰️ Dispatch Signal Transmitted',
+        message: `Dispatch beacon confirmed for Order ${order.orderId || order._id || order.id}. Logistics couriers alerted for farm gate collection.`,
+        category: 'delivery',
+        priority: 'NORMAL'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Dispatch signal successfully confirmed for ${targetOrders.length} order(s)!`,
+      dispatchedCount: targetOrders.length,
+      orders: targetOrders
+    });
+  } catch (error) {
+    console.error('confirmDispatchSignal error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Unable to confirm dispatch signal' });
+  }
+};
+
 const seedMemoryOrder = (ord) => memoryOrders.push(ord);
 const getMemoryOrders = () => memoryOrders;
 
@@ -764,6 +1010,7 @@ module.exports = {
   updateDeliveryLocation,
   generateDeliveryOtp,
   verifyDeliveryOtp,
+  confirmDispatchSignal,
   seedMemoryOrder,
   getMemoryOrders
 };

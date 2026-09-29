@@ -142,5 +142,277 @@
       "address": "India",
       "placeName": "India"
     }
+  },
+  {
+    "id": "user_1790710285520",
+    "firstName": "Aarav",
+    "lastName": "Sharma",
+    "name": "Aarav Sharma",
+    "email": "customer_1790710285422@test.agrilink.in",
+    "phone": "+919840111111",
+    "password": "$2a$10$Otp7X0yom0bLnZOP2o6/4OhAikBJt8CJfAOuGj8fEuIzGNZIKUnuG",
+    "role": "customer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710285592",
+    "firstName": "Ramesh",
+    "lastName": "Patel",
+    "name": "Ramesh Patel",
+    "email": "farmer_a_1790710285422@test.agrilink.in",
+    "phone": "+919840222222",
+    "password": "$2a$10$2C7jG0WW3sXC1yHEgEjVluFi57VqnEFrK37C2bGoVP4VD2bHbkuZ6",
+    "role": "farmer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710285660",
+    "firstName": "Suresh",
+    "lastName": "Gowda",
+    "name": "Suresh Gowda",
+    "email": "farmer_b_1790710285422@test.agrilink.in",
+    "phone": "+919840333333",
+    "password": "$2a$10$ASu5U9G24esgq19hK3xCmO97DcagMruEba6/uD.2uBHmxsNEdnRAm",
+    "role": "farmer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710285730",
+    "firstName": "David",
+    "lastName": "Swift",
+    "name": "David Swift",
+    "email": "driver_1790710285422@test.agrilink.in",
+    "phone": "+919840444444",
+    "password": "$2a$10$/4wUIlqhshECIzEeEwTrS.4HtEpJnaNBZ5JUY.iN7bcJAgKuOHUae",
+    "role": "delivery",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710460926",
+    "firstName": "Aarav",
+    "lastName": "Sharma",
+    "name": "Aarav Sharma",
+    "email": "customer_1790710460830@test.agrilink.in",
+    "phone": "+919810460830",
+    "password": "$2a$10$aHXHHxBWdt/IZ.Zl.D8OaOs6HNswWVd0O.IsKDW5JRNcUBeYpFVeu",
+    "role": "customer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710460999",
+    "firstName": "Ramesh",
+    "lastName": "Patel",
+    "name": "Ramesh Patel",
+    "email": "farmer_a_1790710460830@test.agrilink.in",
+    "phone": "+919710460830",
+    "password": "$2a$10$exU8qvxvcxB8esoSHcaZre2uY6QNVKxY7DVnj2YXNNCgzLiQdDgLi",
+    "role": "farmer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710461067",
+    "firstName": "Suresh",
+    "lastName": "Gowda",
+    "name": "Suresh Gowda",
+    "email": "farmer_b_1790710460830@test.agrilink.in",
+    "phone": "+919610460830",
+    "password": "$2a$10$/N.mDdtKXq7dhlHfw.L7C.JIo5hI2e4pDwOrcJDSMgYkYc73OqqXe",
+    "role": "farmer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710461133",
+    "firstName": "David",
+    "lastName": "Swift",
+    "name": "David Swift",
+    "email": "driver_1790710460830@test.agrilink.in",
+    "phone": "+919510460830",
+    "password": "$2a$10$37aRIwy9ckc4GSVn6FYcieUftU4prE3pQv5avYyYJ3etR2yiYftaK",
+    "role": "delivery",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710513917",
+    "firstName": "Aarav",
+    "lastName": "Sharma",
+    "name": "Aarav Sharma",
+    "email": "customer_1790710513824@test.agrilink.in",
+    "phone": "+919810513824",
+    "password": "$2a$10$Ew/F8E5AHyVN3GAASR6iou3ODcnzI4WFtcA1VjLx7/ZpYV330H9/a",
+    "role": "customer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710513993",
+    "firstName": "Ramesh",
+    "lastName": "Patel",
+    "name": "Ramesh Patel",
+    "email": "farmer_a_1790710513824@test.agrilink.in",
+    "phone": "+919710513824",
+    "password": "$2a$10$aM19JgLUF5cjWIy2iWrSJOzToGV1xo1azCHagsnQzvRMcUyYBBReu",
+    "role": "farmer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710514063",
+    "firstName": "Suresh",
+    "lastName": "Gowda",
+    "name": "Suresh Gowda",
+    "email": "farmer_b_1790710513824@test.agrilink.in",
+    "phone": "+919610513824",
+    "password": "$2a$10$HCGcmxm2AB2Or0ByX1CMTO3Iam9u3S3dtYKD2YfymSMZtXSEDmthe",
+    "role": "farmer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710514131",
+    "firstName": "David",
+    "lastName": "Swift",
+    "name": "David Swift",
+    "email": "driver_1790710513824@test.agrilink.in",
+    "phone": "+919510513824",
+    "password": "$2a$10$qgiNU0KJrMCWRbyqLR1nOehHEsyMRPteueqT4t7oSg1AsOrxr63Iq",
+    "role": "delivery",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710550761",
+    "firstName": "Aarav",
+    "lastName": "Sharma",
+    "name": "Aarav Sharma",
+    "email": "customer_1790710550672@test.agrilink.in",
+    "phone": "+919810550672",
+    "password": "$2a$10$xwag91AM7/LB1QQjh.MrROJlJMgvD1tS2kzt1oCvcOXu.In5AhAmu",
+    "role": "customer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710550839",
+    "firstName": "Ramesh",
+    "lastName": "Patel",
+    "name": "Ramesh Patel",
+    "email": "farmer_a_1790710550672@test.agrilink.in",
+    "phone": "+919710550672",
+    "password": "$2a$10$6ogIk2FQ63MUg4yYvH9HTu8.fFJElKrR61uB8A9DtQnz0kc.Wiz2.",
+    "role": "farmer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710550909",
+    "firstName": "Suresh",
+    "lastName": "Gowda",
+    "name": "Suresh Gowda",
+    "email": "farmer_b_1790710550672@test.agrilink.in",
+    "phone": "+919610550672",
+    "password": "$2a$10$UXwsol9KSZwBvllQFrZrq.fH/j447eJ2UYhxhXEdecVwjvlGVod2m",
+    "role": "farmer",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
+  },
+  {
+    "id": "user_1790710550980",
+    "firstName": "David",
+    "lastName": "Swift",
+    "name": "David Swift",
+    "email": "driver_1790710550672@test.agrilink.in",
+    "phone": "+919510550672",
+    "password": "$2a$10$qv.TTVi8l2SEcziVCY.OneJj4h7rwJZjWIxkqVuFxNfngAQQzq3cS",
+    "role": "delivery",
+    "nativePlace": "Bengaluru, Karnataka",
+    "location": {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "address": "Bengaluru, Karnataka, India",
+      "placeName": "Bengaluru, Karnataka"
+    }
   }
 ]

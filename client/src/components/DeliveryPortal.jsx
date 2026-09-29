@@ -177,10 +177,12 @@ function FleetTelemetryHUD({ speed = 48, battery = 88, satelliteCount = 11 }) {
 /* ─────────────────────────────────────────────────────────────
    3D Cold-Chain Refrigerated Cargo Chamber Component
 ───────────────────────────────────────────────────────────── */
-function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
+function ColdChainTelemetry3D({ temp = 4.2, humidity = 88, onBoostCryo }) {
   const canvasRef = useRef(null);
   const [boostActive, setBoostActive] = useState(false);
   const [currentTemp, setCurrentTemp] = useState(temp);
+
+  const isSafe = currentTemp >= 2.0 && currentTemp <= 8.0;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -209,8 +211,8 @@ function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
 
     // Frost particles
     const particles = Array.from({ length: 40 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
+      x: Math.random() * (canvas.width || 260),
+      y: Math.random() * (canvas.height || 140),
       radius: Math.random() * 2.5 + 1,
       vy: Math.random() * 0.8 + 0.3,
       alpha: Math.random() * 0.7 + 0.2
@@ -218,38 +220,40 @@ function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
 
     const render = () => {
       time += 0.02;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const w = canvas.width || 260;
+      const h = canvas.height || 140;
+      ctx.clearRect(0, 0, w, h);
 
       // Gradient background
-      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      const grad = ctx.createLinearGradient(0, 0, w, h);
       grad.addColorStop(0, boostActive ? 'rgba(6, 44, 60, 0.95)' : 'rgba(8, 28, 36, 0.95)');
       grad.addColorStop(1, 'rgba(4, 14, 18, 0.98)');
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, w, h);
 
       // 3D Grid floor perspective
       ctx.strokeStyle = boostActive ? 'rgba(56, 189, 248, 0.3)' : 'rgba(74, 222, 128, 0.15)';
       ctx.lineWidth = 1;
-      const horizonY = canvas.height * 0.4;
-      for (let i = 0; i <= canvas.width; i += 30) {
+      const horizonY = h * 0.4;
+      for (let i = 0; i <= w; i += 30) {
         ctx.beginPath();
         ctx.moveTo(i, horizonY);
-        ctx.lineTo(i * 1.5 - canvas.width * 0.25, canvas.height);
+        ctx.lineTo(i * 1.5 - w * 0.25, h);
         ctx.stroke();
       }
-      for (let y = horizonY; y <= canvas.height; y += 18) {
+      for (let y = horizonY; y <= h; y += 18) {
         ctx.beginPath();
         ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
+        ctx.lineTo(w, y);
         ctx.stroke();
       }
 
       // Draw frost / chilled particles
       particles.forEach(p => {
         p.y += p.vy * (boostActive ? 2 : 1);
-        if (p.y > canvas.height) {
+        if (p.y > h) {
           p.y = 0;
-          p.x = Math.random() * canvas.width;
+          p.x = Math.random() * w;
         }
         ctx.fillStyle = boostActive ? `rgba(186, 230, 253, ${p.alpha})` : `rgba(167, 243, 208, ${p.alpha})`;
         ctx.beginPath();
@@ -267,15 +271,36 @@ function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
   return (
     <div style={{
       background: 'linear-gradient(145deg, rgba(8, 28, 36, 0.95), rgba(4, 14, 18, 0.98))',
-      border: `1.5px solid ${boostActive ? '#38bdf8' : 'rgba(56, 189, 248, 0.4)'}`,
+      border: `1.5px solid ${!isSafe ? '#ef4444' : boostActive ? '#38bdf8' : 'rgba(56, 189, 248, 0.4)'}`,
       borderRadius: '20px',
-      padding: '22px',
-      boxShadow: boostActive ? '0 0 35px rgba(56, 189, 248, 0.4)' : '0 12px 32px rgba(0,0,0,0.5)',
+      padding: '24px',
+      boxShadow: !isSafe ? '0 0 35px rgba(239, 68, 68, 0.4)' : boostActive ? '0 0 35px rgba(56, 189, 248, 0.4)' : '0 12px 32px rgba(0,0,0,0.5)',
       position: 'relative',
       overflow: 'hidden',
       transition: 'all 0.3s ease'
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', position: 'relative', zIndex: 2 }}>
+      {/* SIMULATION MODE Banner (Problem 6 Rule) */}
+      <div style={{
+        background: 'rgba(245, 158, 11, 0.15)',
+        border: '1px solid rgba(245, 158, 11, 0.4)',
+        borderRadius: '10px',
+        padding: '8px 14px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '16px',
+        fontSize: '12px',
+        color: '#fef08a'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertTriangle size={15} color="#f59e0b" />
+          <strong>SIMULATION MODE — No physical IoT sensor connected</strong>
+        </div>
+        <span style={{ fontSize: '11px', color: '#cbd5e1' }}>Telemetry generated via thermodynamic simulation</span>
+      </div>
+
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', position: 'relative', zIndex: 2, flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '40px',
@@ -290,11 +315,11 @@ function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
             <Snowflake size={22} color="#38bdf8" />
           </div>
           <div>
-            <h3 style={{ margin: 0, color: '#effbe7', fontSize: '16px', fontWeight: '800' }}>
-              3D Cold-Chain Chamber (Interactive WebGL Simulation)
+            <h3 style={{ margin: 0, color: '#effbe7', fontSize: '17px', fontWeight: '800' }}>
+              3D Cold-Chain Logistics Chamber
             </h3>
-            <p style={{ margin: '2px 0 0 0', color: '#7dd3fc', fontSize: '11px', fontWeight: '700' }}>
-              Visual Chamber Simulation • Hardware IoT Sensors Pending
+            <p style={{ margin: '2px 0 0 0', color: '#7dd3fc', fontSize: '11.5px', fontWeight: '700' }}>
+              Refrigerated Cargo Container • Safe Range: 2.0°C – 8.0°C
             </p>
           </div>
         </div>
@@ -319,13 +344,27 @@ function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
           }}
         >
           <Zap size={13} color="#fef08a" />
-          <span>{boostActive ? '❄️ Simulated Cryo Boost Active' : 'Test Cryo Temperature Fluctuation'}</span>
+          <span>{boostActive ? '❄️ Simulated Cryo Boost Active' : 'Test Cryo Chill Fluctuation'}</span>
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', alignItems: 'center', position: 'relative', zIndex: 2 }}>
-        <div style={{ height: '140px', borderRadius: '14px', overflow: 'hidden', border: '1px solid rgba(56, 189, 248, 0.2)', position: 'relative' }}>
-          <canvas ref={canvasRef} width={260} height={140} style={{ width: '100%', height: '100%' }} />
+      {/* Cold Chain Explanation Section */}
+      <div style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '12px',
+        padding: '12px 16px',
+        marginBottom: '18px',
+        fontSize: '12.5px',
+        color: '#c0d9cb',
+        lineHeight: '1.5'
+      }}>
+        <strong style={{ color: '#7dd3fc' }}>What is Cold Chain?</strong> Cold-chain logistics maintains unbroken temperature control during transportation to protect perishable farm produce (such as leafy vegetables, ripe tomatoes, dairy, berries, and herbs) from heat degradation, nutrient loss, and spoilage between farm harvest and customer delivery.
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', alignItems: 'center', position: 'relative', zIndex: 2 }}>
+        <div style={{ height: '150px', borderRadius: '14px', overflow: 'hidden', border: '1px solid rgba(56, 189, 248, 0.2)', position: 'relative' }}>
+          <canvas ref={canvasRef} width={280} height={150} style={{ width: '100%', height: '100%', display: 'block' }} />
           <div style={{
             position: 'absolute',
             bottom: '8px',
@@ -333,42 +372,54 @@ function ColdChainTelemetry3D({ temp = 4.1, humidity = 89, onBoostCryo }) {
             fontSize: '10.5px',
             color: '#bae6fd',
             fontWeight: '700',
-            background: 'rgba(0,0,0,0.5)',
+            background: 'rgba(0,0,0,0.6)',
             padding: '2px 8px',
             borderRadius: '6px'
           }}>
-            Chamber Visual Simulation
+            Cargo Thermal Chamber Simulation
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a3c2b0', fontSize: '12px' }}>
-              <Thermometer size={14} color="#38bdf8" />
-              <span>Chamber Temperature</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Temperature & Safe Status */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a3c2b0', fontSize: '12px' }}>
+              <Thermometer size={16} color="#38bdf8" />
+              <div>
+                <div>Temperature: <strong style={{ color: isSafe ? '#38bdf8' : '#ef4444', fontSize: '15px' }}>{currentTemp}°C</strong></div>
+                <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>Safe Range: 2.0°C – 8.0°C</div>
+              </div>
             </div>
-            <span style={{ color: currentTemp < 5 ? '#38bdf8' : '#f87171', fontWeight: '900', fontSize: '18px' }}>
-              {currentTemp}°C
+            <span style={{
+              background: isSafe ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+              color: isSafe ? '#4ade80' : '#f87171',
+              border: `1px solid ${isSafe ? '#22c55e' : '#ef4444'}`,
+              fontWeight: '900',
+              fontSize: '12px',
+              padding: '4px 10px',
+              borderRadius: '8px'
+            }}>
+              {isSafe ? 'STATUS: SAFE' : 'WARNING: TEMP ALERT'}
             </span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a3c2b0', fontSize: '12px' }}>
-              <Activity size={14} color="#37bd78" />
-              <span>Humidity Balance</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a3c2b0', fontSize: '12px' }}>
+              <Activity size={16} color="#34d399" />
+              <span>Chamber Humidity</span>
             </div>
-            <span style={{ color: '#37bd78', fontWeight: '800', fontSize: '14px' }}>
+            <span style={{ color: '#34d399', fontWeight: '800', fontSize: '13px' }}>
               {humidity}% Optimal RH
             </span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a3c2b0', fontSize: '12px' }}>
-              <ShieldCheck size={14} color="#f4c95d" />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a3c2b0', fontSize: '12px' }}>
+              <ShieldCheck size={16} color="#f4c95d" />
               <span>Perishable Freshness</span>
             </div>
             <span style={{ color: '#f4c95d', fontWeight: '800', fontSize: '13px' }}>
-              100% Purity Preserved
+              Freshness Shield Active
             </span>
           </div>
         </div>
@@ -385,12 +436,12 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
   const [verified, setVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [demoCode, setDemoCode] = useState(null);
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen || !order) return null;
   const orderId = String(order._id || order.id);
+  const customerEmail = order.customerEmail || order.userId?.email || order.userEmail || 'customer email on record';
 
   const handleDispatchOtp = async () => {
     setGenerating(true);
@@ -398,12 +449,9 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
     setStatusMsg('');
     try {
       const res = await orderAPI.generateDeliveryOtp(orderId);
-      setStatusMsg(res.data.message || `OTP dispatched to customer mobile`);
-      if (res.data.demoOtp) {
-        setDemoCode(res.data.demoOtp);
-      }
+      setStatusMsg(res.data.message || `Secure OTP dispatched to customer's verified email (${customerEmail})`);
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Failed to dispatch handover OTP to customer.');
+      setErrorMsg(err.response?.data?.message || 'Failed to dispatch handover OTP to customer email.');
     } finally {
       setGenerating(false);
     }
@@ -513,9 +561,20 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
           </div>
         ) : (
           <div>
-            <p style={{ color: '#c0d9cb', fontSize: '13px', lineHeight: '1.5', margin: '0 0 14px 0' }}>
-              Send an OTP to the customer's phone ({order.customerPhone || 'on record'}) and enter their 6-digit verification code to complete delivery.
-            </p>
+            <div style={{
+              background: 'rgba(244, 201, 93, 0.08)',
+              border: '1px solid rgba(244, 201, 93, 0.25)',
+              borderRadius: '12px',
+              padding: '12px 14px',
+              marginBottom: '14px'
+            }}>
+              <p style={{ color: '#fef08a', fontSize: '12px', fontWeight: '700', margin: '0 0 4px 0' }}>
+                🛡️ Verified Email Handover Flow
+              </p>
+              <p style={{ color: '#c0d9cb', fontSize: '12px', lineHeight: '1.5', margin: 0 }}>
+                When you arrive at the delivery address, click the button below to dispatch a 6-digit one-time PIN directly to the customer's verified email (<span style={{ color: '#effbe7', fontWeight: '600' }}>{customerEmail}</span>). Ask the customer for the PIN to verify and close delivery.
+              </p>
+            </div>
 
             <button
               type="button"
@@ -527,8 +586,8 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
                 border: '1px solid #f4c95d',
                 color: '#f4c95d',
                 borderRadius: '10px',
-                padding: '9px 14px',
-                fontSize: '12.5px',
+                padding: '10px 14px',
+                fontSize: '13px',
                 fontWeight: '700',
                 cursor: 'pointer',
                 marginBottom: '14px',
@@ -539,7 +598,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
               }}
             >
               <Send size={15} />
-              <span>{generating ? 'Sending OTP via Gateway...' : 'Send OTP to Customer Mobile'}</span>
+              <span>{generating ? 'Dispatching to Customer Email...' : 'Send Handover OTP to Customer Email'}</span>
             </button>
 
             {statusMsg && (
@@ -579,39 +638,6 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
                 }}
               />
             </div>
-
-            {demoCode && (
-              <div style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px dashed rgba(255,255,255,0.15)',
-                borderRadius: '10px',
-                padding: '8px 12px',
-                fontSize: '11.5px',
-                color: '#a3b899',
-                marginBottom: '18px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span>Demo Generated OTP: <strong style={{ color: '#f4c95d' }}>{demoCode}</strong></span>
-                <button
-                  type="button"
-                  onClick={() => setEnteredOtp(demoCode)}
-                  style={{
-                    background: 'rgba(244, 201, 93, 0.2)',
-                    border: '1px solid #f4c95d',
-                    color: '#f4c95d',
-                    borderRadius: '6px',
-                    padding: '3px 8px',
-                    fontSize: '11px',
-                    cursor: 'pointer',
-                    fontWeight: '700'
-                  }}
-                >
-                  Auto-fill
-                </button>
-              </div>
-            )}
 
             <button
               onClick={handleVerify}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { productAPI, orderAPI, reviewAPI, authAPI, notificationAPI } from '../services/api';
+import { productAPI, orderAPI, reviewAPI, authAPI, notificationAPI, bargainAPI, aiAPI } from '../services/api';
 import LiveTrackingMap from './LiveTrackingMap';
 import {
   ShoppingCart,
@@ -49,7 +49,8 @@ import {
   Bell,
   Edit2,
   Check,
-  Filter
+  Filter,
+  Users
 } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
 
@@ -549,24 +550,32 @@ function Produce3DInspector({ product, onClose, onAddToCart }) {
 /* ─────────────────────────────────────────────────────────────
    Direct Farmer Price Negotiation / Bargain Modal
 ───────────────────────────────────────────────────────────── */
-function BargainOfferModal({ product, onClose, onOfferAccepted }) {
+function BargainOfferModal({ product, onClose, onBargainSubmitted }) {
   const [proposedPrice, setProposedPrice] = useState(Math.max(1, Math.round(Number(product.price) * 0.9)));
   const [quantity, setQuantity] = useState(5);
-  const [status, setStatus] = useState('idle'); // 'idle' | 'negotiating' | 'accepted' | 'counter'
-  const [counterPrice, setCounterPrice] = useState(null);
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedBargain, setSubmittedBargain] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handlePropose = () => {
-    setStatus('negotiating');
-    setTimeout(() => {
-      const minAcceptable = Number(product.price) * 0.85;
-      if (proposedPrice >= minAcceptable && quantity >= 3) {
-        setStatus('accepted');
-      } else {
-        const fairCounter = Math.round(Number(product.price) * 0.88);
-        setCounterPrice(fairCounter);
-        setStatus('counter');
-      }
-    }, 1400);
+  const handlePropose = async () => {
+    setSubmitting(true);
+    setErrorMsg('');
+    try {
+      const payload = {
+        productId: getProductId(product),
+        quantity,
+        proposedPrice,
+        note: note.trim()
+      };
+      const res = await bargainAPI.createBargain(payload);
+      setSubmittedBargain(res.data.bargain);
+      if (onBargainSubmitted) onBargainSubmitted(res.data.bargain);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Failed to submit bulk bargain offer. Please verify connectivity.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -611,7 +620,7 @@ function BargainOfferModal({ product, onClose, onOfferAccepted }) {
                 Farmer Direct Bulk Bargain
               </h3>
               <p style={{ margin: 0, color: '#a3c2b0', fontSize: '12px' }}>
-                Offer custom price for bulk harvest orders
+                Propose custom pricing for wholesale farm harvest orders
               </p>
             </div>
           </div>
@@ -633,9 +642,9 @@ function BargainOfferModal({ product, onClose, onOfferAccepted }) {
           </div>
         </div>
 
-        {status === 'idle' && (
+        {!submittedBargain ? (
           <div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
               <div>
                 <label style={{ display: 'block', color: '#effbe7', fontSize: '13px', fontWeight: '700', marginBottom: '6px' }}>
                   Target Bulk Quantity ({product.unit || 'kg'}):
@@ -643,7 +652,7 @@ function BargainOfferModal({ product, onClose, onOfferAccepted }) {
                 <input
                   type="number"
                   min="2"
-                  max="100"
+                  max="500"
                   value={quantity}
                   onChange={(e) => setQuantity(Math.max(2, parseInt(e.target.value) || 2))}
                   style={{
@@ -667,7 +676,7 @@ function BargainOfferModal({ product, onClose, onOfferAccepted }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
                     type="range"
-                    min={Math.round(Number(product.price) * 0.6)}
+                    min={Math.max(1, Math.round(Number(product.price) * 0.5))}
                     max={Number(product.price)}
                     value={proposedPrice}
                     onChange={(e) => setProposedPrice(Number(e.target.value))}
@@ -679,13 +688,50 @@ function BargainOfferModal({ product, onClose, onOfferAccepted }) {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#a3c2b0', marginTop: '4px' }}>
                   <span>Total Proposed: ₹{proposedPrice * quantity}</span>
-                  <span style={{ color: '#f4c95d' }}>Saving: ₹{(Number(product.price) - proposedPrice) * quantity}</span>
+                  <span style={{ color: '#f4c95d' }}>Saving: ₹{Math.max(0, (Number(product.price) - proposedPrice) * quantity)}</span>
                 </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', color: '#effbe7', fontSize: '13px', fontWeight: '700', marginBottom: '6px' }}>
+                  Note to Farmer (Optional):
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Regular monthly wholesale purchase for family"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    background: 'rgba(0, 0, 0, 0.4)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#effbe7',
+                    fontSize: '13px',
+                    boxSizing: 'border-box'
+                  }}
+                />
               </div>
             </div>
 
+            {errorMsg && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #ef4444',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                color: '#fca5a5',
+                fontSize: '12px',
+                marginBottom: '14px'
+              }}>
+                ⚠️ {errorMsg}
+              </div>
+            )}
+
             <button
               onClick={handlePropose}
+              disabled={submitting}
               style={{
                 width: '100%',
                 padding: '14px',
@@ -703,97 +749,64 @@ function BargainOfferModal({ product, onClose, onOfferAccepted }) {
               }}
             >
               <Send size={18} />
-              <span>Transmit Bulk Offer to Farmer</span>
+              <span>{submitting ? 'Transmitting Offer...' : 'Transmit Bulk Offer to Farmer'}</span>
             </button>
           </div>
-        )}
+        ) : (
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'rgba(245, 158, 11, 0.2)',
+              border: '2px solid #f59e0b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 14px auto'
+            }}>
+              <Clock size={32} color="#fbbf24" />
+            </div>
 
-        {status === 'negotiating' && (
-          <div style={{ textAlign: 'center', padding: '30px 0' }}>
-            <RotateCw size={36} color="#f4c95d" style={{ animation: 'spin 1s linear infinite' }} />
-            <h4 style={{ color: '#effbe7', margin: '16px 0 6px' }}>Transmitting Offer to Farmer Radar...</h4>
-            <p style={{ color: '#a3c2b0', fontSize: '13px', margin: 0 }}>Evaluating harvest costs & regional farm supply balance</p>
-          </div>
-        )}
+            <div style={{
+              display: 'inline-block',
+              background: 'rgba(245, 158, 11, 0.25)',
+              border: '1px solid #f59e0b',
+              color: '#fbbf24',
+              padding: '3px 12px',
+              borderRadius: '12px',
+              fontSize: '12px',
+              fontWeight: '800',
+              marginBottom: '10px'
+            }}>
+              STATUS: PENDING
+            </div>
 
-        {status === 'accepted' && (
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <CheckCircle size={48} color="#37bd78" style={{ margin: '0 auto 12px' }} />
-            <h4 style={{ color: '#effbe7', fontSize: '18px', margin: '0 0 6px' }}>🎉 Offer Accepted by Farmer!</h4>
-            <p style={{ color: '#8be28b', fontSize: '13px', margin: '0 0 20px' }}>
-              Farmer agreed to ₹{proposedPrice}/{product.unit || 'kg'} for {quantity} {product.unit || 'kg'}.
+            <h4 style={{ color: '#effbe7', fontSize: '18px', margin: '0 0 8px' }}>
+              Bulk Bargain Proposal Dispatched!
+            </h4>
+            <p style={{ color: '#a3c2b0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 20px' }}>
+              Your wholesale offer of <strong>₹{proposedPrice}/{product.unit || 'kg'}</strong> for <strong>{quantity} {product.unit || 'kg'}</strong> (Total: ₹{proposedPrice * quantity}) has been delivered to <strong>{product.farmerName || 'the producer'}</strong>.
+              <br /><br />
+              The farmer partner will review your proposal and choose to <strong>Accept</strong>, <strong>Counter</strong>, or <strong>Reject</strong>. You can monitor and respond to negotiations anytime in your Bargains dashboard.
             </p>
+
             <button
-              onClick={() => {
-                onOfferAccepted({
-                  ...product,
-                  price: proposedPrice,
-                  quantity
-                });
-                onClose();
-              }}
+              onClick={onClose}
               style={{
                 width: '100%',
-                padding: '14px',
+                padding: '13px',
                 borderRadius: '12px',
-                background: 'linear-gradient(135deg, #2e7d32, #1b5e20)',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
                 border: 'none',
                 color: '#ffffff',
-                fontSize: '15px',
+                fontSize: '14.5px',
                 fontWeight: '800',
                 cursor: 'pointer'
               }}
             >
-              Add Negotiated Bulk Batch to Cart
+              Done
             </button>
-          </div>
-        )}
-
-        {status === 'counter' && (
-          <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            <h4 style={{ color: '#f4c95d', fontSize: '18px', margin: '0 0 8px' }}>🌾 Farmer Counter-Offer: ₹{counterPrice}</h4>
-            <p style={{ color: '#effbe7', fontSize: '13px', margin: '0 0 20px' }}>
-              The farmer cannot go as low as ₹{proposedPrice}, but has offered a special batch discount of <strong>₹{counterPrice}/{product.unit || 'kg'}</strong>.
-            </p>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={onClose}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  borderRadius: '10px',
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  color: '#effbe7',
-                  fontWeight: '700',
-                  cursor: 'pointer'
-                }}
-              >
-                Decline
-              </button>
-              <button
-                onClick={() => {
-                  onOfferAccepted({
-                    ...product,
-                    price: counterPrice,
-                    quantity
-                  });
-                  onClose();
-                }}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #f4c95d, #ffa726)',
-                  border: 'none',
-                  color: '#092b27',
-                  fontWeight: '800',
-                  cursor: 'pointer'
-                }}
-              >
-                Accept ₹{counterPrice}
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -1438,19 +1451,35 @@ export default function CustomerPortal() {
   const { user, showToast, updateUserProfile } = useAuth();
   const [products, setProducts] = useState([]);
 
-  // Cart persisted per customer account in localStorage
+  // Cart persisted per customer account in localStorage (Protected against race-condition overwrite)
   const cartStorageKey = `agrilink_cart_${user?._id || user?.id || 'customer'}`;
-  const [cart, setCart] = useState(() => {
-    try {
-      const saved = localStorage.getItem(cartStorageKey);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [cart, setCart] = useState([]);
+  const [cartHydrated, setCartHydrated] = useState(false);
 
   const [orders, setOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState('marketplace'); // 'marketplace' | 'orders' | 'recipes' | 'favorites' | 'profile' | 'cart'
+  const [activeTab, setActiveTab] = useState('marketplace'); // 'marketplace' | 'orders' | 'recipes' | 'favorites' | 'profile' | 'cart' | 'bargains' | 'farmers'
+
+  // Registered Farmers from Database (Problem 9)
+  const [registeredFarmers, setRegisteredFarmers] = useState([]);
+
+  // Customer Bulk Bargains (Problem 9)
+  const [customerBargains, setCustomerBargains] = useState([]);
+  const [loadingBargains, setLoadingBargains] = useState(false);
+
+  // Order Cancellation State (Problem 9)
+  const [cancelModalOrder, setCancelModalOrder] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancellingOrder, setCancellingOrder] = useState(false);
+
+  // AI Recipe Studio Interactive Assistant (Problem 10)
+  const [recipeMessages, setRecipeMessages] = useState([
+    {
+      role: 'assistant',
+      text: 'Hello! I am your AgriLink Farm-to-Table Culinary Assistant. You can ask me what to cook with the fresh produce in your cart, request step-by-step preparation, ask for high-protein or no-onion variations, or cooking times. What fresh dish would you like to prepare today?'
+    }
+  ]);
+  const [recipeInput, setRecipeInput] = useState('');
+  const [recipeLoading, setRecipeLoading] = useState(false);
 
   // Advanced Filters
   const [filterCategory, setFilterCategory] = useState('all');
@@ -1490,18 +1519,41 @@ export default function CustomerPortal() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewedKeys, setReviewedKeys] = useState([]);
 
-  // Sync cart to localStorage whenever it changes
+  // Hydrate cart from localStorage whenever cartStorageKey changes
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(cartStorageKey);
+      if (saved) {
+        setCart(JSON.parse(saved));
+      } else {
+        const legacy = localStorage.getItem('agrilink_cart_customer');
+        if (legacy && (user?._id || user?.id)) {
+          setCart(JSON.parse(legacy));
+        } else {
+          setCart([]);
+        }
+      }
+    } catch {
+      setCart([]);
+    }
+    setCartHydrated(true);
+  }, [cartStorageKey]);
+
+  // Sync cart to localStorage only AFTER initial hydration
+  useEffect(() => {
+    if (!cartHydrated) return;
     try {
       localStorage.setItem(cartStorageKey, JSON.stringify(cart));
     } catch {}
-  }, [cart, cartStorageKey]);
+  }, [cart, cartStorageKey, cartHydrated]);
 
   useEffect(() => {
     fetchProducts();
     fetchOrders();
     fetchWishlist();
     fetchNotifications();
+    fetchRegisteredFarmers();
+    fetchCustomerBargains();
   }, [user]);
 
   // Synchronize cart with latest live database stock & prices
@@ -1605,6 +1657,112 @@ export default function CustomerPortal() {
       showToast(msg, 'error');
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const fetchRegisteredFarmers = async () => {
+    try {
+      const res = await authAPI.getFarmers();
+      if (res.data?.farmers) {
+        setRegisteredFarmers(res.data.farmers);
+      }
+    } catch (e) {
+      console.warn('Could not load registered farmers:', e);
+    }
+  };
+
+  const fetchCustomerBargains = async () => {
+    setLoadingBargains(true);
+    try {
+      const res = await bargainAPI.getBargains();
+      if (res.data?.bargains) {
+        setCustomerBargains(res.data.bargains);
+      }
+    } catch (e) {
+      console.warn('Could not load bargains:', e);
+    } finally {
+      setLoadingBargains(false);
+    }
+  };
+
+  const handleAcceptCounterBargain = async (bargain) => {
+    try {
+      await bargainAPI.customerRespond(bargain._id, { action: 'accept' });
+      showToast('🎉 Counter offer accepted! Produce added to cart at negotiated price.', 'success');
+      if (bargain.productId) {
+        const prod = {
+          ...bargain.productId,
+          price: bargain.counterPrice || bargain.offeredPrice
+        };
+        addToCart(prod, bargain.quantity || 1);
+      }
+      fetchCustomerBargains();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to accept counter offer', 'error');
+    }
+  };
+
+  const handleRejectCounterBargain = async (bargain) => {
+    try {
+      await bargainAPI.customerRespond(bargain._id, { action: 'reject' });
+      showToast('Counter offer declined.', 'info');
+      fetchCustomerBargains();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to decline offer', 'error');
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!cancelModalOrder) return;
+    setCancellingOrder(true);
+    try {
+      await orderAPI.updateStatus(cancelModalOrder._id, {
+        status: 'cancelled',
+        cancellationReason: cancelReason || 'Customer requested order cancellation'
+      });
+      showToast('Order cancelled and reserved farm stock restored to catalog.', 'success');
+      setCancelModalOrder(null);
+      setCancelReason('');
+      await fetchOrders();
+      await fetchProducts();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to cancel order', 'error');
+    } finally {
+      setCancellingOrder(false);
+    }
+  };
+
+  const handleAskRecipeAssistant = async (e, customPrompt = null) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const promptToSend = customPrompt || recipeInput.trim();
+    if (!promptToSend || recipeLoading) return;
+
+    if (!customPrompt) setRecipeInput('');
+    const updatedMessages = [...recipeMessages, { role: 'user', text: promptToSend }];
+    setRecipeMessages(updatedMessages);
+    setRecipeLoading(true);
+
+    try {
+      const cartItemsPayload = cart.map(i => ({ title: i.title, quantity: i.quantity, unit: i.unit || 'kg' }));
+      const res = await aiAPI.recipeAssistant({
+        message: promptToSend,
+        history: updatedMessages.slice(-6),
+        cartItems: cartItemsPayload
+      });
+      if (res.data?.reply) {
+        setRecipeMessages(prev => [...prev, {
+          role: 'assistant',
+          text: res.data.reply,
+          missingIngredients: res.data.missingIngredients || []
+        }]);
+      }
+    } catch (err) {
+      setRecipeMessages(prev => [...prev, {
+        role: 'assistant',
+        text: 'I could not connect to the Culinary Assistant at this moment. You can still browse our fresh ingredients and try again in a few moments!'
+      }]);
+    } finally {
+      setRecipeLoading(false);
     }
   };
 
@@ -1815,6 +1973,110 @@ export default function CustomerPortal() {
         onClose={() => setShowLiveCam(false)}
       />
 
+      {/* Order Cancellation Confirmation Modal */}
+      {cancelModalOrder && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'linear-gradient(145deg, #0d2822, #071915)',
+            border: '1.5px solid rgba(239, 68, 68, 0.4)',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '480px',
+            padding: '24px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.8)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#fca5a5' }}>
+                <AlertCircle size={22} color="#ef4444" />
+                <h3 style={{ margin: 0, color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                  Cancel Order #{String(cancelModalOrder._id || cancelModalOrder.id).slice(-8).toUpperCase()}
+                </h3>
+              </div>
+              <button
+                onClick={() => setCancelModalOrder(null)}
+                style={{ background: 'none', border: 'none', color: '#9db5aa', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ color: '#a3c2b0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
+              Are you sure you want to cancel this order? This order is currently in <strong>{cancelModalOrder.status}</strong> status. Cancelling will notify the farmer and restore reserved stock to the live marketplace catalog.
+            </p>
+
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '6px' }}>
+                Reason for Cancellation (Optional)
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g., Ordered wrong items, change of delivery schedule..."
+                rows={3}
+                style={{
+                  width: '100%',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '10px',
+                  padding: '10px 12px',
+                  color: '#effbe7',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                  resize: 'none'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setCancelModalOrder(null)}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#effbe7',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Keep Order
+              </button>
+              <button
+                onClick={handleCancelOrder}
+                disabled={cancellingOrder}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontWeight: '800',
+                  fontSize: '13px',
+                  cursor: cancellingOrder ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {cancellingOrder ? 'Cancelling...' : 'Confirm Cancellation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left Menu Bar (Desktop Sidebar) */}
       <aside
         className="portal-desktop-sidebar"
@@ -1983,6 +2245,89 @@ export default function CustomerPortal() {
             >
               <ChefHat size={18} />
               <span>AI Recipe Studio</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('bargains');
+                fetchCustomerBargains();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '11px 14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: activeTab === 'bargains' ? 'linear-gradient(135deg, #00897b, #004d40)' : 'transparent',
+                color: activeTab === 'bargains' ? '#ffffff' : '#9db5aa',
+                fontWeight: activeTab === 'bargains' ? '700' : '600',
+                fontSize: '13.5px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'all 0.2s ease',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <DollarSign size={18} />
+                <span>My Bargains</span>
+              </div>
+              {customerBargains.filter(b => b.status === 'PENDING' || b.status === 'COUNTERED').length > 0 && (
+                <span style={{
+                  background: '#f4c95d',
+                  color: '#092b27',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  padding: '2px 7px',
+                  borderRadius: '10px'
+                }}>
+                  {customerBargains.filter(b => b.status === 'PENDING' || b.status === 'COUNTERED').length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('farmers');
+                fetchRegisteredFarmers();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '11px 14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: activeTab === 'farmers' ? 'linear-gradient(135deg, #00897b, #004d40)' : 'transparent',
+                color: activeTab === 'farmers' ? '#ffffff' : '#9db5aa',
+                fontWeight: activeTab === 'farmers' ? '700' : '600',
+                fontSize: '13.5px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'all 0.2s ease',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Users size={18} />
+                <span>Farmers Directory</span>
+              </div>
+              {registeredFarmers.length > 0 && (
+                <span style={{
+                  background: 'rgba(110, 219, 208, 0.2)',
+                  color: '#6edbd0',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  padding: '2px 7px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(110, 219, 208, 0.4)'
+                }}>
+                  {registeredFarmers.length}
+                </span>
+              )}
             </button>
           </div>
 
@@ -2808,9 +3153,9 @@ export default function CustomerPortal() {
                       </div>
 
                       <span style={{
-                        background: order.status === 'delivered' ? 'rgba(55, 189, 120, 0.25)' : 'rgba(244, 201, 93, 0.25)',
-                        border: `1px solid ${order.status === 'delivered' ? '#37bd78' : '#f4c95d'}`,
-                        color: order.status === 'delivered' ? '#8be28b' : '#f4c95d',
+                        background: order.status === 'delivered' ? 'rgba(55, 189, 120, 0.25)' : order.status === 'cancelled' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(244, 201, 93, 0.25)',
+                        border: `1px solid ${order.status === 'delivered' ? '#37bd78' : order.status === 'cancelled' ? '#ef4444' : '#f4c95d'}`,
+                        color: order.status === 'delivered' ? '#8be28b' : order.status === 'cancelled' ? '#fca5a5' : '#f4c95d',
                         padding: '6px 14px',
                         borderRadius: '20px',
                         fontWeight: '800',
@@ -2964,6 +3309,48 @@ export default function CustomerPortal() {
                         <span>Destination: <strong>{order.customerLocation?.address?.split(',')[0] || 'Doorstep'}</strong></span>
                       </div>
                     </div>
+
+                    {/* Cancellation details or Action */}
+                    {order.status === 'cancelled' && (
+                      <div style={{
+                        marginTop: '14px',
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#fca5a5',
+                        fontSize: '12.5px'
+                      }}>
+                        <strong>Order Cancelled:</strong> {order.cancellationReason || 'Cancelled upon customer request. Reserved farm inventory has been replenished.'}
+                      </div>
+                    )}
+
+                    {['pending', 'confirmed', 'accepted'].includes(order.status) && (
+                      <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px' }}>
+                        <button
+                          onClick={() => {
+                            setCancelModalOrder(order);
+                            setCancelReason('');
+                          }}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                            color: '#fca5a5',
+                            padding: '7px 16px',
+                            borderRadius: '8px',
+                            fontSize: '12.5px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <Trash2 size={14} />
+                          <span>Cancel Order</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2975,14 +3362,189 @@ export default function CustomerPortal() {
         {activeTab === 'recipes' && (
           <div>
             <div style={{ marginBottom: '24px' }}>
-              <h2 style={{ color: '#effbe7', fontSize: '24px', fontWeight: '800', margin: '0 0 6px' }}>
-                AI Culinary & Farm-Fresh Recipe Studio
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                <ChefHat size={26} color="#6edbd0" />
+                <h2 style={{ color: '#effbe7', fontSize: '24px', fontWeight: '800', margin: 0 }}>
+                  AI Culinary & Farm-Fresh Recipe Studio
+                </h2>
+              </div>
               <p style={{ color: '#a3c2b0', fontSize: '13.5px', margin: 0 }}>
-                Instant nutritional pairings, healthy organic recipes, and preservation guides generated for your fresh produce.
+                Interactive farm-to-table culinary assistant powered by Gemini. Ask what to cook with produce in your cart, healthy recipes, preservation guides, or ingredient substitutions.
               </p>
             </div>
 
+            {/* Quick Prompt Suggestions */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
+              {[
+                { label: `🥦 Cook with my cart items (${cart.length})`, prompt: `What delicious and healthy meal can I cook using the produce currently in my cart? Cart contains: ${cart.map(i => `${i.quantity}x ${i.title}`).join(', ') || 'fresh produce'}.` },
+                { label: '⏱️ 15-Minute quick organic dinner', prompt: 'Give me a healthy 15-minute dinner recipe using fresh organic farm vegetables.' },
+                { label: '🥗 High-protein farm bowl', prompt: 'Share a high-protein vegetarian farm bowl recipe using whole grains and fresh vegetables.' },
+                { label: '🍅 Produce preservation tips', prompt: 'What are the best natural techniques to preserve fresh organic greens and tomatoes for maximum shelf-life?' }
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  onClick={(e) => handleAskRecipeAssistant(e, chip.prompt)}
+                  disabled={recipeLoading}
+                  style={{
+                    background: 'rgba(55, 189, 120, 0.12)',
+                    border: '1px solid rgba(55, 189, 120, 0.3)',
+                    color: '#8be28b',
+                    padding: '8px 14px',
+                    borderRadius: '20px',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: recipeLoading ? 'wait' : 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Interactive Chat Box */}
+            <div style={{
+              background: 'rgba(9, 43, 39, 0.75)',
+              backdropFilter: 'blur(16px)',
+              border: '1.5px solid rgba(110, 219, 208, 0.25)',
+              borderRadius: '20px',
+              padding: '20px',
+              marginBottom: '30px',
+              boxShadow: '0 12px 32px rgba(0,0,0,0.35)'
+            }}>
+              <div style={{
+                maxHeight: '420px',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+                paddingRight: '6px',
+                marginBottom: '16px'
+              }}>
+                {recipeMessages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                      maxWidth: '85%',
+                      background: msg.role === 'user' ? 'linear-gradient(135deg, #00897b, #004d40)' : 'rgba(255, 255, 255, 0.05)',
+                      border: msg.role === 'user' ? '1px solid #34d399' : '1px solid rgba(110, 219, 208, 0.2)',
+                      borderRadius: '16px',
+                      padding: '14px 18px',
+                      color: '#effbe7'
+                    }}
+                  >
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      textTransform: 'uppercase',
+                      color: msg.role === 'user' ? '#8be28b' : '#6edbd0',
+                      marginBottom: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      {msg.role === 'user' ? <User size={13} /> : <Sparkles size={13} />}
+                      <span>{msg.role === 'user' ? 'You' : 'AgriLink Culinary Assistant'}</span>
+                    </div>
+                    <div style={{ fontSize: '13.5px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                      {msg.text}
+                    </div>
+
+                    {msg.missingIngredients && msg.missingIngredients.length > 0 && (
+                      <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                        <div style={{ fontSize: '11px', fontWeight: '800', color: '#f4c95d', marginBottom: '6px' }}>
+                          ADDITIONAL PRODUCE YOU MAY NEED:
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {msg.missingIngredients.map((item, iIdx) => (
+                            <span
+                              key={iIdx}
+                              style={{
+                                background: 'rgba(244, 201, 93, 0.15)',
+                                border: '1px solid rgba(244, 201, 93, 0.3)',
+                                color: '#f4c95d',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                fontSize: '11.5px',
+                                fontWeight: '700'
+                              }}
+                            >
+                              + {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {recipeLoading && (
+                  <div style={{
+                    alignSelf: 'flex-start',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(110, 219, 208, 0.2)',
+                    borderRadius: '16px',
+                    padding: '12px 18px',
+                    color: '#6edbd0',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>Analyzing fresh ingredients & cooking techniques...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input Form */}
+              <form onSubmit={handleAskRecipeAssistant} style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  type="text"
+                  value={recipeInput}
+                  onChange={(e) => setRecipeInput(e.target.value)}
+                  placeholder="Ask a cooking question (e.g. 'How to make creamy tomato soup with organic garlic?')..."
+                  disabled={recipeLoading}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    background: 'rgba(0, 0, 0, 0.35)',
+                    border: '1px solid rgba(110, 219, 208, 0.3)',
+                    color: '#effbe7',
+                    fontSize: '13.5px',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={recipeLoading || !recipeInput.trim()}
+                  style={{
+                    background: 'linear-gradient(135deg, #00897b, #004d40)',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '12px 20px',
+                    borderRadius: '12px',
+                    fontWeight: '800',
+                    fontSize: '13.5px',
+                    cursor: recipeLoading || !recipeInput.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    opacity: recipeLoading || !recipeInput.trim() ? 0.6 : 1
+                  }}
+                >
+                  <Send size={16} />
+                  <span>Ask Chef</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Recommended Signature Recipes */}
+            <h3 style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800', margin: '0 0 16px' }}>
+              Chef-Curated Farm Highlights
+            </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '22px' }}>
               <div style={{
                 background: 'rgba(9, 43, 39, 0.75)',
@@ -3024,6 +3586,422 @@ export default function CustomerPortal() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* My Bargains View */}
+        {activeTab === 'bargains' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div>
+                <h2 style={{ color: '#effbe7', fontSize: '24px', fontWeight: '800', margin: '0 0 4px' }}>
+                  My Bulk Bargain Proposals
+                </h2>
+                <p style={{ color: '#a3c2b0', fontSize: '13.5px', margin: 0 }}>
+                  Real-time negotiation records with local farmers. Review status updates, counter-offers, and accepted prices.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchCustomerBargains}
+                style={{
+                  background: 'rgba(55, 189, 120, 0.15)',
+                  border: '1px solid rgba(55, 189, 120, 0.4)',
+                  color: '#8be28b',
+                  borderRadius: '10px',
+                  padding: '8px 14px',
+                  fontSize: '12.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RefreshCw size={14} style={{ animation: loadingBargains ? 'spin 1s linear infinite' : 'none' }} />
+                <span>Refresh Bargains</span>
+              </button>
+            </div>
+
+            {customerBargains.length === 0 ? (
+              <div style={{
+                background: 'rgba(9, 43, 39, 0.5)',
+                border: '1px dashed rgba(110, 219, 208, 0.3)',
+                borderRadius: '20px',
+                padding: '60px 20px',
+                textAlign: 'center',
+                color: '#a3c2b0'
+              }}>
+                <DollarSign size={48} color="#6edbd0" style={{ margin: '0 auto 16px' }} />
+                <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Bargain Proposals Yet</h3>
+                <p style={{ margin: '0 0 20px', fontSize: '13.5px' }}>
+                  Looking for bulk quantities (5kg+)? You can propose custom offers to farmers from the Fresh Marketplace!
+                </p>
+                <button
+                  onClick={() => setActiveTab('marketplace')}
+                  style={{
+                    background: 'linear-gradient(135deg, #00897b, #004d40)',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '10px 20px',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Browse Marketplace
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                {customerBargains.map((bargain) => {
+                  const statusColors = {
+                    PENDING: { bg: 'rgba(244, 201, 93, 0.2)', border: '#f4c95d', color: '#f4c95d' },
+                    ACCEPTED: { bg: 'rgba(52, 211, 153, 0.2)', border: '#34d399', color: '#34d399' },
+                    COUNTERED: { bg: 'rgba(96, 165, 250, 0.2)', border: '#60a5fa', color: '#93c5fd' },
+                    REJECTED: { bg: 'rgba(239, 68, 68, 0.2)', border: '#ef4444', color: '#fca5a5' }
+                  };
+                  const currentStyle = statusColors[bargain.status] || statusColors.PENDING;
+
+                  return (
+                    <div
+                      key={bargain._id}
+                      style={{
+                        background: 'rgba(9, 43, 39, 0.75)',
+                        backdropFilter: 'blur(16px)',
+                        border: '1.5px solid rgba(110, 219, 208, 0.25)',
+                        borderRadius: '18px',
+                        padding: '20px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                        <div>
+                          <div style={{ color: '#effbe7', fontSize: '17px', fontWeight: '800' }}>
+                            {bargain.productId?.title || 'Produce Item'}
+                          </div>
+                          <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
+                            🧑‍🌾 Farmer: <strong style={{ color: '#effbe7' }}>{bargain.farmerId?.name || bargain.farmerId?.firstName || 'Local Producer'}</strong> • {new Date(bargain.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        </div>
+
+                        <span style={{
+                          background: currentStyle.bg,
+                          border: `1px solid ${currentStyle.border}`,
+                          color: currentStyle.color,
+                          padding: '5px 14px',
+                          borderRadius: '20px',
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          {bargain.status}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', marginBottom: '14px' }}>
+                        <div>
+                          <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Original Price</div>
+                          <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700' }}>₹{bargain.originalPrice} / {bargain.productId?.unit || 'kg'}</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Requested Qty</div>
+                          <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700' }}>{bargain.quantity} {bargain.productId?.unit || 'kg'}</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Your Offer</div>
+                          <div style={{ color: '#f4c95d', fontSize: '15px', fontWeight: '900' }}>₹{bargain.offeredPrice} / {bargain.productId?.unit || 'kg'}</div>
+                        </div>
+                        {bargain.counterPrice && (
+                          <div>
+                            <div style={{ color: '#93c5fd', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Farmer Counter Offer</div>
+                            <div style={{ color: '#60a5fa', fontSize: '15px', fontWeight: '900' }}>₹{bargain.counterPrice} / {bargain.productId?.unit || 'kg'}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {bargain.status === 'COUNTERED' && (
+                        <div style={{
+                          background: 'rgba(96, 165, 250, 0.12)',
+                          border: '1px solid rgba(96, 165, 250, 0.3)',
+                          borderRadius: '12px',
+                          padding: '12px 16px',
+                          marginBottom: '14px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '12px'
+                        }}>
+                          <div>
+                            <div style={{ color: '#93c5fd', fontSize: '13px', fontWeight: '800' }}>
+                              Farmer Counter Proposal: ₹{bargain.counterPrice} / {bargain.productId?.unit || 'kg'}
+                            </div>
+                            <div style={{ color: '#effbe7', fontSize: '12px', marginTop: '2px' }}>
+                              {bargain.farmerNote ? `Note: "${bargain.farmerNote}"` : 'Farmer has countered your offer with this special bulk rate.'}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={() => handleRejectCounterBargain(bargain)}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#fca5a5',
+                                padding: '8px 14px',
+                                borderRadius: '8px',
+                                fontSize: '12.5px',
+                                fontWeight: '700',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Decline
+                            </button>
+                            <button
+                              onClick={() => handleAcceptCounterBargain(bargain)}
+                              style={{
+                                background: 'linear-gradient(135deg, #10b981, #059669)',
+                                border: 'none',
+                                color: '#ffffff',
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                fontSize: '12.5px',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <Check size={14} />
+                              <span>Accept Counter & Add to Cart</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {bargain.status === 'ACCEPTED' && (
+                        <div style={{
+                          background: 'rgba(52, 211, 153, 0.12)',
+                          border: '1px solid rgba(52, 211, 153, 0.3)',
+                          borderRadius: '12px',
+                          padding: '10px 14px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '10px'
+                        }}>
+                          <div style={{ color: '#8be28b', fontSize: '12.5px', fontWeight: '700' }}>
+                            ✓ Farmer accepted your offer at ₹{bargain.counterPrice || bargain.offeredPrice}/{bargain.productId?.unit || 'kg'}!
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (bargain.productId) {
+                                addToCart({
+                                  ...bargain.productId,
+                                  price: bargain.counterPrice || bargain.offeredPrice
+                                }, bargain.quantity || 1);
+                              }
+                            }}
+                            style={{
+                              background: 'linear-gradient(135deg, #10b981, #059669)',
+                              border: 'none',
+                              color: '#ffffff',
+                              padding: '6px 14px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              fontWeight: '800',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <ShoppingCart size={13} />
+                            <span>Add to Cart</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {bargain.status === 'PENDING' && (
+                        <div style={{ color: '#a3c2b0', fontSize: '12px', fontStyle: 'italic' }}>
+                          ⏳ Submitted to farmer. You will be notified on your dashboard once they accept, counter, or decline.
+                        </div>
+                      )}
+
+                      {bargain.status === 'REJECTED' && (
+                        <div style={{ color: '#fca5a5', fontSize: '12px' }}>
+                          ✕ Bargain declined by farmer. You can place an order at catalog price or submit another reasonable offer.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Farmers Directory View */}
+        {activeTab === 'farmers' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div>
+                <h2 style={{ color: '#effbe7', fontSize: '24px', fontWeight: '800', margin: '0 0 4px' }}>
+                  Registered Farmer Partners
+                </h2>
+                <p style={{ color: '#a3c2b0', fontSize: '13.5px', margin: 0 }}>
+                  Meet the local growers powering your clean food supply directly from Mandya, Ramanagara, and Karnataka agricultural belts.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchRegisteredFarmers}
+                style={{
+                  background: 'rgba(55, 189, 120, 0.15)',
+                  border: '1px solid rgba(55, 189, 120, 0.4)',
+                  color: '#8be28b',
+                  borderRadius: '10px',
+                  padding: '8px 14px',
+                  fontSize: '12.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RefreshCw size={14} />
+                <span>Refresh Directory</span>
+              </button>
+            </div>
+
+            {registeredFarmers.length === 0 ? (
+              <div style={{
+                background: 'rgba(9, 43, 39, 0.5)',
+                border: '1px dashed rgba(110, 219, 208, 0.3)',
+                borderRadius: '20px',
+                padding: '60px 20px',
+                textAlign: 'center',
+                color: '#a3c2b0'
+              }}>
+                <Users size={48} color="#6edbd0" style={{ margin: '0 auto 16px' }} />
+                <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>No Farmers Listed</h3>
+                <p style={{ margin: '0 0 20px', fontSize: '13.5px' }}>Farmer directory data is currently being fetched.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                {registeredFarmers.map((farmer) => {
+                  const farmerId = String(farmer._id || farmer.id);
+                  const farmerProductCount = products.filter(p => String(p.farmerId) === farmerId).length;
+
+                  return (
+                    <div
+                      key={farmerId}
+                      style={{
+                        background: 'rgba(9, 43, 39, 0.75)',
+                        backdropFilter: 'blur(16px)',
+                        border: '1.5px solid rgba(110, 219, 208, 0.25)',
+                        borderRadius: '20px',
+                        padding: '22px',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                          <div style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '14px',
+                            background: 'linear-gradient(135deg, #00897b, #004d40)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#effbe7',
+                            fontWeight: '900',
+                            fontSize: '18px',
+                            boxShadow: '0 4px 14px rgba(0, 137, 123, 0.3)'
+                          }}>
+                            {farmer.name?.[0]?.toUpperCase() || farmer.firstName?.[0]?.toUpperCase() || 'F'}
+                          </div>
+                          <div>
+                            <div style={{ color: '#effbe7', fontSize: '16px', fontWeight: '800' }}>
+                              {farmer.name || `${farmer.firstName || ''} ${farmer.lastName || ''}`.trim() || 'Organic Farmer Partner'}
+                            </div>
+                            <div style={{ color: '#37bd78', fontSize: '12px', fontWeight: '700', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckCircle size={13} />
+                              <span>Verified Producer • Mandya Cluster</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12.5px', color: '#a3c2b0', marginBottom: '16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <MapPin size={14} color="#6edbd0" />
+                            <span>{farmer.location?.address || farmer.address || 'Mandya Organic Farmland, Karnataka'}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Sprout size={14} color="#37bd78" />
+                            <span>Specialty: Heritage Vegetables, Cold-Chain Greens & Grains</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Active Harvest</div>
+                          <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '800' }}>
+                            {farmerProductCount > 0 ? `${farmerProductCount} Produce Items` : '0 Listed'}
+                          </div>
+                        </div>
+
+                        {farmerProductCount > 0 ? (
+                          <button
+                            onClick={() => {
+                              setFilterFarmerId(farmerId);
+                              setActiveTab('marketplace');
+                            }}
+                            style={{
+                              background: 'linear-gradient(135deg, #00897b, #004d40)',
+                              border: 'none',
+                              color: '#ffffff',
+                              padding: '8px 14px',
+                              borderRadius: '10px',
+                              fontSize: '12px',
+                              fontWeight: '800',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <span>Browse Harvest</span>
+                            <ArrowRight size={13} />
+                          </button>
+                        ) : (
+                          <span style={{
+                            fontSize: '11.5px',
+                            color: '#a3c2b0',
+                            fontStyle: 'italic',
+                            background: 'rgba(255,255,255,0.04)',
+                            padding: '4px 10px',
+                            borderRadius: '8px'
+                          }}>
+                            «This farmer has not published products yet.»
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       {/* Verified Purchase Review Modal */}
@@ -3424,7 +4402,7 @@ export default function CustomerPortal() {
                 await updateUserProfile({
                   firstName: profileFirstName,
                   lastName: profileLastName,
-                  phone: profilePhone,
+                  phone: user?.phone || profilePhone,
                   nativePlace: profileNative,
                   location: {
                     address: profileAddress,
@@ -3473,21 +4451,25 @@ export default function CustomerPortal() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Phone Number</label>
+                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>
+                      Phone Number (Verified Identity - Locked)
+                    </label>
                     <input
                       type="text"
-                      value={profilePhone}
-                      onChange={(e) => setProfilePhone(e.target.value)}
-                      required
+                      value={user?.phone || profilePhone}
+                      disabled
+                      readOnly
                       style={{
                         width: '100%',
                         padding: '10px 12px',
                         borderRadius: '10px',
-                        background: 'rgba(0,0,0,0.4)',
-                        border: '1px solid rgba(110, 219, 208, 0.3)',
-                        color: '#effbe7',
+                        background: 'rgba(0,0,0,0.25)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#9db5aa',
                         fontSize: '13px',
-                        boxSizing: 'border-box'
+                        boxSizing: 'border-box',
+                        cursor: 'not-allowed',
+                        opacity: 0.7
                       }}
                     />
                   </div>

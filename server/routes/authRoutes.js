@@ -12,7 +12,8 @@ const {
     updateLocation,
     getWishlist,
     toggleWishlist,
-    updateProfile
+    updateProfile,
+    getFarmers
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const { getDBStatus } = require('../config/db');
@@ -30,6 +31,9 @@ router.post('/phone-otp/verify', verifyPhoneOtpHandler);
 // Password Reset Flow Endpoints
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
+
+// Farmers Directory Endpoint
+router.get('/farmers', getFarmers);
 
 // Authenticated User Endpoints
 router.put('/location', protect, updateLocation);

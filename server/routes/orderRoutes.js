@@ -7,7 +7,8 @@ const {
   assignDeliveryDriver,
   updateDeliveryLocation,
   generateDeliveryOtp,
-  verifyDeliveryOtp
+  verifyDeliveryOtp,
+  confirmDispatchSignal
 } = require('../controllers/orderController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -18,5 +19,7 @@ router.put('/:id/assign', protect, assignDeliveryDriver);
 router.put('/:id/location', protect, updateDeliveryLocation);
 router.post('/:id/delivery-otp/generate', protect, generateDeliveryOtp);
 router.post('/:id/delivery-otp/verify', protect, verifyDeliveryOtp);
+router.post('/:id/dispatch-signal', protect, confirmDispatchSignal);
+router.post('/dispatch-signal', protect, confirmDispatchSignal);
 
 module.exports = router;

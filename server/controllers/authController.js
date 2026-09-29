@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const Product = require('../models/Product');
+const { getMemoryProducts } = require('./productController');
 const generateToken = require('../utils/generateToken');
 const { isConnected } = require('../config/db');
 const sendSms = require('../utils/sendSms');
@@ -549,10 +551,12 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Invalid or expired OTP. Request a new code.' });
     }
 
-    user.password = isConnected() ? newPassword : await bcrypt.hash(newPassword, 10);
+    // Always securely hash password with bcrypt
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
     clearOtp(user);
     await persistUser(user);
-    return res.json({ success: true, message: 'Password updated successfully. Please sign in.' });
+    return res.json({ success: true, message: 'Password changed successfully. Please log in with your new password.' });
   } catch (error) {
     console.error('Password reset failed:', error.message);
     return res.status(500).json({ message: 'Unable to reset password' });
@@ -630,9 +634,38 @@ const updateProfile = async (req, res) => {
       : findMemoryUserById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const { firstName, lastName, phone, nativePlace, farmName, description, location } = req.body;
+    const { firstName, lastName, phone, email, role, isVerified, nativePlace, farmName, description, location } = req.body;
 
-    // Prohibit privilege escalation and tamper attempts
+    // Strict Security Rule: Verified email, account role, and verification badge are immutable via basic profile editing
+    if (email && email.toLowerCase().trim() !== (user.email || '').toLowerCase().trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verified authentication email cannot be modified from profile settings. It is locked to your account identity.'
+      });
+    }
+
+    if (phone && normalizePhone(phone) !== normalizePhone(user.phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verified authentication phone number cannot be modified from profile settings. It is locked to your account identity.'
+      });
+    }
+
+    if (role && role.toLowerCase() !== (user.role || '').toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account role is immutable. You cannot escalate or alter portal account privileges.'
+      });
+    }
+
+    if (isVerified !== undefined && isVerified !== user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Verification badge cannot be modified directly.'
+      });
+    }
+
+    // Editable profile fields: name, farm name, native place, description, delivery location
     if (firstName !== undefined && typeof firstName === 'string') user.firstName = firstName.trim();
     if (lastName !== undefined && typeof lastName === 'string') user.lastName = lastName.trim();
     user.name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
@@ -684,6 +717,80 @@ const updateProfile = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/auth/farmers
+ * Dynamic directory of all registered farmers from MongoDB / memory
+ * Clearly reflects registered farmers vs farmers with published products
+ */
+const getFarmers = async (req, res) => {
+  try {
+    let farmersList = [];
+    if (isConnected()) {
+      const farmers = await User.find({ role: 'farmer' }).select('-password -resetOtpHash');
+      const products = await Product.find({});
+      farmersList = farmers.map(f => {
+        const farmerProds = products.filter(p => String(p.farmerId) === String(f._id || f.id));
+        const crops = Array.from(new Set(farmerProds.map(p => p.category || p.title).filter(Boolean)));
+        return {
+          id: String(f._id || f.id),
+          _id: String(f._id || f.id),
+          name: f.name || `${f.firstName || ''} ${f.lastName || ''}`.trim() || 'Farmer',
+          farmName: f.farmName || `${f.firstName || f.name || 'Organic'}'s Farm`,
+          location: f.location || { address: f.nativePlace || 'Rural Cluster, India' },
+          nativePlace: f.nativePlace || 'Rural Cluster',
+          description: f.description || '',
+          isVerified: Boolean(f.isVerified),
+          crops,
+          publishedProductsCount: farmerProds.length,
+          publishedProducts: farmerProds.map(p => ({
+            id: String(p._id || p.id),
+            _id: String(p._id || p.id),
+            title: p.title,
+            price: p.price,
+            stock: p.stock,
+            image: p.image,
+            category: p.category,
+            unit: p.unit || 'kg'
+          }))
+        };
+      });
+    } else {
+      const memoryProds = typeof getMemoryProducts === 'function' ? getMemoryProducts() : [];
+      farmersList = memoryUsers.filter(u => u.role === 'farmer').map(f => {
+        const farmerProds = memoryProds.filter(p => String(p.farmerId) === String(f.id || f._id));
+        const crops = Array.from(new Set(farmerProds.map(p => p.category || p.title).filter(Boolean)));
+        return {
+          id: String(f.id || f._id),
+          _id: String(f.id || f._id),
+          name: f.name || `${f.firstName || ''} ${f.lastName || ''}`.trim() || 'Farmer',
+          farmName: f.farmName || `${f.firstName || f.name || 'Organic'}'s Farm`,
+          location: f.location || { address: f.nativePlace || 'Rural Cluster, India' },
+          nativePlace: f.nativePlace || 'Rural Cluster',
+          description: f.description || '',
+          isVerified: Boolean(f.isVerified),
+          crops,
+          publishedProductsCount: farmerProds.length,
+          publishedProducts: farmerProds.map(p => ({
+            id: String(p._id || p.id),
+            _id: String(p._id || p.id),
+            title: p.title,
+            price: p.price,
+            stock: p.stock,
+            image: p.image,
+            category: p.category,
+            unit: p.unit || 'kg'
+          }))
+        };
+      });
+    }
+
+    return res.json({ success: true, count: farmersList.length, farmers: farmersList });
+  } catch (error) {
+    console.error('getFarmers error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to retrieve farmers directory' });
+  }
+};
+
 const migrateMemoryPasswords = async () => {
   let changed = false;
   for (const user of memoryUsers) {
@@ -714,6 +821,7 @@ module.exports = {
   getWishlist,
   toggleWishlist,
   updateProfile,
+  getFarmers,
   seedMemoryUser,
   migrateMemoryPasswords,
   findMemoryUserById

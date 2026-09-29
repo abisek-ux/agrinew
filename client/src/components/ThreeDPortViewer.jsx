@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { RotateCw, ZoomIn, ZoomOut, Sparkles, Layers, Eye, Droplets, Sun, Wind, CheckCircle2, ShieldAlert, Zap } from 'lucide-react';
+import { RotateCw, ZoomIn, ZoomOut, Sparkles, Layers, Eye, Droplets, Sun, Wind, CheckCircle2, ShieldAlert, Zap, HelpCircle, X, Info } from 'lucide-react';
 
 export default function ThreeDPortViewer({
   mode = 'leaf_inspector', // 'leaf_inspector' | 'medicine_dispenser' | 'farm_terrain'
@@ -18,6 +18,7 @@ export default function ThreeDPortViewer({
   const [activeHotspot, setActiveHotspot] = useState(null);
   const [sprayActive, setSprayActive] = useState(false);
   const [timeOfDay, setTimeOfDay] = useState('day'); // 'day' | 'golden' | 'night'
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const animationFrameRef = useRef(null);
   const stateRef = useRef({ rotX: 15, rotY: 35, zoom: 1.0, isDragging: false });
 
@@ -501,8 +502,8 @@ export default function ThreeDPortViewer({
           </span>
         </div>
 
-        {/* View Shader Toggle Pills */}
-        <div style={{ display: 'flex', gap: '6px', pointerEvents: 'auto' }}>
+        {/* View Shader Toggle Pills & Info Button */}
+        <div style={{ display: 'flex', gap: '6px', pointerEvents: 'auto', alignItems: 'center' }}>
           {['realistic', 'wireframe', 'heatmap', 'hologram'].map((style) => (
             <button
               key={style}
@@ -523,8 +524,121 @@ export default function ThreeDPortViewer({
               {style}
             </button>
           ))}
+
+          <button
+            onClick={() => setShowInfoModal(true)}
+            title="What is this 3D feature?"
+            style={{
+              background: 'rgba(56, 189, 248, 0.2)',
+              color: '#38bdf8',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              padding: '4px 8px',
+              borderRadius: '8px',
+              fontSize: '10.5px',
+              fontWeight: '800',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <HelpCircle size={12} />
+            <span>What is this?</span>
+          </button>
         </div>
       </div>
+
+      {/* "What is this?" Explanatory Modal (Problem 5) */}
+      {showInfoModal && (
+        <div
+          onClick={() => setShowInfoModal(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 100,
+            background: 'rgba(2, 10, 8, 0.88)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(145deg, #09261c, #051a13)',
+              border: '1.5px solid rgba(52, 211, 153, 0.4)',
+              borderRadius: '16px',
+              padding: '20px',
+              maxWidth: '420px',
+              width: '100%',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+              color: '#effbe7',
+              fontSize: '12.5px',
+              lineHeight: '1.5'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Info size={18} color="#34d399" />
+                <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: '#effbe7' }}>
+                  {mode === 'leaf_inspector'
+                    ? '3D Leaf Tissue Diagnostic Port'
+                    : mode === 'medicine_dispenser'
+                    ? '3D Medicine & Fertilizer Port'
+                    : '3D Farm Digital Twin'}
+                </h4>
+              </div>
+              <button
+                onClick={() => setShowInfoModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <strong style={{ color: '#86efac' }}>🎯 Purpose:</strong>{' '}
+                {mode === 'leaf_inspector'
+                  ? 'Visualizes crop leaf structure in 360° to highlight pathogen infection zones (lesions, fungal spores, necrosis).'
+                  : mode === 'medicine_dispenser'
+                  ? 'Visualizes precise spray droplet dispersion, leaf coverage, and absorption physics for biological & chemical remedies.'
+                  : 'Provides a topographical 3D model of farm plots, soil hydration tiers, and crop canopy coverage.'}
+              </div>
+
+              <div>
+                <strong style={{ color: '#86efac' }}>👆 How to Use:</strong>
+                <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                  <li>Click & drag (or swipe on touchscreens) to rotate 360°.</li>
+                  <li>Use the Zoom controls (+ / -) to inspect leaf tissue up close.</li>
+                  <li>Switch shader pills: <em>Realistic</em>, <em>Wireframe</em>, <em>Heatmap</em>, or <em>Hologram</em>.</li>
+                </ul>
+              </div>
+
+              <div>
+                <strong style={{ color: '#86efac' }}>👁️ What You Are Seeing:</strong>{' '}
+                {mode === 'leaf_inspector'
+                  ? `Curved 3D leaf blade with procedural vein mesh and disease symptom clusters for ${diseaseName}.`
+                  : mode === 'medicine_dispenser'
+                  ? 'Simulated spray nozzle atomization showing droplet adhesion on leaf cuticle.'
+                  : '3D plot terrain grid with elevation contours and moisture saturation shading.'}
+              </div>
+
+              <div>
+                <strong style={{ color: '#86efac' }}>🌾 Farmer Benefit:</strong>{' '}
+                Helps understand disease progression beneath leaf cuticles and ensures spraying reaches both upper and underside surfaces where fungi thrive.
+              </div>
+
+              <div style={{ background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '8px', padding: '8px 10px', fontSize: '11px', color: '#fef08a' }}>
+                <strong>📡 Data Source:</strong> Simulated 3D Educational Visualization. (Computer-generated procedural geometry for agronomy education — not direct hardware telemetry).
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Interactive 3D Canvas */}
       <canvas

@@ -33,7 +33,15 @@ export const authAPI = {
   updateProfile: (data) => axios.put(`${API_BASE}/auth/profile`, data, { headers: getAuthHeaders() }),
   getWishlist: () => axios.get(`${API_BASE}/auth/wishlist`, { headers: getAuthHeaders() }),
   toggleWishlist: (data) => axios.put(`${API_BASE}/auth/wishlist/toggle`, data, { headers: getAuthHeaders() }),
+  getFarmers: () => axios.get(`${API_BASE}/auth/farmers`),
   getStatus: () => axios.get(`${API_BASE}/auth/status`)
+};
+
+export const bargainAPI = {
+  createBargain: (data) => axios.post(`${API_BASE}/bargains`, data, { headers: getAuthHeaders() }),
+  getBargains: () => axios.get(`${API_BASE}/bargains`, { headers: getAuthHeaders() }),
+  farmerRespond: (id, data) => axios.put(`${API_BASE}/bargains/${id}/farmer-respond`, data, { headers: getAuthHeaders() }),
+  customerRespond: (id, data) => axios.put(`${API_BASE}/bargains/${id}/customer-respond`, data, { headers: getAuthHeaders() })
 };
 
 export const productAPI = {
@@ -51,7 +59,13 @@ export const orderAPI = {
   assignDriver: (id) => axios.put(`${API_BASE}/orders/${id}/assign`, {}, { headers: getAuthHeaders() }),
   updateLocation: (id, data) => axios.put(`${API_BASE}/orders/${id}/location`, data, { headers: getAuthHeaders() }),
   generateDeliveryOtp: (id) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/generate`, {}, { headers: getAuthHeaders() }),
-  verifyDeliveryOtp: (id, data) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/verify`, data, { headers: getAuthHeaders() })
+  verifyDeliveryOtp: (id, data) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/verify`, data, { headers: getAuthHeaders() }),
+  confirmDispatchSignal: (id, data) => axios.post(`${API_BASE}/orders/${id || 'batch'}/dispatch-signal`, data || {}, { headers: getAuthHeaders() })
+};
+
+export const aiAPI = {
+  diagnoseCrop: (data) => axios.post(`${API_BASE}/ai/diagnose-crop`, data, { headers: getAuthHeaders() }),
+  recipeAssistant: (data) => axios.post(`${API_BASE}/ai/recipe-assistant`, data, { headers: getAuthHeaders() })
 };
 
 export const reviewAPI = {

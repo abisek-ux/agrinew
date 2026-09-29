@@ -1,0 +1,339 @@
+const crypto = require('crypto');
+const Bargain = require('../models/Bargain');
+const Product = require('../models/Product');
+const { isConnected } = require('../config/db');
+const { getMemoryProducts } = require('./productController');
+const { pushNotification } = require('./notificationController');
+
+const memoryBargains = [];
+
+/**
+ * Helper to resolve product
+ */
+const findProduct = async (prodId) => {
+  if (isConnected()) {
+    return await Product.findById(prodId);
+  }
+  const prods = getMemoryProducts();
+  return prods.find(p => String(p._id || p.id) === String(prodId));
+};
+
+/**
+ * POST /api/bargains
+ * Customer proposes bulk bargain to farmer. Initial status is ALWAYS PENDING.
+ */
+const createBargain = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const customerId = String(req.user.id || req.user._id);
+    const customerRole = String(req.user.role || '').toLowerCase();
+    if (customerRole !== 'customer' && customerRole !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Only customer accounts can submit bargain proposals' });
+    }
+
+    const { productId, quantity, proposedPrice, note } = req.body;
+    if (!productId) return res.status(400).json({ success: false, message: 'Product ID is required' });
+
+    const qty = Number(quantity);
+    if (!qty || qty <= 0) return res.status(400).json({ success: false, message: 'Valid quantity is required' });
+
+    const propPrice = Number(proposedPrice);
+    if (!propPrice || propPrice <= 0) return res.status(400).json({ success: false, message: 'Valid proposed price is required' });
+
+    const product = await findProduct(productId);
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found in marketplace' });
+
+    const farmerId = String(product.farmerId);
+    if (customerId === farmerId) {
+      return res.status(400).json({ success: false, message: 'You cannot bargain on your own produce' });
+    }
+
+    const bargainId = `BARGAIN-${Date.now()}-${crypto.randomInt(100, 999)}`;
+    const originalPrice = Number(product.price);
+
+    const initialHistory = [{
+      senderRole: 'customer',
+      action: 'propose',
+      proposedPrice: propPrice,
+      note: note || `Customer proposed ₹${propPrice}/${product.unit || 'kg'} for ${qty} ${product.unit || 'kg'}.`,
+      timestamp: new Date()
+    }];
+
+    const bargainData = {
+      bargainId,
+      customerId,
+      customerName: req.user.name || `${req.user.firstName || 'Customer'} ${req.user.lastName || ''}`.trim(),
+      customerEmail: req.user.email || '',
+      customerPhone: req.user.phone || '',
+      farmerId,
+      farmerName: product.farmerName || 'Origin Farm',
+      productId: String(product._id || product.id),
+      productTitle: product.title,
+      quantity: qty,
+      unit: product.unit || 'kg',
+      originalPrice,
+      proposedPrice: propPrice,
+      counterPrice: null,
+      status: 'PENDING',
+      farmerNote: '',
+      responseHistory: initialHistory
+    };
+
+    let savedBargain;
+    if (isConnected()) {
+      savedBargain = await Bargain.create(bargainData);
+    } else {
+      savedBargain = { ...bargainData, _id: bargainId, id: bargainId, createdAt: new Date(), updatedAt: new Date() };
+      memoryBargains.push(savedBargain);
+    }
+
+    // Push notification to farmer
+    pushNotification({
+      recipientId: farmerId,
+      recipientRole: 'farmer',
+      title: '🌾 New Bulk Bargain Offer Received',
+      message: `${bargainData.customerName} submitted a bulk offer of ₹${propPrice}/${bargainData.unit} for ${qty} ${bargainData.unit} of "${product.title}" (Original: ₹${originalPrice}).`,
+      category: 'order',
+      priority: 'HIGH'
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Bulk bargain offer sent to farmer! Status: PENDING awaiting farmer review.',
+      bargain: savedBargain
+    });
+  } catch (error) {
+    console.error('createBargain error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Unable to submit bargain proposal' });
+  }
+};
+
+/**
+ * GET /api/bargains
+ * Retrieve bargains for current user (filtered by customerId or farmerId)
+ */
+const getBargains = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const userId = String(req.user.id || req.user._id);
+    const userRole = String(req.user.role || '').toLowerCase();
+
+    let list = [];
+    if (isConnected()) {
+      const query = userRole === 'farmer'
+        ? { farmerId: userId }
+        : userRole === 'customer'
+        ? { customerId: userId }
+        : {};
+      list = await Bargain.find(query).sort({ createdAt: -1 });
+    } else {
+      if (userRole === 'farmer') {
+        list = memoryBargains.filter(b => String(b.farmerId) === userId);
+      } else if (userRole === 'customer') {
+        list = memoryBargains.filter(b => String(b.customerId) === userId);
+      } else {
+        list = [...memoryBargains];
+      }
+      list.reverse();
+    }
+
+    return res.json({ success: true, count: list.length, bargains: list });
+  } catch (error) {
+    console.error('getBargains error:', error);
+    return res.status(500).json({ success: false, message: 'Unable to retrieve bargains' });
+  }
+};
+
+/**
+ * PUT /api/bargains/:id/farmer-respond
+ * Farmer accepts, rejects, or counter-offers a pending proposal
+ */
+const farmerRespond = async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
+    const farmerId = String(req.user.id || req.user._id);
+    const { id } = req.params;
+    const { action, counterPrice, note } = req.body;
+    const act = String(action || '').trim().toUpperCase();
+
+    if (!['ACCEPT', 'REJECT', 'COUNTER'].includes(act)) {
+      return res.status(400).json({ success: false, message: 'Action must be ACCEPT, REJECT, or COUNTER' });
+    }
+
+    let bargain;
+    if (isConnected()) {
+      bargain = await Bargain.findOne({ $or: [{ _id: id }, { bargainId: id }] });
+    } else {
+      bargain = memoryBargains.find(b => String(b.bargainId) === id || String(b.id || b._id) === id);
+    }
+
+    if (!bargain) return res.status(404).json({ success: false, message: 'Bargain not found' });
+
+    if (String(bargain.farmerId) !== farmerId && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You are not authorized to respond to another farmer\'s bargain' });
+    }
+
+    if (bargain.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: `Bargain is already resolved (status: ${bargain.status})` });
+    }
+
+    if (act === 'ACCEPT') {
+      bargain.status = 'ACCEPTED';
+      bargain.farmerNote = note || 'Offer accepted by farmer';
+      bargain.responseHistory.push({
+        senderRole: 'farmer',
+        action: 'accept',
+        proposedPrice: bargain.proposedPrice,
+        note: bargain.farmerNote,
+        timestamp: new Date()
+      });
+
+      pushNotification({
+        recipientId: bargain.customerId,
+        recipientRole: 'customer',
+        title: '🎉 Farmer Accepted Your Bulk Offer!',
+        message: `Farmer ${bargain.farmerName} agreed to your proposed price of ₹${bargain.proposedPrice}/${bargain.unit} for ${bargain.quantity} ${bargain.unit} of "${bargain.productTitle}"! Add to cart to purchase.`,
+        category: 'order',
+        priority: 'HIGH'
+      });
+    } else if (act === 'REJECT') {
+      bargain.status = 'REJECTED';
+      bargain.farmerNote = note || 'Offer declined due to high harvest/production costs';
+      bargain.responseHistory.push({
+        senderRole: 'farmer',
+        action: 'reject',
+        note: bargain.farmerNote,
+        timestamp: new Date()
+      });
+
+      pushNotification({
+        recipientId: bargain.customerId,
+        recipientRole: 'customer',
+        title: '🌾 Bulk Offer Declined',
+        message: `Farmer ${bargain.farmerName} could not accept your bulk price proposal for "${bargain.productTitle}". Reason: ${bargain.farmerNote}`,
+        category: 'order',
+        priority: 'NORMAL'
+      });
+    } else if (act === 'COUNTER') {
+      const cPrice = Number(counterPrice);
+      if (!cPrice || cPrice <= 0) {
+        return res.status(400).json({ success: false, message: 'Counter price is required' });
+      }
+      bargain.status = 'COUNTERED';
+      bargain.counterPrice = cPrice;
+      bargain.farmerNote = note || `Farmer offered counter-price of ₹${cPrice}/${bargain.unit}`;
+      bargain.responseHistory.push({
+        senderRole: 'farmer',
+        action: 'counter',
+        counterPrice: cPrice,
+        note: bargain.farmerNote,
+        timestamp: new Date()
+      });
+
+      pushNotification({
+        recipientId: bargain.customerId,
+        recipientRole: 'customer',
+        title: '🌾 Farmer Sent Counter-Offer',
+        message: `Farmer ${bargain.farmerName} countered with ₹${cPrice}/${bargain.unit} for "${bargain.productTitle}". Review and accept to buy.`,
+        category: 'order',
+        priority: 'HIGH'
+      });
+    }
+
+    if (isConnected()) {
+      await bargain.save();
+    }
+
+    return res.json({ success: true, message: `Bargain updated to ${bargain.status}`, bargain });
+  } catch (error) {
+    console.error('farmerRespond error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Unable to update bargain' });
+  }
+};
+
+/**
+ * PUT /api/bargains/:id/customer-respond
+ * Customer accepts or declines farmer's counter offer
+ */
+const customerRespond = async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
+    const customerId = String(req.user.id || req.user._id);
+    const { id } = req.params;
+    const { action } = req.body;
+    const act = String(action || '').trim().toUpperCase();
+
+    if (!['ACCEPT', 'REJECT'].includes(act)) {
+      return res.status(400).json({ success: false, message: 'Action must be ACCEPT or REJECT' });
+    }
+
+    let bargain;
+    if (isConnected()) {
+      bargain = await Bargain.findOne({ $or: [{ _id: id }, { bargainId: id }] });
+    } else {
+      bargain = memoryBargains.find(b => String(b.bargainId) === id || String(b.id || b._id) === id);
+    }
+
+    if (!bargain) return res.status(404).json({ success: false, message: 'Bargain not found' });
+
+    if (String(bargain.customerId) !== customerId && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You are not authorized to respond to this bargain' });
+    }
+
+    if (bargain.status !== 'COUNTERED') {
+      return res.status(400).json({ success: false, message: 'Can only respond to COUNTERED bargains' });
+    }
+
+    if (act === 'ACCEPT') {
+      bargain.status = 'ACCEPTED';
+      bargain.proposedPrice = bargain.counterPrice; // Customer agreed to counter price
+      bargain.responseHistory.push({
+        senderRole: 'customer',
+        action: 'accept_counter',
+        proposedPrice: bargain.counterPrice,
+        timestamp: new Date()
+      });
+
+      pushNotification({
+        recipientId: bargain.farmerId,
+        recipientRole: 'farmer',
+        title: '🎉 Customer Accepted Your Counter-Offer!',
+        message: `${bargain.customerName} accepted your counter-offer of ₹${bargain.counterPrice}/${bargain.unit} for "${bargain.productTitle}".`,
+        category: 'order',
+        priority: 'HIGH'
+      });
+    } else {
+      bargain.status = 'REJECTED';
+      bargain.responseHistory.push({
+        senderRole: 'customer',
+        action: 'reject_counter',
+        timestamp: new Date()
+      });
+    }
+
+    if (isConnected()) {
+      await bargain.save();
+    }
+
+    return res.json({ success: true, message: `Counter-offer ${bargain.status.toLowerCase()}`, bargain });
+  } catch (error) {
+    console.error('customerRespond error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Unable to respond to counter-offer' });
+  }
+};
+
+const getMemoryBargains = () => memoryBargains;
+
+module.exports = {
+  createBargain,
+  getBargains,
+  farmerRespond,
+  customerRespond,
+  getMemoryBargains
+};

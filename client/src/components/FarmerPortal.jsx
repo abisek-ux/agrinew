@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { productAPI, orderAPI, notificationAPI } from '../services/api';
+import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI } from '../services/api';
 import LiveTrackingMap from './LiveTrackingMap';
 import MapPicker from './MapPicker';
 import MedicineFertilizerHub from './MedicineFertilizerHub';
@@ -737,6 +737,8 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
     return () => cancelAnimationFrame(animId);
   }, [dripActive]);
 
+  const [showExplainer, setShowExplainer] = useState(false);
+
   return (
     <div style={{
       background: 'linear-gradient(145deg, rgba(20, 26, 18, 0.95), rgba(10, 16, 12, 0.98))',
@@ -747,6 +749,37 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
       position: 'relative',
       overflow: 'hidden'
     }}>
+      {/* Simulation Notice Banner */}
+      <div style={{
+        background: 'rgba(245, 158, 11, 0.12)',
+        border: '1px solid rgba(245, 158, 11, 0.35)',
+        borderRadius: '8px',
+        padding: '6px 12px',
+        marginBottom: '14px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontSize: '11px',
+        color: '#fef08a'
+      }}>
+        <span>📡 <strong>SIMULATION MODE</strong> — Educational Subsoil Model (No physical IoT probe connected)</span>
+        <button
+          onClick={() => setShowExplainer(true)}
+          style={{
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: '#fff',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '10.5px',
+            fontWeight: '700',
+            cursor: 'pointer'
+          }}
+        >
+          What is this?
+        </button>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
@@ -766,7 +799,7 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
               3D Real-Time Soil Digital Twin
             </h3>
             <p style={{ margin: '2px 0 0 0', color: '#86efac', fontSize: '11px', fontWeight: '700' }}>
-              IoT Probe Strata • Moisture & NPK Telemetry
+              Subsoil Horizon • Moisture Percolation Model
             </p>
           </div>
         </div>
@@ -789,7 +822,7 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
           }}
         >
           <Droplets size={14} color="#38bdf8" />
-          <span>{dripActive ? '💧 Drip Valve Active...' : 'Activate Targeted Bio-Drip'}</span>
+          <span>{dripActive ? '💧 Drip Valve Active...' : 'Simulate Targeted Bio-Drip'}</span>
         </button>
       </div>
 
@@ -813,8 +846,8 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#a3c2b0', fontSize: '12px' }}>Soil Moisture (0-20cm)</span>
-            <span style={{ color: '#38bdf8', fontWeight: '800', fontSize: '15px' }}>{moisture}% Optimal</span>
+            <span style={{ color: '#a3c2b0', fontSize: '12px' }}>Simulated Moisture (0-20cm)</span>
+            <span style={{ color: '#38bdf8', fontWeight: '800', fontSize: '15px' }}>{moisture}% (Simulated)</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -823,11 +856,50 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#a3c2b0', fontSize: '12px' }}>NPK Fertility Balance</span>
+            <span style={{ color: '#a3c2b0', fontSize: '12px' }}>NPK Horizon Benchmark</span>
             <span style={{ color: '#4ade80', fontWeight: '800', fontSize: '13px' }}>N: 82% • P: 76% • K: 88%</span>
           </div>
         </div>
       </div>
+
+      {/* What is this Modal */}
+      {showExplainer && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 99999,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(16px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px'
+        }} onClick={() => setShowExplainer(false)}>
+          <div style={{
+            maxWidth: '520px',
+            width: '100%',
+            background: 'linear-gradient(145deg, #092b27, #061917)',
+            border: '1.5px solid #4ade80',
+            borderRadius: '20px',
+            padding: '24px',
+            color: '#effbe7'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', color: '#86efac' }}>🌱 What is the 3D Soil Digital Twin?</h3>
+              <button onClick={() => setShowExplainer(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+            </div>
+            <div style={{ fontSize: '12.5px', lineHeight: '1.5', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <p><strong>🎯 Purpose:</strong> Helps farmers understand how subterranean moisture and nutrients disperse through root horizons during drip irrigation.</p>
+              <p><strong>🖱️ How to use:</strong> Click "Simulate Targeted Bio-Drip" to trigger water droplet percolation through the topsoil humus layer into the root zone.</p>
+              <p><strong>👁️ What you see:</strong> The top brown layer is organic humus (0-12cm), the middle layer is the active crop root horizon (12-28cm), and the bottom layer is mineral subsoil (28-40cm).</p>
+              <p><strong>🚜 Farmer Benefit:</strong> Prevents over-watering and nutrient leaching below the root zone, saving water and fertilizer costs.</p>
+              <p style={{ background: 'rgba(245, 158, 11, 0.15)', padding: '8px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                <strong>⚠️ Data Source:</strong> This component is an <em>Educational Computational Simulation</em>. No physical subsoil IoT probe hardware is currently installed on this farm.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -835,19 +907,43 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
 /* ─────────────────────────────────────────────────────────────
    Real-Time Delivery Summon Beacon Modal
 ───────────────────────────────────────────────────────────── */
-function DeliverySummonModal({ isOpen, onClose, onDriverConfirmed }) {
+function DeliverySummonModal({ isOpen, orderId, onClose, onDriverConfirmed }) {
   const [stage, setStage] = useState('searching'); // 'searching' | 'assigned'
+  const [submittingDispatch, setSubmittingDispatch] = useState(false);
+  const [dispatchError, setDispatchError] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
     setStage('searching');
+    setDispatchError('');
     const timer = setTimeout(() => {
       setStage('assigned');
-    }, 2200);
+    }, 1800);
     return () => clearTimeout(timer);
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleConfirmDispatch = async () => {
+    setSubmittingDispatch(true);
+    setDispatchError('');
+    try {
+      if (orderId) {
+        await orderAPI.confirmDispatchSignal(orderId, {
+          driverName: 'David Swift',
+          vehicleNumber: 'KA-04-EA-2026'
+        });
+      }
+      const driver = { name: 'David Swift', vehicle: 'KA-04-EA-2026', eta: '6 Minutes' };
+      if (onDriverConfirmed) onDriverConfirmed(driver);
+      onClose();
+    } catch (err) {
+      console.error('Dispatch signal error:', err);
+      setDispatchError(err.response?.data?.message || 'Failed to dispatch order. Please verify connectivity.');
+    } finally {
+      setSubmittingDispatch(false);
+    }
+  };
 
   return (
     <div style={{
@@ -933,15 +1029,28 @@ function DeliverySummonModal({ isOpen, onClose, onDriverConfirmed }) {
               padding: '12px',
               fontSize: '12.5px',
               color: '#dcfce7',
-              marginBottom: '20px'
+              marginBottom: '16px'
             }}>
               ⏱️ Estimated Arrival at Farm Gate: <strong>6 Minutes</strong> • ❄️ Cold-Chain Ready
             </div>
+
+            {dispatchError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid #ef4444',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                color: '#fca5a5',
+                fontSize: '12px',
+                marginBottom: '14px'
+              }}>
+                ⚠️ {dispatchError}
+              </div>
+            )}
+
             <button
-              onClick={() => {
-                if (onDriverConfirmed) onDriverConfirmed();
-                onClose();
-              }}
+              onClick={handleConfirmDispatch}
+              disabled={submittingDispatch}
               style={{
                 width: '100%',
                 background: 'linear-gradient(135deg, #16a34a, #15803d)',
@@ -953,7 +1062,7 @@ function DeliverySummonModal({ isOpen, onClose, onDriverConfirmed }) {
                 cursor: 'pointer'
               }}
             >
-              Confirm Dispatch Signal
+              {submittingDispatch ? 'Confirming Dispatch Signal...' : 'Confirm Dispatch Signal'}
             </button>
           </div>
         )}
@@ -1016,7 +1125,8 @@ export default function FarmerPortal({ onLogout }) {
       const lat = customLat !== null ? customLat : locInfo.lat;
       const lon = customLon !== null ? customLon : locInfo.lon;
 
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure,uv_index&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max&timezone=auto`;
+      // Real Open-Meteo API with precipitation_sum (mm) and daily precipitation probability
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure,uv_index&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,uv_index_max&timezone=auto`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Weather telemetry response status: ${res.status}`);
@@ -1026,9 +1136,9 @@ export default function FarmerPortal({ onLogout }) {
       const wmo = parseWmoWeather(current.weather_code);
       const windDir = getWindDirection(current.wind_direction_10m ?? 180);
       const windSpeed = Math.round(current.wind_speed_10m ?? 14);
-      const temp = Math.round(current.temperature_2m ?? locInfo.defaultTemp ?? 29);
-      const feelsLike = Math.round(current.apparent_temperature ?? temp + 2);
-      const humidity = Math.round(current.relative_humidity_2m ?? locInfo.defaultHumidity ?? 68);
+      const temp = Math.round(current.temperature_2m ?? 28);
+      const feelsLike = Math.round(current.apparent_temperature ?? temp);
+      const humidity = Math.round(current.relative_humidity_2m ?? 65);
       const uvIndex = current.uv_index !== undefined ? Number(current.uv_index.toFixed(1)) : 0;
       const pressure = Math.round(current.surface_pressure ?? 1009);
 
@@ -1070,27 +1180,36 @@ export default function FarmerPortal({ onLogout }) {
         const d = new Date(dTimes[i]);
         const dayLabel = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : d.toLocaleDateString([], { weekday: 'short' });
         const dWmo = parseWmoWeather(data.daily?.weather_code?.[i]);
+        const rainAmount = data.daily?.precipitation_sum?.[i] !== undefined
+          ? Number(data.daily.precipitation_sum[i]).toFixed(1)
+          : '0.0';
         dailyList.push({
           day: dayLabel,
           date: d.toLocaleDateString([], { month: 'short', day: 'numeric' }),
-          maxTemp: Math.round(data.daily?.temperature_2m_max?.[i] ?? temp + 3),
+          maxTemp: Math.round(data.daily?.temperature_2m_max?.[i] ?? temp + 2),
           minTemp: Math.round(data.daily?.temperature_2m_min?.[i] ?? temp - 3),
           rainProb: data.daily?.precipitation_probability_max?.[i] ?? 0,
+          rainAmount,
           icon: dWmo.icon,
           label: dWmo.label
         });
       }
 
-      const rainChance = hourlyList[0]?.rainProb ?? (data.daily?.precipitation_probability_max?.[0] ?? locInfo.defaultRainChance ?? 20);
+      // Current hour precipitation probability vs day's maximum peak probability
+      const currentHourRainProb = hourlyList[0]?.rainProb ?? 0;
+      const peakRainChance = data.daily?.precipitation_probability_max?.[0] ?? currentHourRainProb;
+      const todayRainMm = data.daily?.precipitation_sum?.[0] !== undefined
+        ? Number(data.daily.precipitation_sum[0]).toFixed(1)
+        : '0.0';
 
       // Dynamically compute scientifically sound field guidance
       const guidance = generateAgriGuidance({
         temp,
         humidity,
-        rainChance,
+        rainChance: currentHourRainProb,
         windSpeed,
         conditionLabel: wmo.label,
-        city: locInfo.name || cityName
+        city: locInfo?.name || cityName
       });
 
       const updated = {
@@ -1100,7 +1219,9 @@ export default function FarmerPortal({ onLogout }) {
         conditionLabel: wmo.label,
         icon: wmo.icon,
         humidity,
-        rainChance,
+        rainChance: currentHourRainProb,
+        peakRainChance,
+        todayRainMm,
         wind: `${windSpeed} km/h ${windDir}`,
         windSpeed,
         windDirection: windDir,
@@ -1112,28 +1233,20 @@ export default function FarmerPortal({ onLogout }) {
         hourly: hourlyList,
         daily: dailyList,
         lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isLive: true
+        isLive: true,
+        error: null
       };
 
       setWeatherData(updated);
       setWeatherCondition(wmo.condition);
       setWeatherMode('live');
     } catch (err) {
-      console.warn('Real weather telemetry fetch fallback:', err);
-      const fallback = customLocations.find(l => l.name === cityName) || WEATHER_LOCATIONS[cityName] || WEATHER_LOCATIONS['My Farm Location (GPS)'];
+      console.warn('Real weather telemetry fetch error:', err);
       setWeatherData(prev => ({
         ...prev,
-        temp: fallback.defaultTemp || 29,
-        feelsLike: fallback.defaultFeelsLike || 32,
-        condition: fallback.defaultCondition || 'cloudy',
-        conditionLabel: 'Overcast Cumulus Clouds',
-        humidity: fallback.defaultHumidity || 70,
-        rainChance: fallback.defaultRainChance || 25,
-        wind: fallback.defaultWind || '14 km/h',
-        advisory: fallback.defaultAdvisory || 'Partly cloudy sky. Favorable for morning agricultural operations.',
-        isLive: false
+        isLive: false,
+        error: 'Weather data unavailable.'
       }));
-      setWeatherCondition(fallback.defaultCondition || 'cloudy');
     } finally {
       setWeatherLoading(false);
     }
@@ -1281,6 +1394,16 @@ export default function FarmerPortal({ onLogout }) {
   );
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showDeliverySummon, setShowDeliverySummon] = useState(false);
+  const [selectedDispatchOrderId, setSelectedDispatchOrderId] = useState(null);
+
+  // AI Plant Diagnosis Mode ('reference_demo' | 'gemini_vision')
+  const [aiDiagnosisMode, setAiDiagnosisMode] = useState('reference_demo');
+  const [aiDiagnosisNotice, setAiDiagnosisNotice] = useState('');
+
+  // Buyer Bulk Bargains State
+  const [farmerBargains, setFarmerBargains] = useState([]);
+  const [loadingBargains, setLoadingBargains] = useState(false);
+  const [counterInputs, setCounterInputs] = useState({});
 
   // Edit Product Modal State
   const [editingProduct, setEditingProduct] = useState(null);
@@ -1312,12 +1435,18 @@ export default function FarmerPortal({ onLogout }) {
     fetchFarmerProducts();
     fetchIncomingOrders();
     fetchFarmerNotifications();
+    fetchFarmerBargains();
   }, []);
 
   useEffect(() => {
-    if (activeNav !== 'orders') return;
-    const interval = setInterval(fetchIncomingOrders, 5000);
-    return () => clearInterval(interval);
+    if (activeNav === 'orders') {
+      const interval = setInterval(fetchIncomingOrders, 5000);
+      return () => clearInterval(interval);
+    }
+    if (activeNav === 'bargains') {
+      const interval = setInterval(fetchFarmerBargains, 5000);
+      return () => clearInterval(interval);
+    }
   }, [activeNav]);
 
   // Compute crop recommendation whenever soil, water, or weather changes
@@ -1388,32 +1517,75 @@ export default function FarmerPortal({ onLogout }) {
   const handleDiseaseImageUpload = (e) => {
     const file = e.target?.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Image file size must be less than 5MB', 'error');
+        return;
+      }
       const url = URL.createObjectURL(file);
       setUploadedImagePreview(url);
       setAnalyzingImage(true);
 
-      const fileNameLower = file.name.toLowerCase();
-      // Intelligent crop & pathogen matching
-      let detected = DISEASE_PRESETS.find(
-        (p) =>
-          fileNameLower.includes(p.crop.toLowerCase()) ||
-          fileNameLower.includes(p.id.split('_')[0]) ||
-          fileNameLower.includes(p.id.split('_')[1] || '')
-      );
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result;
+        try {
+          const res = await aiAPI.diagnoseCrop({
+            image: base64Data,
+            cropContext: 'Crop Leaf Sample'
+          });
 
-      if (!detected) {
-        // Pick a realistic non-clean disease preset if not explicitly named healthy
-        const candidates = DISEASE_PRESETS.filter((p) => p.id !== 'healthy_leaf');
-        detected = candidates[Math.floor(Math.random() * candidates.length)];
-      }
+          if (res.data.mode === 'gemini_vision' && res.data.diagnosis) {
+            setAiDiagnosisMode('gemini_vision');
+            setAiDiagnosisNotice(res.data.disclaimer);
+            setSelectedDisease({
+              id: 'ai_detected',
+              name: res.data.diagnosis.possibleDisease,
+              crop: res.data.diagnosis.detectedCrop || 'Field Sample',
+              severity: res.data.diagnosis.confidence > 75 ? 'Moderate to High' : 'Observational',
+              summary: res.data.diagnosis.explanation,
+              organicRemedy: res.data.diagnosis.treatmentGuidance,
+              chemicalMedicine: res.data.diagnosis.preventionGuidance,
+              farmerTips: [
+                `Next Step: ${res.data.diagnosis.recommendedNextStep}`,
+                `Visible Symptoms: ${res.data.diagnosis.visibleSymptoms}`,
+                res.data.disclaimer
+              ],
+              confidence: `${res.data.diagnosis.confidence}%`
+            });
+            setAiScanConfidence(`${res.data.diagnosis.confidence}%`);
+            showToast(`AI Vision Diagnosis: ${res.data.diagnosis.possibleDisease} (${res.data.diagnosis.confidence}%)`, 'success');
+          } else {
+            // Reference / Demo Mode
+            setAiDiagnosisMode('reference_demo');
+            setAiDiagnosisNotice(res.data.message || 'Reference / Demo Mode: Visual AI provider is not active or GEMINI_API_KEY is not configured.');
+            
+            const fileNameLower = file.name.toLowerCase();
+            let detected = DISEASE_PRESETS.find(
+              (p) =>
+                fileNameLower.includes(p.crop.toLowerCase()) ||
+                fileNameLower.includes(p.id.split('_')[0]) ||
+                fileNameLower.includes(p.id.split('_')[1] || '')
+            ) || DISEASE_PRESETS[1] || DISEASE_PRESETS[0];
 
-      setTimeout(() => {
-        setAnalyzingImage(false);
-        setSelectedDisease(detected);
-        const randConf = (96.2 + Math.random() * 3.6).toFixed(1) + '%';
-        setAiScanConfidence(randConf);
-        showToast(`AI Plant Doctor: Leaf scanned! Diagnosed ${detected.name.split('(')[0]} (${randConf} confidence)`, 'success');
-      }, 1600);
+            setSelectedDisease({
+              ...detected,
+              name: `[Reference Mode] ${detected.name}`
+            });
+            setAiScanConfidence('Demo Mode (85%)');
+            showToast('Operating in Reference / Demo Mode. Live vision requires GEMINI_API_KEY.', 'info');
+          }
+        } catch (err) {
+          console.warn('AI diagnose crop note:', err);
+          setAiDiagnosisMode('reference_demo');
+          setAiDiagnosisNotice('AI Provider offline. Displaying reference botanical sample database.');
+          const detected = DISEASE_PRESETS[0];
+          setSelectedDisease(detected);
+          setAiScanConfidence('Reference (90%)');
+        } finally {
+          setAnalyzingImage(false);
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -1507,9 +1679,39 @@ export default function FarmerPortal({ onLogout }) {
     }
   };
 
+  const fetchFarmerBargains = async () => {
+    try {
+      setLoadingBargains(true);
+      const res = await bargainAPI.getFarmerBargains();
+      setFarmerBargains(res.data?.bargains || []);
+    } catch (err) {
+      console.warn('Bargains fetch note:', err.message);
+    } finally {
+      setLoadingBargains(false);
+    }
+  };
+
+  const handleUpdateBargain = async (bargainId, action, counterPrice = null) => {
+    try {
+      const payload = { action };
+      if (action === 'counter') {
+        if (!counterPrice || Number(counterPrice) <= 0) {
+          showToast('Please enter a valid counter offer price', 'warning');
+          return;
+        }
+        payload.counterPrice = Number(counterPrice);
+      }
+      const res = await bargainAPI.updateBargainStatus(bargainId, payload);
+      showToast(res.data.message || `Bargain ${action}ed!`, 'success');
+      fetchFarmerBargains();
+    } catch (err) {
+      showToast(err.response?.data?.message || `Failed to ${action} bargain`, 'error');
+    }
+  };
+
   const handleRefreshAll = async () => {
     setRefreshing(true);
-    await Promise.all([fetchFarmerProducts(), fetchIncomingOrders(), fetchFarmerNotifications()]);
+    await Promise.all([fetchFarmerProducts(), fetchIncomingOrders(), fetchFarmerNotifications(), fetchFarmerBargains()]);
     setRefreshing(false);
     showToast('Farmer dashboard synchronized with live marketplace', 'info');
   };
@@ -1735,6 +1937,7 @@ export default function FarmerPortal({ onLogout }) {
   const transitOrdersCount = incomingOrders.filter(o => ['assigned', 'driver_assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status)).length;
   const completedOrdersCount = incomingOrders.filter(o => o.status === 'delivered').length;
   const cancelledOrdersCount = incomingOrders.filter(o => o.status === 'cancelled').length;
+  const pendingBargainsCount = (farmerBargains || []).filter(b => b.status === 'PENDING').length;
 
   const realDeliveredEarnings = incomingOrders
     .filter(o => o.status === 'delivered')
@@ -1819,6 +2022,26 @@ export default function FarmerPortal({ onLogout }) {
               {pendingOrdersCount > 0 && (
                 <span className="farmer-nav-badge" style={{ background: '#ef4444' }}>
                   {pendingOrdersCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              className={`farmer-nav-item ${activeNav === 'bargains' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveNav('bargains');
+                fetchFarmerBargains();
+              }}
+              style={{
+                background: activeNav === 'bargains' ? 'rgba(245, 158, 11, 0.25)' : undefined,
+                borderColor: activeNav === 'bargains' ? '#f59e0b' : undefined
+              }}
+            >
+              <IndianRupee size={18} color="#fbbf24" />
+              <span>Bulk Bargains</span>
+              {pendingBargainsCount > 0 && (
+                <span className="farmer-nav-badge" style={{ background: '#f59e0b' }}>
+                  {pendingBargainsCount}
                 </span>
               )}
             </button>
@@ -3347,7 +3570,11 @@ export default function FarmerPortal({ onLogout }) {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
                         <CloudRain size={14} color="#93c5fd" />
-                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Rain Chance: <strong style={{ color: '#93c5fd', fontWeight: '800' }}>{weatherData.rainChance}%</strong></span>
+                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Rain (Now): <strong style={{ color: '#93c5fd', fontWeight: '800' }}>{weatherData.rainChance}%</strong></span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+                        <CloudRain size={14} color="#60a5fa" />
+                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Peak Today: <strong style={{ color: '#60a5fa', fontWeight: '800' }}>{weatherData.peakRainChance ?? weatherData.rainChance}% ({weatherData.todayRainMm ?? '0.0'} mm)</strong></span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
                         <Wind size={14} color="#a7f3d0" />
@@ -3403,6 +3630,41 @@ export default function FarmerPortal({ onLogout }) {
                   </div>
                 </div>
 
+                {weatherData.error && (
+                  <div style={{
+                    marginTop: '10px',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    border: '1px solid #ef4444',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    color: '#fca5a5',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    position: 'relative',
+                    zIndex: 2
+                  }}>
+                    <span>⚠️ {weatherData.error}</span>
+                    <button
+                      onClick={() => fetchRealForecast()}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.4)',
+                        border: '1px solid #f87171',
+                        color: '#fff',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: '800'
+                      }}
+                    >
+                      Retry Sync
+                    </button>
+                  </div>
+                )}
+
                 {/* 12-Hour Predictive Hourly Timeline (Compact height) */}
                 {weatherData.hourly && weatherData.hourly.length > 0 && (
                   <div style={{
@@ -3418,7 +3680,7 @@ export default function FarmerPortal({ onLogout }) {
                       <div style={{ fontSize: '11px', fontWeight: '800', color: '#93c5fd', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                         <Clock size={12} color="#93c5fd" /> True Predictive Hourly Timeline (Next 12 Hours)
                       </div>
-                      <span style={{ fontSize: '10px', color: '#94a3b8' }}>Real ECMWF atmospheric forecast</span>
+                      <span style={{ fontSize: '10px', color: '#94a3b8' }}>Real Open-Meteo atmospheric forecast</span>
                     </div>
                     <div style={{
                       display: 'flex',
@@ -3482,7 +3744,7 @@ export default function FarmerPortal({ onLogout }) {
                     </div>
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(105px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))',
                       gap: '8px'
                     }}>
                       {weatherData.daily.map((d, idx) => (
@@ -3507,13 +3769,13 @@ export default function FarmerPortal({ onLogout }) {
                           <div style={{
                             fontSize: '9.5px',
                             marginTop: '3px',
-                            padding: '1px 5px',
+                            padding: '2px 5px',
                             borderRadius: '5px',
                             background: d.rainProb > 40 ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255, 255, 255, 0.08)',
                             color: d.rainProb > 40 ? '#93c5fd' : '#cbd5e1',
                             fontWeight: '700'
                           }}>
-                            💧 {d.rainProb}% Rain
+                            💧 Peak {d.rainProb}% ({d.rainAmount || '0.0'} mm)
                           </div>
                         </div>
                       ))}
@@ -4382,9 +4644,32 @@ export default function FarmerPortal({ onLogout }) {
                           </>
                         )}
                         {isPacked && (
-                          <span style={{ fontSize: '12px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
-                            <Clock size={14} /> Packed & Ready for Delivery Driver
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '12px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+                              <Clock size={14} /> Packed & Ready
+                            </span>
+                            <button
+                              onClick={() => {
+                                setSelectedDispatchOrderId(orderId);
+                                setShowDeliverySummon(true);
+                              }}
+                              style={{
+                                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                border: '1px solid rgba(245, 158, 11, 0.4)',
+                                color: '#ffffff',
+                                padding: '7px 14px',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <Truck size={14} /> Summon Delivery Driver
+                            </button>
+                          </div>
                         )}
                         {isInTransit && (
                           <span style={{ fontSize: '12px', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
@@ -4402,6 +4687,218 @@ export default function FarmerPortal({ onLogout }) {
                           </span>
                         )}
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            VIEW: BUYER BULK BARGAINS & NEGOTIATIONS
+            ========================================================================= */}
+        {activeNav === 'bargains' && (
+          <div style={{ padding: '24px 28px', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+              <div>
+                <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
+                  Buyer Bulk Bargains & Direct Price Offers
+                </h2>
+                <p style={{ fontSize: '13px', color: '#9ca3af', margin: '4px 0 0 0' }}>
+                  Review real bulk purchase price proposals from customers. Submissions are marked PENDING until you choose to Accept, Reject, or propose a Counter Offer.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchFarmerBargains}
+                disabled={loadingBargains}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#effbe7',
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  fontWeight: '700',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RotateCw size={14} style={{ animation: loadingBargains ? 'spin 1s linear infinite' : 'none' }} />
+                <span>Refresh Bargains</span>
+              </button>
+            </div>
+
+            {loadingBargains && farmerBargains.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9ca3af' }}>
+                <RotateCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
+                <p>Loading bulk buyer offers...</p>
+              </div>
+            ) : farmerBargains.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <IndianRupee size={36} color="#fbbf24" style={{ margin: '0 auto 12px auto', opacity: 0.6 }} />
+                <h3 style={{ color: '#f3f4f6', fontSize: '17px', margin: '0 0 6px 0' }}>No Bulk Price Offers Yet</h3>
+                <p style={{ color: '#9ca3af', fontSize: '13px', margin: 0 }}>
+                  When buyers offer wholesale prices on your fresh produce, their pending offers will appear here for your review and negotiation.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {farmerBargains.map((b) => {
+                  const bId = String(b._id || b.id);
+                  const isPending = b.status === 'PENDING';
+                  const isAccepted = b.status === 'ACCEPTED';
+                  const isRejected = b.status === 'REJECTED';
+                  const isCountered = b.status === 'COUNTERED';
+
+                  const discountPct = b.originalPrice && b.proposedPrice
+                    ? Math.round(((b.originalPrice - b.proposedPrice) / b.originalPrice) * 100)
+                    : 0;
+
+                  return (
+                    <div
+                      key={bId}
+                      style={{
+                        background: 'linear-gradient(145deg, rgba(14, 38, 30, 0.7), rgba(8, 24, 19, 0.8))',
+                        border: isPending ? '1.5px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '16px',
+                        padding: '20px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '16px', fontWeight: '800', color: '#effbe7' }}>
+                              {b.productTitle || 'Farm Produce'}
+                            </span>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '8px',
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              background: isPending ? 'rgba(245, 158, 11, 0.2)' : isAccepted ? 'rgba(16, 185, 129, 0.2)' : isCountered ? 'rgba(56, 189, 248, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                              color: isPending ? '#fbbf24' : isAccepted ? '#34d399' : isCountered ? '#38bdf8' : '#f87171',
+                              border: `1px solid ${isPending ? '#fbbf24' : isAccepted ? '#34d399' : isCountered ? '#38bdf8' : '#f87171'}`
+                            }}>
+                              {b.status}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                            Buyer: <strong style={{ color: '#effbe7' }}>{b.customerName || 'AgriLink Shopper'}</strong> • {new Date(b.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '11px', color: '#9ca3af' }}>Requested Quantity</div>
+                          <span style={{ fontSize: '18px', fontWeight: '800', color: '#effbe7' }}>
+                            {b.quantity} {b.productUnit || 'kg'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Pricing Comparison */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', background: 'rgba(0,0,0,0.25)', padding: '12px', borderRadius: '12px', marginBottom: '14px' }}>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>Catalog Price:</span>
+                          <strong style={{ color: '#effbe7', fontSize: '14px' }}>₹{b.originalPrice} / {b.productUnit || 'kg'}</strong>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#fbbf24', display: 'block' }}>Buyer Proposed Offer:</span>
+                          <strong style={{ color: '#fbbf24', fontSize: '16px' }}>₹{b.proposedPrice} / {b.productUnit || 'kg'}</strong>
+                          {discountPct > 0 && (
+                            <span style={{ fontSize: '11px', color: '#f87171', marginLeft: '6px' }}>(-{discountPct}%)</span>
+                          )}
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#a3c2b0', display: 'block' }}>Total Proposed Value:</span>
+                          <strong style={{ color: '#34d399', fontSize: '16px' }}>₹{(b.proposedPrice * b.quantity).toFixed(2)}</strong>
+                        </div>
+                        {b.counterPrice && (
+                          <div>
+                            <span style={{ fontSize: '11px', color: '#38bdf8', display: 'block' }}>Your Counter Price:</span>
+                            <strong style={{ color: '#38bdf8', fontSize: '15px' }}>₹{b.counterPrice} / {b.productUnit || 'kg'}</strong>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      {isPending && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '10px' }}>
+                          <button
+                            onClick={() => handleUpdateBargain(bId, 'accept')}
+                            style={{
+                              background: '#10b981',
+                              color: '#fff',
+                              border: 'none',
+                              padding: '8px 18px',
+                              borderRadius: '8px',
+                              fontSize: '12.5px',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <CheckCircle size={15} /> Accept Offer
+                          </button>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="Counter ₹"
+                              value={counterInputs[bId] || ''}
+                              onChange={e => setCounterInputs({ ...counterInputs, [bId]: e.target.value })}
+                              style={{
+                                width: '90px',
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                background: 'rgba(0,0,0,0.5)',
+                                border: '1px solid rgba(56, 189, 248, 0.4)',
+                                color: '#effbe7',
+                                fontSize: '12px',
+                                fontWeight: '700'
+                              }}
+                            />
+                            <button
+                              onClick={() => handleUpdateBargain(bId, 'counter', counterInputs[bId])}
+                              style={{
+                                background: '#0284c7',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '8px 14px',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: '700',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Counter Offer
+                            </button>
+                          </div>
+
+                          <button
+                            onClick={() => handleUpdateBargain(bId, 'reject')}
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              color: '#f87171',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              padding: '8px 14px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              fontWeight: '700',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -5378,13 +5875,13 @@ export default function FarmerPortal({ onLogout }) {
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Contact Phone</label>
+                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Contact Phone (Verified Login - Read Only)</label>
                     <input
                       type="text"
-                      value={profilePhone}
-                      onChange={e => setProfilePhone(e.target.value)}
+                      value={user?.phone || profilePhone}
+                      disabled
+                      style={{ opacity: 0.7, cursor: 'not-allowed' }}
                       className="input-field"
-                      required
                     />
                   </div>
                   <div>
@@ -5736,10 +6233,16 @@ export default function FarmerPortal({ onLogout }) {
       {/* Real-time Delivery Summon Beacon Modal */}
       <DeliverySummonModal
         isOpen={showDeliverySummon}
-        onClose={() => setShowDeliverySummon(false)}
+        orderId={selectedDispatchOrderId}
+        onClose={() => {
+          setShowDeliverySummon(false);
+          setSelectedDispatchOrderId(null);
+        }}
         onDriverConfirmed={(driver) => {
           showToast(`⚡ Driver ${driver.name} accepted summon! ETA: ${driver.eta}`, 'success');
+          fetchIncomingOrders();
           setShowDeliverySummon(false);
+          setSelectedDispatchOrderId(null);
         }}
       />
 

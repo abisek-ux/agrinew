@@ -80,6 +80,15 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// Pre-save hook: ensure password is always securely hashed if modified
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  if (!this.password.startsWith('$2a$') && !this.password.startsWith('$2b$')) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  next();
+});
+
 // Method to compare entered password with hashed password
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);

@@ -48,20 +48,31 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
   const senderName = 'AgriLink Support';
 
   const isLoginOtp = type === 'login';
-  const headerGradient = isLoginOtp
+  const isDeliveryOtp = type === 'delivery';
+  const headerGradient = isDeliveryOtp
+    ? 'linear-gradient(135deg, #0284c7, #0369a1)'
+    : isLoginOtp
     ? 'linear-gradient(135deg, #15803d, #166534)'
     : 'linear-gradient(135deg, #1B5E20, #2E7D32)';
-  const headerIcon = isLoginOtp ? '🔐' : '🌾';
-  const headingText = isLoginOtp ? 'Registration & Login Verification Code' : 'Password Reset Verification';
-  const bodyText = isLoginOtp
+  const headerIcon = isDeliveryOtp ? '📦' : isLoginOtp ? '🔐' : '🌾';
+  const headingText = isDeliveryOtp
+    ? 'Delivery Handover Verification Code'
+    : isLoginOtp
+    ? 'Registration & Login Verification Code'
+    : 'Password Reset Verification';
+  const bodyText = isDeliveryOtp
+    ? `Your delivery partner has arrived at your address with your AgriLink farm order. Please provide the 6-digit handover code below to your delivery driver to complete delivery:`
+    : isLoginOtp
     ? `Welcome to AgriLink! Use the verification code below to verify your email and complete your registration:`
     : `We received a request to reset your password. Use the following 6-digit verification code to complete the reset:`;
-  const otpBorderColor = isLoginOtp ? '#22c55e' : '#2E7D32';
-  const otpBgColor = isLoginOtp ? '#f0fdf4' : '#F1F8E9';
-  const otpTextColor = isLoginOtp ? '#15803d' : '#1B5E20';
-  const headingColor = isLoginOtp ? '#15803d' : '#1B5E20';
+  const otpBorderColor = isDeliveryOtp ? '#0284c7' : isLoginOtp ? '#22c55e' : '#2E7D32';
+  const otpBgColor = isDeliveryOtp ? '#f0f9ff' : isLoginOtp ? '#f0fdf4' : '#F1F8E9';
+  const otpTextColor = isDeliveryOtp ? '#0369a1' : isLoginOtp ? '#15803d' : '#1B5E20';
+  const headingColor = isDeliveryOtp ? '#0284c7' : isLoginOtp ? '#15803d' : '#1B5E20';
   const expiryMins = '10';
-  const warningText = isLoginOtp
+  const warningText = isDeliveryOtp
+    ? 'Only provide this verification code to the delivery driver AFTER physically inspecting your package at your doorstep.'
+    : isLoginOtp
     ? 'If you did not attempt to register on AgriLink, please disregard this message.'
     : 'If you did not request this code, you can safely ignore this email.';
 

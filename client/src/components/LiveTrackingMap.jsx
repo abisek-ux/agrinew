@@ -1,11 +1,15 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 
 export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliveryLoc, status }) {
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markersRef = useRef({});
-  const polylineRef = useRef(null);
+  const roadPolylineRef = useRef(null);
+
+  const [routeInfo, setRouteInfo] = useState(null); // { distanceKm, durationMins, isRoadRoute }
+  const [routeUnavailable, setRouteUnavailable] = useState(false);
+  const [loadingRoute, setLoadingRoute] = useState(false);
 
   // Extract from order or direct props
   const effectiveCustomer = customerLoc || order?.customerLocation;
@@ -36,8 +40,8 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
     }
 
     // Default center fallback if coordinates missing
-    const centerLat = fLat || cLat || 12.5222;
-    const centerLng = fLng || cLng || 76.9004;
+    const centerLat = dLat || fLat || cLat || 12.5222;
+    const centerLng = dLng || fLng || cLng || 76.9004;
 
     const map = L.map(mapRef.current).setView([centerLat, centerLng], 12);
     leafletMap.current = map;
@@ -90,17 +94,77 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
       latLngPoints.push([dLat, dLng]);
     }
 
-    // 4. Polyline Route if 2 or more points
-    if (latLngPoints.length >= 2) {
-      polylineRef.current = L.polyline(latLngPoints, {
-        color: '#F9A825',
-        dashArray: '8, 8',
-        weight: 4
-      }).addTo(map);
-
+    // Fit bounds to markers
+    if (latLngPoints.length > 0) {
       const bounds = L.latLngBounds(latLngPoints);
       map.fitBounds(bounds, { padding: [50, 50] });
     }
+
+    // 4. Fetch Actual Road Routing from OSRM (Open Source Routing Machine)
+    // Never draw straight lines across terrain (Problem 9 - Route Bug)
+    const fetchRoadRoute = async () => {
+      // Build waypoints string: lng,lat;lng,lat
+      let waypoints = [];
+      if (fLat && fLng) waypoints.push(`${fLng},${fLat}`);
+      if (hasDriverBroadcast && dLat && dLng) waypoints.push(`${dLng},${dLat}`);
+      if (cLat && cLng) waypoints.push(`${cLng},${cLat}`);
+
+      if (waypoints.length < 2) {
+        setRouteInfo(null);
+        return;
+      }
+
+      setLoadingRoute(true);
+      setRouteUnavailable(false);
+
+      try {
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
+        const res = await fetch(osrmUrl);
+        if (!res.ok) throw new Error(`Routing status ${res.status}`);
+        const data = await res.json();
+
+        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+
+          if (roadPolylineRef.current) {
+            map.removeLayer(roadPolylineRef.current);
+          }
+
+          roadPolylineRef.current = L.polyline(coords, {
+            color: '#10b981',
+            weight: 5,
+            opacity: 0.85,
+            lineJoin: 'round'
+          }).addTo(map);
+
+          map.fitBounds(roadPolylineRef.current.getBounds(), { padding: [40, 40] });
+
+          const distKm = (route.distance / 1000).toFixed(1);
+          const durMins = Math.round(route.duration / 60);
+
+          setRouteInfo({
+            distanceKm: distKm,
+            durationMins: durMins,
+            isRoadRoute: true
+          });
+          setRouteUnavailable(false);
+        } else {
+          // If no route returned by OSRM, do NOT draw a fake straight line
+          setRouteUnavailable(true);
+          setRouteInfo(null);
+        }
+      } catch (err) {
+        console.warn('Road routing service notice:', err.message);
+        // Explicitly report Route Unavailable instead of pretending straight line is a road
+        setRouteUnavailable(true);
+        setRouteInfo(null);
+      } finally {
+        setLoadingRoute(false);
+      }
+    };
+
+    fetchRoadRoute();
 
     return () => {
       if (leafletMap.current) {
@@ -136,6 +200,7 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
     <div style={{ position: 'relative', width: '100%' }}>
       <div ref={mapRef} style={{ height: '280px', width: '100%', borderRadius: '16px', border: '1.5px solid rgba(110, 219, 208, 0.25)' }} />
 
+      {/* Top Right Live Telemetry Badge */}
       <div style={{
         position: 'absolute',
         top: '10px',
@@ -168,6 +233,37 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
               ? 'Delivery Complete'
               : "Waiting for driver's location"}
         </div>
+      </div>
+
+      {/* Bottom Road Routing HUD Overlay (Problem 9: Road Route, Distance, Travel Time) */}
+      <div style={{
+        position: 'absolute',
+        bottom: '10px',
+        left: '10px',
+        zIndex: 500,
+        background: 'rgba(7, 26, 22, 0.92)',
+        backdropFilter: 'blur(8px)',
+        padding: '6px 12px',
+        borderRadius: '8px',
+        border: '1px solid rgba(52, 211, 153, 0.35)',
+        fontSize: '11.5px',
+        color: '#dcfce7',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }}>
+        {loadingRoute ? (
+          <span>Calculating verified road geometry...</span>
+        ) : routeUnavailable ? (
+          <span style={{ color: '#fca5a5', fontWeight: '700' }}>⚠️ Route unavailable</span>
+        ) : routeInfo ? (
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <span>🛣️ <strong>{routeInfo.distanceKm} km</strong> road route</span>
+            <span>⏱️ ETA: <strong>{routeInfo.durationMins} mins</strong></span>
+          </div>
+        ) : (
+          <span>Connecting to logistics road network...</span>
+        )}
       </div>
     </div>
   );
