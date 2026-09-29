@@ -118,7 +118,13 @@ const addProduct = async (req, res) => {
       farmerPhone,
       farmerEmail,
       farmerNative,
-      location
+      location,
+      variety,
+      qualityGrade,
+      cultivationType,
+      irrigationMethod,
+      minOrderQty,
+      allowBargain
     } = req.body;
 
     if (!title || !title.trim()) {
@@ -129,6 +135,49 @@ const addProduct = async (req, res) => {
     }
     if (stock === undefined || isNaN(Number(stock)) || Number(stock) < 0) {
       return res.status(400).json({ success: false, message: 'A valid non-negative available quantity (stock) is required' });
+    }
+
+    // Validate minOrderQty (must be > 0 if supplied)
+    let parsedMinOrderQty = 1;
+    if (minOrderQty !== undefined && minOrderQty !== null && minOrderQty !== '') {
+      const numMinOrder = Number(minOrderQty);
+      if (isNaN(numMinOrder) || numMinOrder <= 0) {
+        return res.status(400).json({ success: false, message: 'Minimum order quantity must be greater than 0' });
+      }
+      parsedMinOrderQty = numMinOrder;
+    }
+
+    // Helper to safely validate and trim optional string fields without fake defaults
+    const cleanOptionalString = (val, fieldName) => {
+      if (val === undefined || val === null) return '';
+      if (typeof val !== 'string') {
+        throw new Error(`${fieldName} must be a text string`);
+      }
+      return val.trim();
+    };
+
+    let cleanedVariety = '';
+    let cleanedQualityGrade = '';
+    let cleanedCultivationType = '';
+    let cleanedIrrigationMethod = '';
+
+    try {
+      cleanedVariety = cleanOptionalString(variety, 'variety');
+      cleanedQualityGrade = cleanOptionalString(qualityGrade, 'qualityGrade');
+      cleanedCultivationType = cleanOptionalString(cultivationType, 'cultivationType');
+      cleanedIrrigationMethod = cleanOptionalString(irrigationMethod, 'irrigationMethod');
+    } catch (valErr) {
+      return res.status(400).json({ success: false, message: valErr.message });
+    }
+
+    let parsedAllowBargain = true;
+    if (allowBargain !== undefined && allowBargain !== null) {
+      if (typeof allowBargain === 'boolean') {
+        parsedAllowBargain = allowBargain;
+      } else if (typeof allowBargain === 'string') {
+        if (allowBargain.toLowerCase() === 'false') parsedAllowBargain = false;
+        else if (allowBargain.toLowerCase() === 'true') parsedAllowBargain = true;
+      }
     }
 
     const farmerId = String(req.user.id || req.user._id || 'farmer_1');
@@ -154,7 +203,14 @@ const addProduct = async (req, res) => {
       farmerPhone: computedFarmerPhone,
       farmerEmail: computedFarmerEmail,
       farmerNative: computedFarmerNative,
-      location: computedLocation
+      location: computedLocation,
+      // Optional agricultural fields
+      variety: cleanedVariety,
+      qualityGrade: cleanedQualityGrade,
+      cultivationType: cleanedCultivationType,
+      irrigationMethod: cleanedIrrigationMethod,
+      minOrderQty: parsedMinOrderQty,
+      allowBargain: parsedAllowBargain
     };
 
     if (isConnected()) {
@@ -174,28 +230,58 @@ const addProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { price, stock, title, unit, description, image, category, location, harvestDate } = req.body;
+    const {
+      price,
+      stock,
+      title,
+      unit,
+      description,
+      image,
+      category,
+      location,
+      harvestDate,
+      variety,
+      qualityGrade,
+      cultivationType,
+      irrigationMethod,
+      minOrderQty,
+      allowBargain
+    } = req.body;
     const userId = String(req.user?.id || req.user?._id);
 
     if (req.user?.role !== 'farmer') {
       return res.status(403).json({ success: false, message: 'Only farmers can manage products' });
     }
 
-    if (isConnected()) {
-      const product = await Product.findById(id);
-      if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-      if (String(product.farmerId) !== userId) {
-        return res.status(403).json({ success: false, message: 'You can only update your own products' });
+    // Common validations for update
+    if (price !== undefined && (isNaN(Number(price)) || Number(price) < 0)) {
+      return res.status(400).json({ success: false, message: 'Invalid price' });
+    }
+    if (stock !== undefined && (isNaN(Number(stock)) || Number(stock) < 0)) {
+      return res.status(400).json({ success: false, message: 'Invalid stock quantity' });
+    }
+    if (minOrderQty !== undefined && minOrderQty !== null && minOrderQty !== '') {
+      const numMinOrder = Number(minOrderQty);
+      if (isNaN(numMinOrder) || numMinOrder <= 0) {
+        return res.status(400).json({ success: false, message: 'Minimum order quantity must be greater than 0' });
       }
+    }
+    if (variety !== undefined && variety !== null && typeof variety !== 'string') {
+      return res.status(400).json({ success: false, message: 'variety must be a text string' });
+    }
+    if (qualityGrade !== undefined && qualityGrade !== null && typeof qualityGrade !== 'string') {
+      return res.status(400).json({ success: false, message: 'qualityGrade must be a text string' });
+    }
+    if (cultivationType !== undefined && cultivationType !== null && typeof cultivationType !== 'string') {
+      return res.status(400).json({ success: false, message: 'cultivationType must be a text string' });
+    }
+    if (irrigationMethod !== undefined && irrigationMethod !== null && typeof irrigationMethod !== 'string') {
+      return res.status(400).json({ success: false, message: 'irrigationMethod must be a text string' });
+    }
 
-      if (price !== undefined) {
-        if (isNaN(Number(price)) || Number(price) < 0) return res.status(400).json({ success: false, message: 'Invalid price' });
-        product.price = Number(price);
-      }
-      if (stock !== undefined) {
-        if (isNaN(Number(stock)) || Number(stock) < 0) return res.status(400).json({ success: false, message: 'Invalid stock quantity' });
-        product.stock = Number(stock);
-      }
+    const applyUpdates = (product) => {
+      if (price !== undefined) product.price = Number(price);
+      if (stock !== undefined) product.stock = Number(stock);
       if (title !== undefined && title.trim()) product.title = title.trim();
       if (unit !== undefined) product.unit = unit.trim();
       if (description !== undefined) product.description = description.trim();
@@ -204,6 +290,39 @@ const updateProduct = async (req, res) => {
       if (location !== undefined) product.location = location;
       if (harvestDate !== undefined) product.harvestDate = new Date(harvestDate);
 
+      // Optional agricultural fields
+      if (minOrderQty !== undefined && minOrderQty !== null && minOrderQty !== '') {
+        product.minOrderQty = Number(minOrderQty);
+      }
+      if (variety !== undefined && variety !== null) {
+        product.variety = variety.trim();
+      }
+      if (qualityGrade !== undefined && qualityGrade !== null) {
+        product.qualityGrade = qualityGrade.trim();
+      }
+      if (cultivationType !== undefined && cultivationType !== null) {
+        product.cultivationType = cultivationType.trim();
+      }
+      if (irrigationMethod !== undefined && irrigationMethod !== null) {
+        product.irrigationMethod = irrigationMethod.trim();
+      }
+      if (allowBargain !== undefined && allowBargain !== null) {
+        if (typeof allowBargain === 'boolean') {
+          product.allowBargain = allowBargain;
+        } else if (typeof allowBargain === 'string') {
+          product.allowBargain = allowBargain.toLowerCase() !== 'false';
+        }
+      }
+    };
+
+    if (isConnected()) {
+      const product = await Product.findById(id);
+      if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+      if (String(product.farmerId) !== userId) {
+        return res.status(403).json({ success: false, message: 'You can only update your own products' });
+      }
+
+      applyUpdates(product);
       await product.save();
       return res.json(product);
     } else {
@@ -213,22 +332,7 @@ const updateProduct = async (req, res) => {
         return res.status(403).json({ success: false, message: 'You can only update your own products' });
       }
 
-      if (price !== undefined) {
-        if (isNaN(Number(price)) || Number(price) < 0) return res.status(400).json({ success: false, message: 'Invalid price' });
-        product.price = Number(price);
-      }
-      if (stock !== undefined) {
-        if (isNaN(Number(stock)) || Number(stock) < 0) return res.status(400).json({ success: false, message: 'Invalid stock quantity' });
-        product.stock = Number(stock);
-      }
-      if (title !== undefined && title.trim()) product.title = title.trim();
-      if (unit !== undefined) product.unit = unit.trim();
-      if (description !== undefined) product.description = description.trim();
-      if (image !== undefined) product.image = image;
-      if (category !== undefined) product.category = category;
-      if (location !== undefined) product.location = location;
-      if (harvestDate !== undefined) product.harvestDate = new Date(harvestDate);
-
+      applyUpdates(product);
       return res.json(product);
     }
   } catch (error) {

@@ -2705,3 +2705,32 @@ canvas {
   }
 }
 
+/* Phase 4 — Skeleton Loaders & Mobile Checkout Helpers */
+@keyframes agrilink-pulse {
+  0%, 100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+.skeleton-box {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  animation: agrilink-pulse 1.5s ease-in-out infinite;
+}
+
+@media (max-width: 640px) {
+  .checkout-mobile-footer {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(7, 24, 20, 0.98);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(110, 219, 208, 0.25);
+    padding: 12px 16px;
+    z-index: 100;
+  }
+}

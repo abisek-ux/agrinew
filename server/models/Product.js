@@ -26,7 +26,14 @@ const productSchema = new mongoose.Schema(
       lat: { type: Number, default: 12.5222 },
       lng: { type: Number, default: 76.9004 },
       address: { type: String, default: 'Mandya Organic Farm, Karnataka, India' }
-    }
+    },
+    // Optional Agricultural Fields (Phase 1 Enrichment)
+    variety: { type: String, default: '', trim: true },
+    qualityGrade: { type: String, default: '', trim: true },
+    cultivationType: { type: String, default: '', trim: true },
+    irrigationMethod: { type: String, default: '', trim: true },
+    minOrderQty: { type: Number, default: 1, min: 1 },
+    allowBargain: { type: Boolean, default: true }
   },
   { timestamps: true }
 );

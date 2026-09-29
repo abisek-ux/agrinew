@@ -1377,7 +1377,7 @@ export default function FarmerPortal({ onLogout }) {
   const [currentOtpNotif, setCurrentOtpNotif] = useState(null);
   const [notificationsList, setNotificationsList] = useState([]);
 
-  // Add Product Form State
+  // Add Product Form State (Progressive Disclosure)
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('vegetable');
   const [price, setPrice] = useState('');
@@ -1387,6 +1387,20 @@ export default function FarmerPortal({ onLogout }) {
   const [image, setImage] = useState(PRESET_IMAGES.vegetable[0].url);
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Phase 1 / Phase 2 Agricultural Fields
+  const [variety, setVariety] = useState('');
+  const [harvestDate, setHarvestDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [qualityGrade, setQualityGrade] = useState('');
+  const [cultivationType, setCultivationType] = useState('');
+  const [irrigationMethod, setIrrigationMethod] = useState('');
+  const [minOrderQty, setMinOrderQty] = useState('1');
+  const [allowBargain, setAllowBargain] = useState(true);
+
+  // Progressive Disclosure Accordions & Live Preview
+  const [showHarvestSection, setShowHarvestSection] = useState(false);
+  const [showCultivationSection, setShowCultivationSection] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Farm Location Picker State
   const [farmLocation, setFarmLocation] = useState(
@@ -1415,6 +1429,14 @@ export default function FarmerPortal({ onLogout }) {
   const [editDescription, setEditDescription] = useState('');
   const [editImage, setEditImage] = useState('');
   const [editHarvestDate, setEditHarvestDate] = useState('');
+  const [editVariety, setEditVariety] = useState('');
+  const [editQualityGrade, setEditQualityGrade] = useState('');
+  const [editCultivationType, setEditCultivationType] = useState('');
+  const [editIrrigationMethod, setEditIrrigationMethod] = useState('');
+  const [editMinOrderQty, setEditMinOrderQty] = useState('1');
+  const [editAllowBargain, setEditAllowBargain] = useState(true);
+  const [editShowHarvestSection, setEditShowHarvestSection] = useState(false);
+  const [editShowCultivationSection, setEditShowCultivationSection] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Profile Edit State
@@ -1741,35 +1763,71 @@ export default function FarmerPortal({ onLogout }) {
       showToast('Responsibility check: Only registered Farmer accounts can publish produce.', 'error');
       return;
     }
-    if (!title.trim() || !price || isNaN(Number(price))) {
-      showToast('Please specify a valid Produce Title and Price', 'error');
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      showToast('Please enter the produce name (e.g. Country Tomato)', 'error');
+      return;
+    }
+    const numPrice = Number(price);
+    if (isNaN(numPrice) || numPrice <= 0) {
+      showToast('Please enter a valid price greater than ₹0', 'error');
+      return;
+    }
+    const numStock = Number(stock);
+    if (isNaN(numStock) || numStock <= 0) {
+      showToast('Available quantity must be greater than 0', 'error');
+      return;
+    }
+    const numMinOrder = Number(minOrderQty);
+    if (isNaN(numMinOrder) || numMinOrder <= 0) {
+      showToast('Minimum order quantity must be at least 1', 'error');
       return;
     }
 
     setLoading(true);
     try {
       const payload = {
-        title: title.trim(),
+        title: trimmedTitle,
         category,
-        price: Number(price),
+        price: numPrice,
         unit: unit.trim() || 'kg',
-        stock: Number(stock) || 50,
+        stock: numStock,
         description: description.trim(),
         image: image || PRESET_IMAGES[category]?.[0]?.url || PRESET_IMAGES.vegetable[0].url,
+        harvestDate: harvestDate ? new Date(harvestDate) : new Date(),
         farmerName: `${user?.firstName || 'Aravinth'} ${user?.lastName || 'Kumar'}`.trim(),
         farmerPhone: user?.phone || '+91 98421 55678',
         farmerEmail: user?.email || 'farmer@agrisun.in',
         farmerNative: user?.nativePlace || selectedCity || 'Chidambaram, Tamil Nadu',
-        location: farmLocation
+        location: farmLocation,
+        // Agricultural fields (Phase 1 & 2)
+        variety: variety.trim(),
+        qualityGrade: qualityGrade.trim(),
+        cultivationType: cultivationType.trim(),
+        irrigationMethod: irrigationMethod.trim(),
+        minOrderQty: numMinOrder,
+        allowBargain: Boolean(allowBargain)
       };
 
       const res = await productAPI.addProduct(payload);
       setFarmerProducts([res.data, ...farmerProducts]);
-      showToast(`Successfully published ${title} to live marketplace!`, 'success');
+      showToast(`Successfully published ${trimmedTitle} to live marketplace!`, 'success');
+
+      // Reset form states
       setTitle('');
       setPrice('');
+      setStock('100');
       setDescription('');
+      setVariety('');
+      setQualityGrade('');
+      setCultivationType('');
+      setIrrigationMethod('');
+      setMinOrderQty('1');
+      setAllowBargain(true);
       setShowAddForm(false);
+      setShowPreview(false);
+      setShowHarvestSection(false);
+      setShowCultivationSection(false);
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to publish produce';
       showToast(msg, 'error');
@@ -1788,31 +1846,55 @@ export default function FarmerPortal({ onLogout }) {
     setEditDescription(prod.description || '');
     setEditImage(prod.image || '');
     setEditHarvestDate(prod.harvestDate ? new Date(prod.harvestDate).toISOString().split('T')[0] : '');
+    // Agricultural fields (Phase 1 & 2)
+    setEditVariety(prod.variety || '');
+    setEditQualityGrade(prod.qualityGrade || '');
+    setEditCultivationType(prod.cultivationType || '');
+    setEditIrrigationMethod(prod.irrigationMethod || '');
+    setEditMinOrderQty(String(prod.minOrderQty || '1'));
+    setEditAllowBargain(prod.allowBargain !== false);
+    setEditShowHarvestSection(Boolean(prod.variety || prod.qualityGrade || prod.harvestDate));
+    setEditShowCultivationSection(Boolean(prod.cultivationType || prod.irrigationMethod));
   };
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingProduct) return;
-    if (isNaN(Number(editPrice)) || Number(editPrice) < 0) {
-      showToast('Price must be a valid non-negative number', 'error');
+    const numPrice = Number(editPrice);
+    if (isNaN(numPrice) || numPrice <= 0) {
+      showToast('Price must be greater than ₹0', 'error');
       return;
     }
-    if (isNaN(Number(editStock)) || Number(editStock) < 0) {
+    const numStock = Number(editStock);
+    if (isNaN(numStock) || numStock < 0) {
       showToast('Stock quantity cannot be negative', 'error');
       return;
     }
+    const numMinOrder = Number(editMinOrderQty);
+    if (isNaN(numMinOrder) || numMinOrder <= 0) {
+      showToast('Minimum order quantity must be at least 1', 'error');
+      return;
+    }
+
     setSavingEdit(true);
     try {
       const prodId = editingProduct._id || editingProduct.id;
       const payload = {
         title: editTitle.trim(),
         category: editCategory,
-        price: Number(editPrice),
+        price: numPrice,
         unit: editUnit.trim() || 'kg',
-        stock: Math.max(0, Number(editStock) || 0),
+        stock: Math.max(0, numStock),
         description: editDescription.trim(),
         image: editImage || editingProduct.image,
-        harvestDate: editHarvestDate ? new Date(editHarvestDate) : undefined
+        harvestDate: editHarvestDate ? new Date(editHarvestDate) : undefined,
+        // Agricultural fields (Phase 1 & 2)
+        variety: editVariety.trim(),
+        qualityGrade: editQualityGrade.trim(),
+        cultivationType: editCultivationType.trim(),
+        irrigationMethod: editIrrigationMethod.trim(),
+        minOrderQty: numMinOrder,
+        allowBargain: Boolean(editAllowBargain)
       };
       const res = await productAPI.updateProduct(prodId, payload);
       setFarmerProducts(farmerProducts.map(p =>
@@ -4203,99 +4285,366 @@ export default function FarmerPortal({ onLogout }) {
                 </div>
 
                 <form onSubmit={handleAddProduct}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#d1d5db', display: 'block', marginBottom: '6px' }}>
-                        Produce / Seed Title *
-                      </label>
-                      <input
-                        type="text"
-                        value={title}
-                        onChange={e => setTitle(e.target.value)}
-                        placeholder="e.g. Organic Honeycrisp Apples"
-                        className="input-field"
-                        required
-                      />
+                  {/* ─────────────────────────────────────────────────────────────
+                      SECTION 1: BASIC PRODUCE INFORMATION (Always Visible)
+                      ───────────────────────────────────────────────────────────── */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '800', color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>1. Basic Produce Information</span>
+                      <span style={{ fontSize: '10px', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#6ee7b7', padding: '1px 6px', borderRadius: '4px' }}>Required</span>
                     </div>
 
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#d1d5db', display: 'block', marginBottom: '6px' }}>
-                        Category *
-                      </label>
-                      <select
-                        value={category}
-                        onChange={e => handleCategoryChange(e.target.value)}
-                        className="input-field"
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <option value="vegetable">🥬 Farm-Fresh Vegetables</option>
-                        <option value="fruit">🍎 Fresh Organic Fruits</option>
-                        <option value="seed">🌱 Agriculture Seeds & Grains</option>
-                      </select>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '6px' }}>
+                          Produce Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={title}
+                          onChange={e => setTitle(e.target.value)}
+                          placeholder="e.g. Country Tomato, Fresh Spinach, Sona Masoori"
+                          className="input-field"
+                          style={{ minHeight: '48px', fontSize: '14px', boxSizing: 'border-box' }}
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '6px' }}>
+                          Category *
+                        </label>
+                        <select
+                          value={category}
+                          onChange={e => handleCategoryChange(e.target.value)}
+                          className="input-field"
+                          style={{ minHeight: '48px', fontSize: '14px', cursor: 'pointer', boxSizing: 'border-box' }}
+                        >
+                          <option value="vegetable">🥬 Farm-Fresh Vegetables</option>
+                          <option value="fruit">🍎 Fresh Organic Fruits</option>
+                          <option value="grain">🌾 Grains, Pulses & Cereals</option>
+                          <option value="seed">🌱 Agriculture Seeds</option>
+                          <option value="dairy">🥛 Dairy & Farm Fresh</option>
+                          <option value="spices">🌶️ Spices & Condiments</option>
+                          <option value="other">📦 Other Produce</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '6px' }}>
+                          Farmer Direct Price (₹) *
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#10b981', fontWeight: '800', fontSize: '15px' }}>₹</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min="0.01"
+                            value={price}
+                            onChange={e => setPrice(e.target.value)}
+                            placeholder="e.g. 45"
+                            className="input-field"
+                            style={{ minHeight: '48px', fontSize: '14px', paddingLeft: '30px', boxSizing: 'border-box' }}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '6px' }}>
+                          Pricing Unit *
+                        </label>
+                        <select
+                          value={unit}
+                          onChange={e => setUnit(e.target.value)}
+                          className="input-field"
+                          style={{ minHeight: '48px', fontSize: '14px', cursor: 'pointer', boxSizing: 'border-box' }}
+                        >
+                          <option value="kg">Per Kilogram (kg)</option>
+                          <option value="quintal">Per Quintal (100 kg)</option>
+                          <option value="bunch">Per Bunch (கட்டு)</option>
+                          <option value="dozen">Per Dozen (12 pcs)</option>
+                          <option value="box">Per Box / Crate</option>
+                          <option value="g">Per Gram (g)</option>
+                          <option value="litre">Per Litre (L)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '4px' }}>
+                          Available Quantity *
+                        </label>
+                        <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
+                          Total stock ready for sale right now
+                        </span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={stock}
+                          onChange={e => setStock(e.target.value)}
+                          placeholder="e.g. 100"
+                          className="input-field"
+                          style={{ minHeight: '48px', fontSize: '14px', boxSizing: 'border-box' }}
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '4px' }}>
+                          Minimum Order Quantity *
+                        </label>
+                        <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
+                          Smallest quantity a customer can order
+                        </span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={minOrderQty}
+                          onChange={e => setMinOrderQty(e.target.value)}
+                          placeholder="1"
+                          className="input-field"
+                          style={{ minHeight: '48px', fontSize: '14px', boxSizing: 'border-box' }}
+                          required
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#d1d5db', display: 'block', marginBottom: '6px' }}>
-                        Farmer Direct Price (₹) *
-                      </label>
+                    {/* Bargain Availability Checkbox */}
+                    <div style={{
+                      marginTop: '14px',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      borderRadius: '10px',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      cursor: 'pointer'
+                    }} onClick={() => setAllowBargain(!allowBargain)}>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        value={price}
-                        onChange={e => setPrice(e.target.value)}
-                        placeholder="e.g. 50"
-                        className="input-field"
-                        required
+                        type="checkbox"
+                        checked={allowBargain}
+                        onChange={e => setAllowBargain(e.target.checked)}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#10b981' }}
+                        onClick={e => e.stopPropagation()}
                       />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#d1d5db', display: 'block', marginBottom: '6px' }}>
-                        Pricing Unit
-                      </label>
-                      <input
-                        type="text"
-                        value={unit}
-                        onChange={e => setUnit(e.target.value)}
-                        placeholder="kg / bunch / dozen / pack"
-                        className="input-field"
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#d1d5db', display: 'block', marginBottom: '6px' }}>
-                        Initial Stock Quantity
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={stock}
-                        onChange={e => setStock(e.target.value)}
-                        className="input-field"
-                      />
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: '700', color: '#effbe7' }}>
+                          Allow customers to negotiate price (Bulk Bargaining)
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: '#9ca3af' }}>
+                          Customers can submit bulk price offers; you retain complete power to accept, decline, or counter.
+                        </div>
+                      </div>
                     </div>
                   </div>
 
+                  {/* ─────────────────────────────────────────────────────────────
+                      SECTION 2: HARVEST & QUALITY DETAILS (Optional Accordion)
+                      ───────────────────────────────────────────────────────────── */}
+                  <div style={{
+                    marginBottom: '16px',
+                    border: '1px solid rgba(251, 191, 36, 0.3)',
+                    borderRadius: '12px',
+                    background: 'rgba(251, 191, 36, 0.03)',
+                    overflow: 'hidden'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowHarvestSection(!showHarvestSection)}
+                      style={{
+                        width: '100%',
+                        padding: '14px 16px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#fbbf24',
+                        fontSize: '13.5px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        textAlign: 'left'
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        🌾 {showHarvestSection ? 'Hide Harvest & Quality Details' : '+ Add Harvest & Quality Details (Optional)'}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#d97706', background: 'rgba(251, 191, 36, 0.15)', padding: '2px 8px', borderRadius: '10px' }}>
+                        {showHarvestSection ? 'Collapse ▲' : 'Expand ▼'}
+                      </span>
+                    </button>
+
+                    {showHarvestSection && (
+                      <div style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(251, 191, 36, 0.15)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginTop: '12px' }}>
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '4px' }}>
+                            Crop Variety
+                          </label>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
+                            Specific cultivar name
+                          </span>
+                          <input
+                            type="text"
+                            value={variety}
+                            onChange={e => setVariety(e.target.value)}
+                            placeholder="e.g. Sona Masoori, Alphonso, PKM-1, G4 Chilli"
+                            className="input-field"
+                            style={{ minHeight: '46px', fontSize: '13.5px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '4px' }}>
+                            Harvest Date
+                          </label>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
+                            Date harvested from the field
+                          </span>
+                          <input
+                            type="date"
+                            value={harvestDate}
+                            onChange={e => setHarvestDate(e.target.value)}
+                            className="input-field"
+                            style={{ minHeight: '46px', fontSize: '13.5px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '4px' }}>
+                            Quality Grade
+                          </label>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
+                            Size & appearance sorting
+                          </span>
+                          <select
+                            value={qualityGrade}
+                            onChange={e => setQualityGrade(e.target.value)}
+                            className="input-field"
+                            style={{ minHeight: '46px', fontSize: '13.5px', cursor: 'pointer', boxSizing: 'border-box' }}
+                          >
+                            <option value="">Not Specified (Leave blank)</option>
+                            <option value="Premium">🌟 Premium Export Quality</option>
+                            <option value="Grade A">⭐ Grade A Standard Quality</option>
+                            <option value="Standard">🌾 Standard Market Grade</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ─────────────────────────────────────────────────────────────
+                      SECTION 3: CULTIVATION DETAILS (Optional Accordion)
+                      ───────────────────────────────────────────────────────────── */}
+                  <div style={{
+                    marginBottom: '18px',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    borderRadius: '12px',
+                    background: 'rgba(56, 189, 248, 0.03)',
+                    overflow: 'hidden'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowCultivationSection(!showCultivationSection)}
+                      style={{
+                        width: '100%',
+                        padding: '14px 16px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#38bdf8',
+                        fontSize: '13.5px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        textAlign: 'left'
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        🌱 {showCultivationSection ? 'Hide Cultivation Details' : '+ Add Cultivation Details (Optional)'}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#0284c7', background: 'rgba(56, 189, 248, 0.15)', padding: '2px 8px', borderRadius: '10px' }}>
+                        {showCultivationSection ? 'Collapse ▲' : 'Expand ▼'}
+                      </span>
+                    </button>
+
+                    {showCultivationSection && (
+                      <div style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginTop: '12px' }}>
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '4px' }}>
+                            Cultivation Type
+                          </label>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
+                            Farming practice applied
+                          </span>
+                          <select
+                            value={cultivationType}
+                            onChange={e => setCultivationType(e.target.value)}
+                            className="input-field"
+                            style={{ minHeight: '46px', fontSize: '13.5px', cursor: 'pointer', boxSizing: 'border-box' }}
+                          >
+                            <option value="">Not Specified (Leave blank)</option>
+                            <option value="Natural">🌱 Natural / Zero-Budget Farming</option>
+                            <option value="Organic">🌿 Organic (Farmer-Reported)</option>
+                            <option value="Conventional">🚜 Conventional Farming</option>
+                            <option value="Hydroponic">💧 Hydroponic / Polyhouse</option>
+                          </select>
+                          {cultivationType === 'Organic' && (
+                            <span style={{ fontSize: '10.5px', color: '#fbbf24', marginTop: '4px', display: 'block' }}>
+                              ⚠️ Displayed to buyers as farmer-reported cultivation type
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '4px' }}>
+                            Irrigation Method
+                          </label>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
+                            Water supply method
+                          </span>
+                          <select
+                            value={irrigationMethod}
+                            onChange={e => setIrrigationMethod(e.target.value)}
+                            className="input-field"
+                            style={{ minHeight: '46px', fontSize: '13.5px', cursor: 'pointer', boxSizing: 'border-box' }}
+                          >
+                            <option value="">Not Specified (Leave blank)</option>
+                            <option value="Drip">💧 Drip Irrigation</option>
+                            <option value="Rain-fed">🌧️ Rain-fed (Dryland)</option>
+                            <option value="Borewell">⚡ Borewell / Deep Well</option>
+                            <option value="Canal/River">🌊 Canal / River Basin</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Produce Description */}
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#d1d5db', display: 'block', marginBottom: '6px' }}>
-                      Produce Description
+                    <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '6px' }}>
+                      Produce Description (Optional)
                     </label>
                     <textarea
                       value={description}
                       onChange={e => setDescription(e.target.value)}
-                      placeholder="e.g. Tree-ripened organic apples harvested without synthetic waxes."
+                      placeholder="e.g. Hand-picked at dawn, tree-ripened, graded for freshness."
                       className="input-field"
                       rows="2"
+                      style={{ fontSize: '13px', boxSizing: 'border-box' }}
                     />
                   </div>
 
                   {/* Farm Pickup Location Pin */}
-                  <div style={{ marginBottom: '18px', background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '10px' }}>
+                  <div style={{ marginBottom: '18px', background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                       <div>
                         <span style={{ fontSize: '12px', fontWeight: '700', color: '#d1d5db', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <MapPin size={15} color="#10b981" /> Farm Pickup / Harvest Point:
+                          <MapPin size={15} color="#10b981" /> Farm Gate Pickup / Dispatch Point:
                         </span>
                         <span style={{ fontSize: '12px', color: '#10b981', fontWeight: '600' }}>
                           {farmLocation.address || 'Selected farm coordinates'}
@@ -4304,7 +4653,7 @@ export default function FarmerPortal({ onLogout }) {
                       <button
                         type="button"
                         onClick={() => setShowMapPicker(!showMapPicker)}
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#e5e7eb', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', cursor: 'pointer' }}
+                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#e5e7eb', padding: '8px 14px', borderRadius: '8px', fontSize: '11.5px', cursor: 'pointer', minHeight: '36px' }}
                       >
                         {showMapPicker ? 'Hide Map' : '📍 Adjust GPS Pin'}
                       </button>
@@ -4324,20 +4673,133 @@ export default function FarmerPortal({ onLogout }) {
                     )}
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  {/* ─────────────────────────────────────────────────────────────
+                      PREVIEW BEFORE PUBLISH (Accordion / Toggle)
+                      ───────────────────────────────────────────────────────────── */}
+                  <div style={{ marginBottom: '18px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowPreview(!showPreview)}
+                      style={{
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        color: '#d1d5db',
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        marginBottom: '8px'
+                      }}
+                    >
+                      <Eye size={14} color="#34d399" />
+                      <span>{showPreview ? 'Hide Produce Preview' : '👁️ Preview Listing Before Publishing'}</span>
+                    </button>
+
+                    {showPreview && (
+                      <div style={{
+                        background: 'linear-gradient(135deg, rgba(8, 28, 22, 0.95), rgba(4, 16, 13, 0.98))',
+                        border: '1px solid rgba(52, 211, 153, 0.35)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: '10px',
+                        fontSize: '12.5px',
+                        color: '#e5e7eb'
+                      }}>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>PRODUCE NAME</strong>
+                          <span style={{ fontSize: '15px', fontWeight: '800', color: '#6ee7b7' }}>{title || '(Enter name above)'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>PRICE</strong>
+                          <span style={{ fontSize: '15px', fontWeight: '800', color: '#10b981' }}>₹{price || 0} / {unit || 'kg'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>AVAILABLE STOCK</strong>
+                          <span>{stock || 0} {unit || 'kg'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>MIN ORDER QUANTITY</strong>
+                          <span>{minOrderQty || 1} {unit || 'kg'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>VARIETY</strong>
+                          <span>{variety || 'Not provided'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>HARVEST DATE</strong>
+                          <span>{harvestDate || 'Not provided'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>QUALITY GRADE</strong>
+                          <span>{qualityGrade || 'Not provided'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>CULTIVATION TYPE</strong>
+                          <span>{cultivationType || 'Not provided'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>IRRIGATION METHOD</strong>
+                          <span>{irrigationMethod || 'Not provided'}</span>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#9ca3af', display: 'block', fontSize: '11px' }}>BARGAINING</strong>
+                          <span style={{ color: allowBargain ? '#34d399' : '#9ca3af' }}>
+                            {allowBargain ? '✓ Available (Bulk offers accepted)' : 'Fixed Price Only'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Form Action Buttons (Mobile-first >= 48px touch targets) */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       onClick={() => setShowAddForm(false)}
-                      style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: '#d1d5db', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        color: '#d1d5db',
+                        padding: '12px 22px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        fontSize: '13.5px',
+                        fontWeight: '600',
+                        minHeight: '48px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={loading}
-                      style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '700' }}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '12px 28px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: '800',
+                        minHeight: '48px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)'
+                      }}
                     >
-                      {loading ? 'Publishing...' : '🌱 Publish to Live Marketplace'}
+                      {loading ? 'Publishing Produce...' : '🌱 Publish to Live Marketplace'}
                     </button>
                   </div>
                 </form>
@@ -4414,22 +4876,64 @@ export default function FarmerPortal({ onLogout }) {
                             fontSize: '10px',
                             fontWeight: '800'
                           }}>
-                            {isOutOfStock ? 'OUT OF STOCK' : `STOCK: ${p.stock}`}
+                            {isOutOfStock ? 'OUT OF STOCK' : isLowStock ? `⚠️ LOW STOCK: ${p.stock} ${p.unit || 'kg'}` : `STOCK: ${p.stock} ${p.unit || 'kg'}`}
                           </span>
                         </div>
 
                         {/* Details */}
                         <div style={{ padding: '16px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                             <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
                               {p.title}
                             </h4>
-                            <span style={{ fontSize: '18px', fontWeight: '900', color: '#10b981' }}>
-                              ₹{Number(p.price).toFixed(2)}
-                            </span>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ fontSize: '18px', fontWeight: '900', color: '#10b981' }}>
+                                ₹{Number(p.price).toFixed(2)}
+                              </span>
+                              <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>
+                                /{p.unit || 'kg'}
+                              </span>
+                            </div>
                           </div>
 
-                          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 12px 0', minHeight: '32px', lineHeight: '1.4' }}>
+                          {/* Agricultural Metadata Chips */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                            <span style={{ fontSize: '10.5px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#d1d5db', padding: '2px 7px', borderRadius: '6px' }}>
+                              📦 Min: {p.minOrderQty || 1} {p.unit || 'kg'}
+                            </span>
+                            <span style={{
+                              fontSize: '10.5px',
+                              background: p.allowBargain !== false ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255,255,255,0.05)',
+                              border: p.allowBargain !== false ? '1px solid rgba(52, 211, 153, 0.35)' : '1px solid rgba(255,255,255,0.1)',
+                              color: p.allowBargain !== false ? '#6ee7b7' : '#9ca3af',
+                              padding: '2px 7px',
+                              borderRadius: '6px'
+                            }}>
+                              {p.allowBargain !== false ? '🤝 Bargain Allowed' : '🔒 Fixed Price'}
+                            </span>
+                            {p.variety && (
+                              <span style={{ fontSize: '10.5px', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', color: '#fcd34d', padding: '2px 7px', borderRadius: '6px' }}>
+                                🌾 {p.variety}
+                              </span>
+                            )}
+                            {p.qualityGrade && (
+                              <span style={{ fontSize: '10.5px', background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)', color: '#c084fc', padding: '2px 7px', borderRadius: '6px' }}>
+                                ⭐ {p.qualityGrade}
+                              </span>
+                            )}
+                            {p.cultivationType && (
+                              <span style={{ fontSize: '10.5px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#7dd3fc', padding: '2px 7px', borderRadius: '6px' }}>
+                                🌱 {p.cultivationType}
+                              </span>
+                            )}
+                            {p.harvestDate && (
+                              <span style={{ fontSize: '10.5px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', color: '#9ca3af', padding: '2px 7px', borderRadius: '6px' }}>
+                                🗓️ {new Date(p.harvestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                              </span>
+                            )}
+                          </div>
+
+                          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 10px 0', minHeight: '28px', lineHeight: '1.4' }}>
                             {p.description || 'Certified farm fresh produce direct from grower.'}
                           </p>
 
@@ -4446,15 +4950,15 @@ export default function FarmerPortal({ onLogout }) {
                           <>
                             <button
                               onClick={() => openEditModal(p)}
-                              style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: 'none', color: '#e5e7eb', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                              style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: 'none', color: '#e5e7eb', padding: '10px', borderRadius: '8px', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', minHeight: '40px' }}
                             >
-                              <Edit2 size={13} /> Edit
+                              <Edit2 size={14} /> Edit
                             </button>
                             <button
                               onClick={() => handleDeleteProduct(prodId, p.title)}
-                              style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', padding: '10px 14px', borderRadius: '8px', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', minHeight: '40px' }}
                             >
-                              <Trash2 size={13} /> Delete
+                              <Trash2 size={14} /> Delete
                             </button>
                           </>
                         ) : (
@@ -6078,82 +6582,305 @@ export default function FarmerPortal({ onLogout }) {
 
             <form onSubmit={handleSaveEdit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Produce Title</label>
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={e => setEditTitle(e.target.value)}
-                    className="input-field"
-                    required
-                  />
+                {/* SECTION 1: BASIC PRODUCE INFORMATION */}
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(74, 222, 128, 0.2)', borderRadius: '12px', padding: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#4ade80', marginBottom: '10px' }}>
+                    1. Basic Information <span style={{ fontSize: '11px', color: '#f87171' }}>*Required</span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px', fontWeight: '600' }}>
+                        Produce Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        className="input-field"
+                        placeholder="e.g. Country Tomato"
+                        required
+                        style={{ minHeight: '44px' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px', fontWeight: '600' }}>
+                          Category *
+                        </label>
+                        <select
+                          value={editCategory}
+                          onChange={e => setEditCategory(e.target.value)}
+                          className="input-field"
+                          style={{ minHeight: '44px' }}
+                        >
+                          <option value="vegetable">Vegetables</option>
+                          <option value="fruit">Fruits</option>
+                          <option value="grain">Grains & Pulses</option>
+                          <option value="spice">Spices & Herbs</option>
+                          <option value="organic">Organic Special</option>
+                          <option value="seed">Seeds</option>
+                          <option value="dairy">Dairy & Farm Fresh</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px', fontWeight: '600' }}>
+                          Unit *
+                        </label>
+                        <select
+                          value={editUnit}
+                          onChange={e => setEditUnit(e.target.value)}
+                          className="input-field"
+                          style={{ minHeight: '44px' }}
+                        >
+                          <option value="kg">kg (Kilogram)</option>
+                          <option value="quintal">quintal (100 kg)</option>
+                          <option value="ton">ton (1,000 kg)</option>
+                          <option value="bunch">bunch / kattu</option>
+                          <option value="crate">crate / box</option>
+                          <option value="bag">bag / sack</option>
+                          <option value="piece">piece / count</option>
+                          <option value="litre">litre</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px', fontWeight: '600' }}>
+                          Price (₹ / {editUnit || 'unit'}) *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={editPrice}
+                          onChange={e => setEditPrice(e.target.value)}
+                          className="input-field"
+                          required
+                          style={{ minHeight: '44px' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px', fontWeight: '600' }}>
+                          Available Stock ({editUnit || 'unit'}) *
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={editStock}
+                          onChange={e => setEditStock(e.target.value)}
+                          className="input-field"
+                          required
+                          style={{ minHeight: '44px' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', alignItems: 'center' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '2px', fontWeight: '600' }}>
+                          Min Order ({editUnit || 'unit'})
+                        </label>
+                        <span style={{ fontSize: '10.5px', color: '#9db5aa', display: 'block', marginBottom: '4px' }}>
+                          Smallest quantity a customer can order
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={editMinOrderQty}
+                          onChange={e => setEditMinOrderQty(e.target.value)}
+                          className="input-field"
+                          style={{ minHeight: '44px' }}
+                        />
+                      </div>
+
+                      <div style={{ paddingTop: '14px' }}>
+                        <label style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          cursor: 'pointer',
+                          padding: '10px 12px',
+                          background: editAllowBargain ? 'rgba(74, 222, 128, 0.12)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${editAllowBargain ? 'rgba(74, 222, 128, 0.4)' : 'rgba(255,255,255,0.1)'}`,
+                          borderRadius: '10px',
+                          minHeight: '44px',
+                          boxSizing: 'border-box'
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={editAllowBargain}
+                            onChange={e => setEditAllowBargain(e.target.checked)}
+                            style={{ width: '18px', height: '18px', accentColor: '#10b981', cursor: 'pointer' }}
+                          />
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: '700', color: '#effbe7' }}>
+                              Allow Bargaining
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#9db5aa' }}>
+                              Bulk price negotiation
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Category</label>
-                    <select
-                      value={editCategory}
-                      onChange={e => setEditCategory(e.target.value)}
-                      className="input-field"
-                    >
-                      <option value="vegetable">Vegetable</option>
-                      <option value="fruit">Fruit</option>
-                      <option value="grain">Grain</option>
-                      <option value="spice">Spice</option>
-                      <option value="organic">Organic Special</option>
-                      <option value="seed">Seeds</option>
-                      <option value="dairy">Dairy & Farm Fresh</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Harvest Date</label>
-                    <input
-                      type="date"
-                      value={editHarvestDate}
-                      onChange={e => setEditHarvestDate(e.target.value)}
-                      className="input-field"
-                    />
-                  </div>
+                {/* SECTION 2: HARVEST & QUALITY (OPTIONAL ACCORDION) */}
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(244, 201, 93, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setEditShowHarvestSection(!editShowHarvestSection)}
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      border: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      color: '#f4c95d',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                  >
+                    <span>{editShowHarvestSection ? '▾ 2. Harvest & Quality Details' : '+ Add Harvest & Quality Details (Optional)'}</span>
+                    <span style={{ fontSize: '11px', color: '#9db5aa', fontWeight: '500' }}>
+                      {editShowHarvestSection ? 'Tap to collapse' : 'Variety, Grade, Date'}
+                    </span>
+                  </button>
+
+                  {editShowHarvestSection && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px' }}>
+                          Produce Variety
+                        </label>
+                        <input
+                          type="text"
+                          value={editVariety}
+                          onChange={e => setEditVariety(e.target.value)}
+                          className="input-field"
+                          placeholder="e.g. Sona Masoori, Alphonso, PKM-1"
+                          style={{ minHeight: '44px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div>
+                          <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px' }}>
+                            Harvest Date
+                          </label>
+                          <input
+                            type="date"
+                            value={editHarvestDate}
+                            onChange={e => setEditHarvestDate(e.target.value)}
+                            className="input-field"
+                            style={{ minHeight: '44px' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px' }}>
+                            Quality Grade
+                          </label>
+                          <select
+                            value={editQualityGrade}
+                            onChange={e => setEditQualityGrade(e.target.value)}
+                            className="input-field"
+                            style={{ minHeight: '44px' }}
+                          >
+                            <option value="">Leave empty (Unspecified)</option>
+                            <option value="Premium">Premium</option>
+                            <option value="Grade A">Grade A</option>
+                            <option value="Standard">Standard</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Price (₹)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      value={editPrice}
-                      onChange={e => setEditPrice(e.target.value)}
-                      className="input-field"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Unit</label>
-                    <input
-                      type="text"
-                      value={editUnit}
-                      onChange={e => setEditUnit(e.target.value)}
-                      className="input-field"
-                      placeholder="e.g. kg, bunch, crate"
-                    />
-                  </div>
+                {/* SECTION 3: CULTIVATION DETAILS (OPTIONAL ACCORDION) */}
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(52, 211, 153, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setEditShowCultivationSection(!editShowCultivationSection)}
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      border: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      color: '#34d399',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                  >
+                    <span>{editShowCultivationSection ? '▾ 3. Cultivation & Irrigation' : '+ Add Cultivation Details (Optional)'}</span>
+                    <span style={{ fontSize: '11px', color: '#9db5aa', fontWeight: '500' }}>
+                      {editShowCultivationSection ? 'Tap to collapse' : 'Type & Water Source'}
+                    </span>
+                  </button>
+
+                  {editShowCultivationSection && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div>
+                          <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px' }}>
+                            Cultivation Type
+                          </label>
+                          <select
+                            value={editCultivationType}
+                            onChange={e => setEditCultivationType(e.target.value)}
+                            className="input-field"
+                            style={{ minHeight: '44px' }}
+                          >
+                            <option value="">Not Specified</option>
+                            <option value="Natural">Natural</option>
+                            <option value="Organic">Organic</option>
+                            <option value="Conventional">Conventional</option>
+                            <option value="Hydroponic">Hydroponic</option>
+                          </select>
+                          {editCultivationType === 'Organic' && (
+                            <div style={{ fontSize: '10px', color: '#facc15', marginTop: '4px' }}>
+                              ℹ️ Note: Farmer-reported cultivation type
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '4px' }}>
+                            Irrigation Method
+                          </label>
+                          <select
+                            value={editIrrigationMethod}
+                            onChange={e => setEditIrrigationMethod(e.target.value)}
+                            className="input-field"
+                            style={{ minHeight: '44px' }}
+                          >
+                            <option value="">Not Specified</option>
+                            <option value="Drip">Drip</option>
+                            <option value="Rain-fed">Rain-fed</option>
+                            <option value="Borewell">Borewell</option>
+                            <option value="Canal/River">Canal/River</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Available Stock Quantity</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={editStock}
-                    onChange={e => setEditStock(e.target.value)}
-                    className="input-field"
-                    required
-                  />
-                </div>
-
+                {/* IMAGE & DESCRIPTION */}
                 <div>
                   <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Produce Image URL</label>
                   <input
@@ -6162,6 +6889,7 @@ export default function FarmerPortal({ onLogout }) {
                     onChange={e => setEditImage(e.target.value)}
                     placeholder="https://images.unsplash.com/..."
                     className="input-field"
+                    style={{ minHeight: '44px' }}
                   />
                   {/* Preset quick buttons */}
                   <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
@@ -6174,9 +6902,9 @@ export default function FarmerPortal({ onLogout }) {
                           background: editImage === item.url ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.06)',
                           border: `1px solid ${editImage === item.url ? '#34d399' : 'rgba(255,255,255,0.1)'}`,
                           color: '#effbe7',
-                          padding: '3px 8px',
+                          padding: '4px 10px',
                           borderRadius: '6px',
-                          fontSize: '10.5px',
+                          fontSize: '11px',
                           cursor: 'pointer'
                         }}
                       >

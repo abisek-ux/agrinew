@@ -51,7 +51,8 @@ const orderSchema = new mongoose.Schema(
     deliveryOtpAttempts: { type: Number, default: 0 },
     deliveryOtpLastSentAt: { type: Date, default: null },
     deliveryOtpVerifiedAt: { type: Date, default: null },
-    dispatchSignaledAt: { type: Date, default: null }
+    dispatchSignaledAt: { type: Date, default: null },
+    cancellationReason: { type: String, default: '' }
   },
   { timestamps: true }
 );
