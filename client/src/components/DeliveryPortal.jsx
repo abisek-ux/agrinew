@@ -36,9 +36,12 @@ import {
   X,
   Check,
   Sparkles,
-  ArrowRight,
-  Map
+  Map,
+  Lock,
+  LogOut,
+  Edit2
 } from 'lucide-react';
+import ProfileEmailOtpModal from './ProfileEmailOtpModal';
 
 /* ─────────────────────────────────────────────────────────────
    Skeleton Shimmer Loader for Deliveries
@@ -689,8 +692,8 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
 /* ─────────────────────────────────────────────────────────────
    Main Delivery Portal Component
 ───────────────────────────────────────────────────────────── */
-export default function DeliveryPortal() {
-  const { user, showToast } = useAuth();
+export default function DeliveryPortal({ onLogout }) {
+  const { user, showToast, updateUserProfile, logout } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
@@ -699,6 +702,34 @@ export default function DeliveryPortal() {
   const [refreshing, setRefreshing] = useState(false);
   const [sosActive, setSosActive] = useState(false);
   const [selectedHandoverOrder, setSelectedHandoverOrder] = useState(null);
+
+  // Profile Edit State (Phase 6 Security & Lock)
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileFirstName, setProfileFirstName] = useState(user?.firstName || '');
+  const [profileLastName, setProfileLastName] = useState(user?.lastName || '');
+  const [profileVehicleType, setProfileVehicleType] = useState(user?.vehicleType || 'Electric Mini-Van (Chilled)');
+  const [profileVehicleNumber, setProfileVehicleNumber] = useState(user?.vehicleNumber || 'KA-04-EA-2026');
+  const [profileServiceArea, setProfileServiceArea] = useState(user?.serviceArea || 'Mandya - Mysuru - Bengaluru Expressway');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [showEmailOtpModal, setShowEmailOtpModal] = useState(false);
+
+  const handleDeliveryLogout = async () => {
+    if (onLogout) {
+      onLogout();
+    } else if (logout) {
+      await logout();
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      setProfileFirstName(user.firstName || '');
+      setProfileLastName(user.lastName || '');
+      setProfileVehicleType(user.vehicleType || 'Electric Mini-Van (Chilled)');
+      setProfileVehicleNumber(user.vehicleNumber || 'KA-04-EA-2026');
+      setProfileServiceArea(user.serviceArea || 'Mandya - Mysuru - Bengaluru Expressway');
+    }
+  }, [user]);
 
   const isDriver = user?.role === 'delivery';
   const driverId = String(user?._id || user?.id || '');
@@ -1893,7 +1924,7 @@ export default function DeliveryPortal() {
         )}
 
         {/* ─────────────────────────────────────────────────────────────
-           TAB 5: COURIER PROFILE
+           TAB 5: COURIER PROFILE (Phase 6 Security & Lock)
         ───────────────────────────────────────────────────────────── */}
         {activeNavTab === 'profile' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1903,9 +1934,36 @@ export default function DeliveryPortal() {
                 <span>Courier Operator Profile</span>
               </h2>
               <p style={{ color: '#a3c2b0', fontSize: '13px', margin: '4px 0 0 0' }}>
-                Verified fleet partner credentials and safety controls.
+                Verified fleet partner credentials, vehicle telemetry, and account security.
               </p>
             </div>
+
+            {/* 7-Day Modification Lock Banner */}
+            {user?.isProfileLocked && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1.5px solid #ef4444',
+                borderRadius: '16px',
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                boxShadow: '0 4px 18px rgba(239, 68, 68, 0.2)'
+              }}>
+                <Lock size={22} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '800', color: '#fca5a5' }}>
+                    🔒 Profile changes locked
+                  </h4>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#fecaca' }}>
+                    You can edit your profile again in {user?.profileLockRemainingDays || 6} days.
+                  </p>
+                  <span style={{ fontSize: '12px', color: '#fde047', fontWeight: '700' }}>
+                    Available on: {user?.profileModificationLockedUntil ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '7 days from update'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div style={{
               background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.95), rgba(8, 20, 16, 0.98))',
@@ -1914,68 +1972,415 @@ export default function DeliveryPortal() {
               padding: '24px',
               boxShadow: '0 8px 24px rgba(0,0,0,0.35)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-                <div style={{
-                  width: '56px',
-                  height: '56px',
-                  borderRadius: '16px',
-                  background: 'linear-gradient(135deg, #37bd78, #15803d)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#effbe7',
-                  fontWeight: '900',
-                  fontSize: '22px'
+              {/* Header: Photo, Name & Carrier Rating */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '16px',
+                    background: 'linear-gradient(135deg, #37bd78, #15803d)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#effbe7',
+                    fontWeight: '900',
+                    fontSize: '22px'
+                  }}>
+                    {user?.firstName?.[0]?.toUpperCase() || 'D'}
+                  </div>
+                  <div>
+                    <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                      {profileFirstName || user?.firstName} {profileLastName || user?.lastName}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        background: 'rgba(244, 201, 93, 0.15)',
+                        color: '#f4c95d',
+                        border: '1px solid rgba(244, 201, 93, 0.3)',
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontSize: '11px',
+                        fontWeight: '800'
+                      }}>
+                        ⭐ 4.95 Certified Courier
+                      </span>
+                      <span style={{ fontSize: '11.5px', color: '#9db5aa' }}>
+                        Role: <strong style={{ color: '#effbe7' }}>Delivery Partner</strong>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (user?.isProfileLocked) {
+                      showToast(`Profile changes locked until ${user.profileModificationLockedUntil ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB') : '7 days'}`, 'warning');
+                      return;
+                    }
+                    setProfileFirstName(user?.firstName || '');
+                    setProfileLastName(user?.lastName || '');
+                    setProfileVehicleType(user?.vehicleType || 'Electric Mini-Van (Chilled)');
+                    setProfileVehicleNumber(user?.vehicleNumber || 'KA-04-EA-2026');
+                    setProfileServiceArea(user?.serviceArea || 'Mandya - Mysuru - Bengaluru Expressway');
+                    setIsEditingProfile(prev => !prev);
+                  }}
+                  disabled={user?.isProfileLocked}
+                  style={{
+                    background: user?.isProfileLocked ? 'rgba(255, 255, 255, 0.05)' : isEditingProfile ? 'rgba(255, 255, 255, 0.08)' : 'rgba(74, 222, 128, 0.15)',
+                    border: `1px solid ${user?.isProfileLocked ? 'rgba(255, 255, 255, 0.1)' : 'rgba(74, 222, 128, 0.4)'}`,
+                    color: user?.isProfileLocked ? '#6b7280' : '#86efac',
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    fontSize: '12.5px',
+                    fontWeight: '700',
+                    cursor: user?.isProfileLocked ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {user?.isProfileLocked ? <Lock size={14} /> : <Edit2 size={14} />}
+                  <span>{user?.isProfileLocked ? 'Profile Locked' : isEditingProfile ? 'Cancel Edit' : 'Edit Profile'}</span>
+                </button>
+              </div>
+
+              {/* Timestamps: Last Profile Update & Next Modification Date */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <span style={{ fontSize: '10.5px', color: '#a3c2b0', textTransform: 'uppercase', fontWeight: '700', display: 'block' }}>Last Profile Update</span>
+                  <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#effbe7', marginTop: '2px', display: 'block' }}>
+                    {user?.lastProfileModifiedAt ? new Date(user.lastProfileModifiedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Initial Registration'}
+                  </span>
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <span style={{ fontSize: '10.5px', color: '#a3c2b0', textTransform: 'uppercase', fontWeight: '700', display: 'block' }}>Next Modification Date</span>
+                  <span style={{ fontSize: '12.5px', fontWeight: '800', color: user?.isProfileLocked ? '#fde047' : '#34d399', marginTop: '2px', display: 'block' }}>
+                    {user?.isProfileLocked && user?.profileModificationLockedUntil
+                      ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : 'Available Now'}
+                  </span>
+                </div>
+              </div>
+
+              {isEditingProfile ? (
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  setSavingProfile(true);
+                  try {
+                    await updateUserProfile({
+                      firstName: profileFirstName,
+                      lastName: profileLastName,
+                      vehicleType: profileVehicleType,
+                      vehicleNumber: profileVehicleNumber,
+                      serviceArea: profileServiceArea
+                    });
+                    showToast('Profile updated successfully! Profile locked for 7 days.', 'success');
+                    setIsEditingProfile(false);
+                  } catch (err) {
+                    showToast(err.response?.data?.message || 'Failed to update profile', 'error');
+                  } finally {
+                    setSavingProfile(false);
+                  }
                 }}>
-                  {user?.firstName?.[0]?.toUpperCase() || 'D'}
-                </div>
-                <div>
-                  <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
-                    {user?.firstName} {user?.lastName}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>First Name</label>
+                      <input
+                        type="text"
+                        value={profileFirstName}
+                        onChange={(e) => setProfileFirstName(e.target.value)}
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: '1px solid rgba(74, 222, 128, 0.3)',
+                          color: '#effbe7',
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Last Name</label>
+                      <input
+                        type="text"
+                        value={profileLastName}
+                        onChange={(e) => setProfileLastName(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: '1px solid rgba(74, 222, 128, 0.3)',
+                          color: '#effbe7',
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>
+                        Contact Phone (Login Verified)
+                      </label>
+                      <input
+                        type="text"
+                        value={user?.phone || '+91 98400 12345'}
+                        disabled
+                        readOnly
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          background: 'rgba(0,0,0,0.25)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          color: '#9db5aa',
+                          fontSize: '13px',
+                          boxSizing: 'border-box',
+                          cursor: 'not-allowed',
+                          opacity: 0.7
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email Address</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowEmailOtpModal(true)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#34d399',
+                            fontSize: '10.5px',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            textDecoration: 'underline'
+                          }}
+                        >
+                          Change Email (OTP)
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={user?.email || 'driver@agrilink.in'}
+                        disabled
+                        readOnly
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          background: 'rgba(0,0,0,0.25)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          color: '#9db5aa',
+                          fontSize: '13px',
+                          boxSizing: 'border-box',
+                          cursor: 'not-allowed',
+                          opacity: 0.7
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div style={{ color: '#f4c95d', fontSize: '12.5px', fontWeight: '700', marginTop: '2px' }}>
-                    ⭐ 4.95 Certified AgriLink Logistics Carrier
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Vehicle Model & Type</label>
+                      <input
+                        type="text"
+                        value={profileVehicleType}
+                        onChange={(e) => setProfileVehicleType(e.target.value)}
+                        placeholder="e.g. Electric Mini-Van (Chilled)"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: '1px solid rgba(74, 222, 128, 0.3)',
+                          color: '#effbe7',
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Vehicle Registration No.</label>
+                      <input
+                        type="text"
+                        value={profileVehicleNumber}
+                        onChange={(e) => setProfileVehicleNumber(e.target.value)}
+                        placeholder="e.g. KA-04-EA-2026"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: '1px solid rgba(74, 222, 128, 0.3)',
+                          color: '#effbe7',
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Operating Service Area</label>
+                      <input
+                        type="text"
+                        value={profileServiceArea}
+                        onChange={(e) => setProfileServiceArea(e.target.value)}
+                        placeholder="e.g. Mandya - Mysuru - Bengaluru Expressway"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: '1px solid rgba(74, 222, 128, 0.3)',
+                          color: '#effbe7',
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginBottom: '16px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfile(false)}
+                      style={{
+                        padding: '10px 16px',
+                        borderRadius: '10px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        color: '#effbe7',
+                        fontWeight: '700',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingProfile || user?.isProfileLocked}
+                      style={{
+                        padding: '10px 20px',
+                        borderRadius: '10px',
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        border: 'none',
+                        color: '#ffffff',
+                        fontWeight: '800',
+                        cursor: (savingProfile || user?.isProfileLocked) ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Check size={16} />
+                      <span>{savingProfile ? 'Saving Changes...' : 'Save Profile'}</span>
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Registered Email</div>
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailOtpModal(true)}
+                        disabled={user?.isProfileLocked}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: user?.isProfileLocked ? '#6b7280' : '#34d399',
+                          fontSize: '10.5px',
+                          fontWeight: '800',
+                          cursor: user?.isProfileLocked ? 'not-allowed' : 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        Change (OTP)
+                      </button>
+                    </div>
+                    <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '600', marginTop: '3px' }}>{user?.email || 'driver@agrilink.in'}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Contact Phone</div>
+                    <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '600', marginTop: '3px' }}>{user?.phone || '+91 98400 12345'}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Assigned Vehicle</div>
+                    <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700', marginTop: '3px' }}>
+                      {user?.vehicleNumber || 'KA-04-EA-2026'}
+                    </div>
+                    <div style={{ color: '#34d399', fontSize: '11.5px', marginTop: '2px' }}>
+                      {user?.vehicleType || 'Electric Mini-Van (Chilled)'}
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Operating Service Area</div>
+                    <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>
+                      {user?.serviceArea || 'Mandya - Mysuru - Bengaluru Expressway'}
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Completed Deliveries</div>
+                    <div style={{ color: '#37bd78', fontSize: '15px', fontWeight: '800', marginTop: '3px' }}>{completedOrders.length} Verified Runs</div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Contact Phone</div>
-                  <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '600', marginTop: '3px' }}>{user?.phone || '+91 98400 12345'}</div>
-                </div>
-                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Registered Email</div>
-                  <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '600', marginTop: '3px' }}>{user?.email || 'driver@agrilink.in'}</div>
-                </div>
-                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Completed Deliveries</div>
-                  <div style={{ color: '#37bd78', fontSize: '15px', fontWeight: '800', marginTop: '3px' }}>{completedOrders.length} Verified Runs</div>
-                </div>
-              </div>
+              {/* Action Buttons: SOS and Logout */}
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <button
+                  type="button"
+                  onClick={triggerSOS}
+                  style={{
+                    flex: 1,
+                    minHeight: '48px',
+                    borderRadius: '12px',
+                    background: sosActive ? '#ff1744' : 'rgba(255, 23, 68, 0.15)',
+                    border: '1.5px solid #ff1744',
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: sosActive ? '0 0 20px #ff1744' : 'none'
+                  }}
+                >
+                  <AlertTriangle size={18} />
+                  <span>{sosActive ? '🚨 DEMO BEACON BROADCASTING' : 'Demo Safety Beacon'}</span>
+                </button>
 
-              <button
-                onClick={triggerSOS}
-                style={{
-                  width: '100%',
-                  minHeight: '48px',
-                  borderRadius: '12px',
-                  background: sosActive ? '#ff1744' : 'rgba(255, 23, 68, 0.15)',
-                  border: '1.5px solid #ff1744',
-                  color: '#ffffff',
-                  fontWeight: '800',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: sosActive ? '0 0 20px #ff1744' : 'none'
-                }}
-              >
-                <AlertTriangle size={18} />
-                <span>{sosActive ? '🚨 DEMO BEACON BROADCASTING' : 'Demo Safety Beacon (Not connected to 112/emergency services)'}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleDeliveryLogout}
+                  style={{
+                    minHeight: '48px',
+                    padding: '0 24px',
+                    borderRadius: '12px',
+                    background: 'rgba(220, 38, 38, 0.15)',
+                    border: '1.5px solid #dc2626',
+                    color: '#ef4444',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2054,6 +2459,20 @@ export default function DeliveryPortal() {
           <span>Profile</span>
         </button>
       </nav>
+
+      {/* Email OTP Verification Modal for Profile Modification */}
+      <ProfileEmailOtpModal
+        isOpen={showEmailOtpModal}
+        onClose={() => setShowEmailOtpModal(false)}
+        currentEmail={user?.email}
+        onSuccess={(updatedUser) => {
+          if (updateUserProfile) {
+            updateUserProfile(updatedUser);
+          }
+          showToast('✓ Email updated successfully! 7-day modification lock activated.', 'success');
+        }}
+        showToast={showToast}
+      />
     </div>
   );
 }

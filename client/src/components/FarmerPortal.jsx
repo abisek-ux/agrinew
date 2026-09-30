@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI } from '../services/api';
+import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI, authAPI } from '../services/api';
 import LiveTrackingMap from './LiveTrackingMap';
 import MapPicker from './MapPicker';
 import MedicineFertilizerHub from './MedicineFertilizerHub';
 import ThreeDPortViewer from './ThreeDPortViewer';
 import OtpNotificationModal from './OtpNotificationModal';
 import AgriLinkLogo from './AgriLinkLogo';
+import ProductDetailsModal from './ProductDetailsModal';
+import FarmerMobileProfileSheet from './FarmerMobileProfileSheet';
+import ProfileEmailOtpModal from './ProfileEmailOtpModal';
+import AskAgriLinkAi from './AskAgriLinkAi';
 import {
   ShoppingCart,
   Sprout,
@@ -64,7 +68,10 @@ import {
   KeyRound,
   Eye,
   CheckCircle2,
-  Radio
+  Radio,
+  Lock,
+  MessageSquare,
+  Bot
 } from 'lucide-react';
 import '../farmer.css';
 
@@ -1361,6 +1368,35 @@ export default function FarmerPortal({ onLogout }) {
   const [season, setSeason] = useState('Monsoon (Kharif)');
   const [recommendedCrops, setRecommendedCrops] = useState([]);
 
+  // Phase 6 States
+  const [selectedProductForDetails, setSelectedProductForDetails] = useState(null);
+  const [showMobileProfileSheet, setShowMobileProfileSheet] = useState(false);
+  const [showEmailOtpModal, setShowEmailOtpModal] = useState(false);
+  const [cropAdvisoryResult, setCropAdvisoryResult] = useState(null);
+  const [cropAdvisoryLoading, setCropAdvisoryLoading] = useState(false);
+
+  const handleGetCropAdvisory = async () => {
+    setCropAdvisoryLoading(true);
+    try {
+      const res = await aiAPI.cropAdvisory({
+        soilType,
+        season,
+        waterAvailability: waterCapacity,
+        location: farmerCityName,
+        temperature: `${weatherData?.temp || 30}°C`,
+        humidity: `${weatherData?.humidity || 65}%`
+      });
+      if (res.data?.success) {
+        setCropAdvisoryResult(res.data.data);
+        showToast('AI Crop Recommendation Advisory updated', 'success');
+      }
+    } catch (err) {
+      showToast('AI is temporarily unavailable. Please try again.', 'error');
+    } finally {
+      setCropAdvisoryLoading(false);
+    }
+  };
+
   // Disease Detection & 3D Diagnostic State
   const [selectedDisease, setSelectedDisease] = useState(DISEASE_PRESETS[0]);
   const [analyzingImage, setAnalyzingImage] = useState(false);
@@ -1973,6 +2009,10 @@ export default function FarmerPortal({ onLogout }) {
 
   const handleSaveProfile = async (e) => {
     if (e) e.preventDefault();
+    if (user?.isProfileLocked) {
+      showToast(`Profile changes locked. You can edit your profile again in ${user.profileLockRemainingDays || 6} days.`, 'warning');
+      return;
+    }
     setSavingProfile(true);
     try {
       const payload = {
@@ -1985,10 +2025,11 @@ export default function FarmerPortal({ onLogout }) {
       };
       const res = await updateUserProfile(payload);
       if (res && res.success) {
-        showToast('Farmer profile and farm bio updated successfully', 'success');
+        showToast(res.message || 'Farmer profile and farm bio updated successfully', 'success');
       }
     } catch (err) {
-      showToast(err.message || 'Failed to update profile', 'error');
+      const msg = err.response?.data?.message || err.message || 'Failed to update profile';
+      showToast(msg, 'error');
     } finally {
       setSavingProfile(false);
     }
@@ -2186,6 +2227,21 @@ export default function FarmerPortal({ onLogout }) {
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span>3D Soil Digital Twin</span>
                 <span style={{ fontSize: '9px', background: 'rgba(74, 222, 128, 0.25)', color: '#4ade80', padding: '1px 5px', borderRadius: '6px', fontWeight: '800' }}>LIVE</span>
+              </span>
+            </button>
+
+            <button
+              className={`farmer-nav-item ${activeNav === 'ask_agrilink_ai' ? 'active' : ''}`}
+              onClick={() => setActiveNav('ask_agrilink_ai')}
+              style={{
+                background: activeNav === 'ask_agrilink_ai' ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.45))' : undefined,
+                borderColor: activeNav === 'ask_agrilink_ai' ? '#10b981' : undefined
+              }}
+            >
+              <Bot size={18} color="#34d399" />
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>🌱 Ask AgriLink AI</span>
+                <span style={{ fontSize: '9px', background: 'rgba(52, 211, 153, 0.25)', color: '#34d399', padding: '1px 5px', borderRadius: '6px', fontWeight: '800' }}>VOICE</span>
               </span>
             </button>
 
@@ -2417,7 +2473,9 @@ export default function FarmerPortal({ onLogout }) {
             {/* Farmer Profile Chip */}
             <div
               className="farmer-user-chip"
-              onClick={() => setActiveNav('profile')}
+              onClick={() => setShowMobileProfileSheet(true)}
+              style={{ cursor: 'pointer' }}
+              title="Open Profile & Account Settings"
             >
               <div className="farmer-avatar-circle">
                 {farmerDisplayName[0] || 'A'}
@@ -4025,6 +4083,170 @@ export default function FarmerPortal({ onLogout }) {
                   ))}
                 </div>
               </div>
+
+              {/* Phase 6: Multi-Variable Scientific AI Advisory */}
+              <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: '800', color: '#86efac', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Bot size={18} color="#34d399" />
+                      <span>Scientific Agricultural AI Advisory (Multi-Variable Analysis)</span>
+                    </div>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#9db5aa' }}>
+                      Evaluates soil, water regime, ambient temperatures, seasonal photoperiod, and rotation history without data fabrication.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleGetCropAdvisory}
+                    disabled={cropAdvisoryLoading}
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      border: 'none',
+                      color: '#ffffff',
+                      padding: '10px 20px',
+                      borderRadius: '12px',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      cursor: cropAdvisoryLoading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 16px rgba(16, 185, 129, 0.4)'
+                    }}
+                  >
+                    {cropAdvisoryLoading ? (
+                      <>
+                        <RefreshCw size={15} className="animate-spin" />
+                        <span>Computing Agronomy Model...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={15} />
+                        <span>🌱 Get AI Crop Recommendation</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {cropAdvisoryResult && (
+                  <div style={{
+                    background: 'linear-gradient(145deg, rgba(8, 30, 23, 0.95), rgba(4, 18, 14, 0.98))',
+                    border: '1.5px solid rgba(74, 222, 128, 0.4)',
+                    borderRadius: '18px',
+                    padding: '20px',
+                    color: '#effbe7',
+                    boxShadow: '0 12px 30px rgba(0,0,0,0.5)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+                      <div>
+                        <span style={{ fontSize: '11px', color: '#86efac', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.6px' }}>
+                          🌱 Recommended Crop
+                        </span>
+                        <h3 style={{ margin: '4px 0 0 0', fontSize: '22px', fontWeight: '900', color: '#effbe7' }}>
+                          {cropAdvisoryResult.recommendedCrop}
+                        </h3>
+                      </div>
+
+                      <span style={{
+                        background: 'rgba(52, 211, 153, 0.15)',
+                        border: '1px solid rgba(52, 211, 153, 0.35)',
+                        color: '#34d399',
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '11.5px',
+                        fontWeight: '800'
+                      }}>
+                        Confidence: {cropAdvisoryResult.confidence}
+                      </span>
+                    </div>
+
+                    {/* Why this may suit your conditions */}
+                    <div style={{ marginBottom: '16px' }}>
+                      <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#86efac', display: 'block', marginBottom: '6px' }}>
+                        Why this may suit your conditions
+                      </span>
+                      <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.6', color: '#d1fae5' }}>
+                        {(cropAdvisoryResult.whySuited || []).map((reason, rIdx) => (
+                          <li key={rIdx}>{reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Attributes Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)' }}>
+                        <span style={{ fontSize: '11px', color: '#9db5aa', display: 'block', fontWeight: '700' }}>🌧 Water Requirement</span>
+                        <span style={{ fontSize: '13.5px', fontWeight: '800', color: '#67e8f9', marginTop: '2px', display: 'block' }}>
+                          {cropAdvisoryResult.waterRequirement}
+                        </span>
+                      </div>
+
+                      <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)' }}>
+                        <span style={{ fontSize: '11px', color: '#9db5aa', display: 'block', fontWeight: '700' }}>⏱ Approximate Duration</span>
+                        <span style={{ fontSize: '13.5px', fontWeight: '800', color: '#fbbf24', marginTop: '2px', display: 'block' }}>
+                          {cropAdvisoryResult.duration}
+                        </span>
+                      </div>
+
+                      <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)' }}>
+                        <span style={{ fontSize: '11px', color: '#9db5aa', display: 'block', fontWeight: '700' }}>🌱 Suitable Soil</span>
+                        <span style={{ fontSize: '12.5px', fontWeight: '600', color: '#effbe7', marginTop: '2px', display: 'block' }}>
+                          {cropAdvisoryResult.suitableSoil}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Risks */}
+                    {cropAdvisoryResult.risks && cropAdvisoryResult.risks.length > 0 && (
+                      <div style={{ marginBottom: '14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', padding: '12px 14px', borderRadius: '12px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '800', color: '#f87171', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                          ⚠️ Risks & Vulnerabilities
+                        </span>
+                        <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#fecaca', lineHeight: '1.5' }}>
+                          {cropAdvisoryResult.risks.map((risk, kIdx) => (
+                            <li key={kIdx}>{risk}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Suggested Next Steps */}
+                    {cropAdvisoryResult.suggestedNextSteps && cropAdvisoryResult.suggestedNextSteps.length > 0 && (
+                      <div style={{ marginBottom: '14px' }}>
+                        <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#a7f3d0', display: 'block', marginBottom: '6px' }}>
+                          📋 Suggested Next Steps
+                        </span>
+                        <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '12.5px', color: '#d1fae5', lineHeight: '1.6' }}>
+                          {cropAdvisoryResult.suggestedNextSteps.map((step, sIdx) => (
+                            <li key={sIdx}>{step}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* Transparent Missing Information Notice */}
+                    {cropAdvisoryResult.missingInformationNotice && (
+                      <div style={{
+                        background: 'rgba(251, 191, 36, 0.1)',
+                        border: '1px solid rgba(251, 191, 36, 0.25)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        fontSize: '11.5px',
+                        color: '#fde68a',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <AlertCircle size={15} color="#fbbf24" style={{ flexShrink: 0 }} />
+                        <span>
+                          <strong>Note:</strong> {cropAdvisoryResult.missingInformationNotice}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* -------------------------------------------------------------
@@ -4824,7 +5046,7 @@ export default function FarmerPortal({ onLogout }) {
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
+              <div className="farmer-catalog-grid">
                 {displayedProducts.map((p) => {
                   const prodId = p._id || p.id;
                   const isOutOfStock = Number(p.stock) <= 0;
@@ -4833,139 +5055,168 @@ export default function FarmerPortal({ onLogout }) {
                   return (
                     <div
                       key={prodId}
-                      style={{
-                        background: 'rgba(255,255,255,0.025)',
-                        border: '1px solid rgba(55, 189, 120, 0.15)',
-                        borderRadius: '14px',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between'
-                      }}
+                      className="farmer-compact-card"
+                      onClick={() => setSelectedProductForDetails(p)}
+                      title="Tap to manage produce details"
                     >
                       <div>
-                        {/* Image banner */}
-                        <div style={{ height: '160px', position: 'relative' }}>
+                        {/* Image banner with Category badge and Freshness indicator */}
+                        <div className="farmer-compact-thumb-wrap">
                           <img
                             src={p.image || 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b'}
                             alt={p.title}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            className="farmer-compact-thumb-img"
                           />
                           <span style={{
                             position: 'absolute',
-                            top: '10px',
-                            left: '10px',
-                            background: 'rgba(0,0,0,0.75)',
+                            top: '6px',
+                            left: '6px',
+                            background: 'rgba(0,0,0,0.8)',
+                            backdropFilter: 'blur(4px)',
                             color: p.category === 'seed' ? '#34d399' : p.category === 'fruit' ? '#fbbf24' : '#38bdf8',
-                            padding: '3px 8px',
-                            borderRadius: '10px',
-                            fontSize: '11px',
-                            fontWeight: '700'
+                            padding: '2px 7px',
+                            borderRadius: '8px',
+                            fontSize: '10px',
+                            fontWeight: '800'
                           }}>
-                            {p.category === 'seed' ? '🌱 SEED' : p.category === 'fruit' ? '🍎 FRUIT' : '🥬 VEGETABLE'}
+                            {p.category === 'seed' ? '🌾 SEED' : p.category === 'fruit' ? '🥭 FRUIT' : '🥬 VEG'}
                           </span>
 
                           <span style={{
                             position: 'absolute',
-                            top: '10px',
-                            right: '10px',
-                            background: isOutOfStock ? '#ef4444' : isLowStock ? '#f59e0b' : '#10b981',
-                            color: '#ffffff',
-                            padding: '3px 8px',
-                            borderRadius: '10px',
-                            fontSize: '10px',
-                            fontWeight: '800'
+                            bottom: '6px',
+                            left: '6px',
+                            background: 'rgba(0,0,0,0.75)',
+                            backdropFilter: 'blur(4px)',
+                            color: '#a7f3d0',
+                            padding: '2px 6px',
+                            borderRadius: '6px',
+                            fontSize: '9.5px',
+                            fontWeight: '700'
                           }}>
-                            {isOutOfStock ? 'OUT OF STOCK' : isLowStock ? `⚠️ LOW STOCK: ${p.stock} ${p.unit || 'kg'}` : `STOCK: ${p.stock} ${p.unit || 'kg'}`}
+                            {p.harvestDate ? `🗓️ ${new Date(p.harvestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : '🌱 Fresh'}
                           </span>
+
+                          {isOutOfStock ? (
+                            <span style={{
+                              position: 'absolute',
+                              top: '6px',
+                              right: '6px',
+                              background: '#ef4444',
+                              color: '#fff',
+                              padding: '2px 6px',
+                              borderRadius: '6px',
+                              fontSize: '9px',
+                              fontWeight: '900'
+                            }}>
+                              OUT
+                            </span>
+                          ) : isLowStock ? (
+                            <span style={{
+                              position: 'absolute',
+                              top: '6px',
+                              right: '6px',
+                              background: '#f59e0b',
+                              color: '#fff',
+                              padding: '2px 6px',
+                              borderRadius: '6px',
+                              fontSize: '9px',
+                              fontWeight: '900'
+                            }}>
+                              LOW
+                            </span>
+                          ) : null}
                         </div>
 
-                        {/* Details */}
-                        <div style={{ padding: '16px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                            <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
-                              {p.title}
-                            </h4>
-                            <div style={{ textAlign: 'right' }}>
-                              <span style={{ fontSize: '18px', fontWeight: '900', color: '#10b981' }}>
-                                ₹{Number(p.price).toFixed(2)}
-                              </span>
-                              <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>
-                                /{p.unit || 'kg'}
-                              </span>
-                            </div>
+                        {/* Card Info (Compact) */}
+                        <div style={{ padding: '10px 10px 4px 10px' }}>
+                          <h4 style={{
+                            fontSize: '13px',
+                            fontWeight: '800',
+                            color: '#f3f4f6',
+                            margin: '0 0 4px 0',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {p.title}
+                          </h4>
+
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '15px', fontWeight: '900', color: '#10b981' }}>
+                              ₹{Number(p.price).toFixed(2)}
+                            </span>
+                            <span style={{ fontSize: '10.5px', color: '#9ca3af' }}>
+                              /{p.unit || 'kg'}
+                            </span>
                           </div>
 
-                          {/* Agricultural Metadata Chips */}
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                            <span style={{ fontSize: '10.5px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#d1d5db', padding: '2px 7px', borderRadius: '6px' }}>
-                              📦 Min: {p.minOrderQty || 1} {p.unit || 'kg'}
-                            </span>
+                          <div style={{ fontSize: '11px', color: '#d1d5db', display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                            <span>{p.stock} {p.unit || 'kg'} stock</span>
+                            <span style={{ color: '#9ca3af' }}>Min: {p.minOrderQty || 1}</span>
+                          </div>
+
+                          <div style={{ marginTop: '4px' }}>
                             <span style={{
-                              fontSize: '10.5px',
-                              background: p.allowBargain !== false ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255,255,255,0.05)',
-                              border: p.allowBargain !== false ? '1px solid rgba(52, 211, 153, 0.35)' : '1px solid rgba(255,255,255,0.1)',
-                              color: p.allowBargain !== false ? '#6ee7b7' : '#9ca3af',
-                              padding: '2px 7px',
-                              borderRadius: '6px'
+                              fontSize: '10px',
+                              fontWeight: '700',
+                              color: p.allowBargain !== false ? '#34d399' : '#9ca3af',
+                              background: p.allowBargain !== false ? 'rgba(52, 211, 153, 0.12)' : 'rgba(255,255,255,0.05)',
+                              padding: '2px 6px',
+                              borderRadius: '5px',
+                              display: 'inline-block'
                             }}>
-                              {p.allowBargain !== false ? '🤝 Bargain Allowed' : '🔒 Fixed Price'}
+                              {p.allowBargain !== false ? '🤝 Bargain' : '🔒 Fixed'}
                             </span>
-                            {p.variety && (
-                              <span style={{ fontSize: '10.5px', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', color: '#fcd34d', padding: '2px 7px', borderRadius: '6px' }}>
-                                🌾 {p.variety}
-                              </span>
-                            )}
-                            {p.qualityGrade && (
-                              <span style={{ fontSize: '10.5px', background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)', color: '#c084fc', padding: '2px 7px', borderRadius: '6px' }}>
-                                ⭐ {p.qualityGrade}
-                              </span>
-                            )}
-                            {p.cultivationType && (
-                              <span style={{ fontSize: '10.5px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#7dd3fc', padding: '2px 7px', borderRadius: '6px' }}>
-                                🌱 {p.cultivationType}
-                              </span>
-                            )}
-                            {p.harvestDate && (
-                              <span style={{ fontSize: '10.5px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', color: '#9ca3af', padding: '2px 7px', borderRadius: '6px' }}>
-                                🗓️ {new Date(p.harvestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                              </span>
-                            )}
-                          </div>
-
-                          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 10px 0', minHeight: '28px', lineHeight: '1.4' }}>
-                            {p.description || 'Certified farm fresh produce direct from grower.'}
-                          </p>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#6ee7b7' }}>
-                            <MapPin size={12} />
-                            <span>{p.location?.address || p.farmerNative || farmerCityName}</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '8px' }}>
-                        {isFarmer ? (
-                          <>
-                            <button
-                              onClick={() => openEditModal(p)}
-                              style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: 'none', color: '#e5e7eb', padding: '10px', borderRadius: '8px', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', minHeight: '40px' }}
-                            >
-                              <Edit2 size={14} /> Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProduct(prodId, p.title)}
-                              style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', padding: '10px 14px', borderRadius: '8px', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', minHeight: '40px' }}
-                            >
-                              <Trash2 size={14} /> Delete
-                            </button>
-                          </>
-                        ) : (
-                          <div style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', width: '100%' }}>
-                            Verified Producer: {p.farmerName}
-                          </div>
-                        )}
+                      {/* Compact Actions (Touch targets >= 44px) */}
+                      <div
+                        style={{ padding: '8px 10px', display: 'flex', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => openEditModal(p)}
+                          style={{
+                            flex: 1,
+                            minHeight: '44px',
+                            background: 'rgba(255,255,255,0.08)',
+                            border: 'none',
+                            color: '#e5e7eb',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Edit2 size={13} />
+                          <span>Edit</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteProduct(prodId, p.title)}
+                          style={{
+                            minHeight: '44px',
+                            minWidth: '44px',
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid rgba(239, 68, 68, 0.25)',
+                            color: '#f87171',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title="Delete produce"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
                   );
@@ -6304,30 +6555,86 @@ export default function FarmerPortal({ onLogout }) {
         {/* =========================================================================
             VIEW: FARMER PROFILE & GPS (Fully Interactive & Safe)
             ========================================================================= */}
+        {/* =========================================================================
+            VIEW: ASK AGRILINK AI (Voice + Text Agricultural Assistant)
+            ========================================================================= */}
+        {activeNav === 'ask_agrilink_ai' && (
+          <div style={{ padding: '24px 28px', maxWidth: '1000px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ marginBottom: '18px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(52, 211, 153, 0.15)', border: '1px solid rgba(52, 211, 153, 0.35)', color: '#34d399', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', marginBottom: '8px' }}>
+                <Bot size={12} /> Agricultural AI Assistant
+              </div>
+              <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#effbe7', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                🌱 Ask AgriLink AI
+              </h2>
+              <p style={{ fontSize: '13px', color: '#9db5aa', margin: 0 }}>
+                Discuss crop choices, soil health, irrigation schedules, weather advisories, diseases, and cultivation practices.
+              </p>
+            </div>
+
+            <AskAgriLinkAi
+              farmerLocation={farmerCityName}
+              showToast={showToast}
+            />
+          </div>
+        )}
+
+        {/* =========================================================================
+            VIEW: FARMER PROFILE & GPS (Phase 6 Enhanced Security & 7-Day Lock)
+            ========================================================================= */}
         {activeNav === 'profile' && (
           <div style={{ padding: 'clamp(14px, 3vw, 28px)', maxWidth: '1000px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
             <div style={{ marginBottom: '20px' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(74, 222, 128, 0.15)', border: '1px solid rgba(74, 222, 128, 0.35)', color: '#86efac', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', marginBottom: '8px' }}>
-                <User size={12} /> Producer Identity & Field Coordinates
+                <User size={12} /> Producer Identity & Security
               </div>
               <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#effbe7', margin: '0 0 6px 0' }}>
-                Farmer Profile & Farm Location
+                Farmer Profile & Security Center
               </h2>
               <p style={{ fontSize: '13px', color: '#9db5aa', margin: 0 }}>
-                Manage verified producer details, farm land branding, contact numbers, and delivery pickup coordinates.
+                Manage verified producer credentials, farm name, email verification, and pickup coordinates.
               </p>
             </div>
 
+            {/* 7-Day Profile Modification Lock Banner */}
+            {user?.isProfileLocked && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1.5px solid #ef4444',
+                borderRadius: '16px',
+                padding: '16px 20px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                boxShadow: '0 4px 18px rgba(239, 68, 68, 0.2)'
+              }}>
+                <Lock size={22} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '800', color: '#fca5a5' }}>
+                    🔒 Profile changes locked
+                  </h4>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#fecaca' }}>
+                    You can edit your profile again in {user?.profileLockRemainingDays || 6} days.
+                  </p>
+                  <span style={{ fontSize: '12px', color: '#fde047', fontWeight: '700' }}>
+                    Available on: {user?.profileModificationLockedUntil ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '7 days from update'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div style={{ background: 'rgba(9, 38, 28, 0.85)', border: '1.5px solid rgba(74, 222, 128, 0.3)', borderRadius: '20px', padding: '24px', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px' }}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '18px', background: 'linear-gradient(135deg, #10b981, #047857)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '26px', fontWeight: '900' }}>
+              {/* Profile Card Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '18px', flexWrap: 'wrap' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '18px', background: 'linear-gradient(135deg, #10b981, #047857)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '28px', fontWeight: '900', boxShadow: '0 4px 16px rgba(16, 185, 129, 0.4)' }}>
                   {profileFirstName?.[0]?.toUpperCase() || user?.firstName?.[0]?.toUpperCase() || 'F'}
                 </div>
                 <div>
                   <div style={{ color: '#effbe7', fontSize: '20px', fontWeight: '800' }}>
                     {profileFirstName || user?.firstName} {profileLastName || user?.lastName}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
                     <span style={{
                       background: user?.isVerified ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)',
                       color: user?.isVerified ? '#34d399' : '#fbbf24',
@@ -6337,11 +6644,30 @@ export default function FarmerPortal({ onLogout }) {
                       fontSize: '11px',
                       fontWeight: '800'
                     }}>
-                      {user?.isVerified ? '✓ Verified Direct Producer' : '⏳ Document Verification Pending'}
+                      {user?.isVerified ? '✓ Verified Producer' : '⏳ Verification Pending'}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#9db5aa' }}>
-                      Account Role: <strong>Farmer (Immutable)</strong>
+                    <span style={{ fontSize: '11.5px', color: '#9db5aa' }}>
+                      Account Role: <strong style={{ color: '#effbe7' }}>Farmer</strong>
                     </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status and Modification Timestamps */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '22px' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '12px 14px' }}>
+                  <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>Last Profile Update</span>
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7', marginTop: '3px' }}>
+                    {user?.lastProfileModifiedAt ? new Date(user.lastProfileModifiedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Initial Registration'}
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '12px 14px' }}>
+                  <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>Next Modification Date</span>
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: user?.isProfileLocked ? '#fde047' : '#34d399', marginTop: '3px' }}>
+                    {user?.isProfileLocked && user?.profileModificationLockedUntil
+                      ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : 'Available Now'}
                   </div>
                 </div>
               </div>
@@ -6355,6 +6681,7 @@ export default function FarmerPortal({ onLogout }) {
                       type="text"
                       value={profileFirstName}
                       onChange={e => setProfileFirstName(e.target.value)}
+                      disabled={user?.isProfileLocked}
                       className="input-field"
                       required
                     />
@@ -6365,6 +6692,7 @@ export default function FarmerPortal({ onLogout }) {
                       type="text"
                       value={profileLastName}
                       onChange={e => setProfileLastName(e.target.value)}
+                      disabled={user?.isProfileLocked}
                       className="input-field"
                     />
                   </div>
@@ -6374,12 +6702,13 @@ export default function FarmerPortal({ onLogout }) {
                       type="text"
                       value={profileFarmName}
                       onChange={e => setProfileFarmName(e.target.value)}
+                      disabled={user?.isProfileLocked}
                       placeholder="e.g. Kaveri Organic Greens Estate"
                       className="input-field"
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Contact Phone (Verified Login - Read Only)</label>
+                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Phone (Login Phone)</label>
                     <input
                       type="text"
                       value={user?.phone || profilePhone}
@@ -6394,12 +6723,31 @@ export default function FarmerPortal({ onLogout }) {
                       type="text"
                       value={profileNativePlace}
                       onChange={e => setProfileNativePlace(e.target.value)}
+                      disabled={user?.isProfileLocked}
                       placeholder="e.g. Mandya / Chidambaram"
                       className="input-field"
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>Email (Registered Login)</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '12px', color: '#9db5aa', fontWeight: '700' }}>Email Address</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailOtpModal(true)}
+                        disabled={user?.isProfileLocked}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: user?.isProfileLocked ? '#6b7280' : '#34d399',
+                          fontSize: '11px',
+                          fontWeight: '800',
+                          cursor: user?.isProfileLocked ? 'not-allowed' : 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        Change Email (OTP)
+                      </button>
+                    </div>
                     <input
                       type="email"
                       value={user?.email || ''}
@@ -6415,6 +6763,7 @@ export default function FarmerPortal({ onLogout }) {
                   <textarea
                     value={profileDescription}
                     onChange={e => setProfileDescription(e.target.value)}
+                    disabled={user?.isProfileLocked}
                     rows="3"
                     placeholder="Describe your soil, crops, organic certifications, and pesticide-free methods..."
                     className="input-field"
@@ -6455,22 +6804,47 @@ export default function FarmerPortal({ onLogout }) {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                   <button
-                    type="submit"
-                    disabled={savingProfile}
+                    type="button"
+                    onClick={handleLogoutFarmer}
                     style={{
-                      background: '#10b981',
-                      color: '#ffffff',
-                      border: 'none',
-                      padding: '10px 24px',
-                      borderRadius: '10px',
+                      background: 'rgba(220, 38, 38, 0.15)',
+                      border: '1.5px solid #dc2626',
+                      color: '#ef4444',
+                      padding: '11px 22px',
+                      borderRadius: '12px',
                       fontSize: '13px',
                       fontWeight: '800',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
                     }}
                   >
-                    {savingProfile ? 'Saving Profile...' : 'Save Profile Changes'}
+                    <LogOut size={16} />
+                    <span>Logout</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={savingProfile || user?.isProfileLocked}
+                    style={{
+                      background: user?.isProfileLocked ? 'rgba(255,255,255,0.1)' : '#10b981',
+                      color: user?.isProfileLocked ? '#9ca3af' : '#ffffff',
+                      border: 'none',
+                      padding: '11px 24px',
+                      borderRadius: '12px',
+                      fontSize: '13.5px',
+                      fontWeight: '800',
+                      cursor: (savingProfile || user?.isProfileLocked) ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {user?.isProfileLocked && <Lock size={15} />}
+                    <span>{savingProfile ? 'Saving Profile...' : user?.isProfileLocked ? 'Profile Changes Locked' : 'Save Profile Changes'}</span>
                   </button>
                 </div>
               </form>
@@ -6972,6 +7346,47 @@ export default function FarmerPortal({ onLogout }) {
           setShowDeliverySummon(false);
           setSelectedDispatchOrderId(null);
         }}
+      />
+
+      {/* Product Details Modal (Phase 6 Compact Browsing Modal) */}
+      <ProductDetailsModal
+        isOpen={!!selectedProductForDetails}
+        product={selectedProductForDetails}
+        onClose={() => setSelectedProductForDetails(null)}
+        onEdit={(prod) => {
+          setSelectedProductForDetails(null);
+          openEditModal(prod);
+        }}
+        onDelete={(prodId) => {
+          setSelectedProductForDetails(null);
+          handleDeleteProduct(prodId, selectedProductForDetails?.title);
+        }}
+      />
+
+      {/* Farmer Mobile Profile Drawer / Bottom Sheet */}
+      <FarmerMobileProfileSheet
+        isOpen={showMobileProfileSheet}
+        onClose={() => setShowMobileProfileSheet(false)}
+        farmer={{ ...user, firstName: profileFirstName || user?.firstName, lastName: profileLastName || user?.lastName, farmName: profileFarmName || user?.farmName, location: farmLocation?.address || profileNativePlace }}
+        onNavigate={(tab) => {
+          setShowMobileProfileSheet(false);
+          setActiveNav(tab);
+        }}
+        onLogout={handleLogoutFarmer}
+      />
+
+      {/* Email OTP Verification Modal for Profile Modification */}
+      <ProfileEmailOtpModal
+        isOpen={showEmailOtpModal}
+        onClose={() => setShowEmailOtpModal(false)}
+        currentEmail={user?.email}
+        onSuccess={(updatedUser) => {
+          if (updateUserProfile) {
+            updateUserProfile(updatedUser);
+          }
+          showToast('✓ Email updated successfully! 7-day modification lock activated.', 'success');
+        }}
+        showToast={showToast}
       />
 
       {/* Mobile Bottom Navigation Bar (Home | Farm | Products | Orders | Profile) */}

@@ -56,9 +56,12 @@ import {
   Tag,
   CreditCard,
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  LogOut
 } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
+import ProfileEmailOtpModal from './ProfileEmailOtpModal';
 
 const getProductId = (p) => {
   if (!p) return '';
@@ -3348,8 +3351,8 @@ function OrderDetailsModal({
 /* ─────────────────────────────────────────────────────────────
    Main Customer Portal Component
 ───────────────────────────────────────────────────────────── */
-export default function CustomerPortal() {
-  const { user, showToast, updateUserProfile } = useAuth();
+export default function CustomerPortal({ onLogout }) {
+  const { user, showToast, updateUserProfile, logout } = useAuth();
   const [products, setProducts] = useState([]);
 
   // Cart persisted per customer account in localStorage (Protected against race-condition overwrite)
@@ -3410,14 +3413,38 @@ export default function CustomerPortal() {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Profile Edit State
+  // Profile Edit State (Phase 6 Security & Lock)
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileFirstName, setProfileFirstName] = useState(user?.firstName || '');
   const [profileLastName, setProfileLastName] = useState(user?.lastName || '');
   const [profilePhone, setProfilePhone] = useState(user?.phone || '');
-  const [profileAddress, setProfileAddress] = useState(user?.location?.address || '');
+  const [profileAddress, setProfileAddress] = useState(user?.deliveryAddress || user?.location?.address || user?.address || '');
   const [profileNative, setProfileNative] = useState(user?.nativePlace || '');
+  const [profileCity, setProfileCity] = useState(user?.city || user?.location?.placeName || user?.nativePlace || '');
+  const [profileState, setProfileState] = useState(user?.state || 'Karnataka');
+  const [profilePincode, setProfilePincode] = useState(user?.pincode || '');
   const [savingProfile, setSavingProfile] = useState(false);
+  const [showEmailOtpModal, setShowEmailOtpModal] = useState(false);
+
+  const handleCustomerLogout = async () => {
+    if (onLogout) {
+      onLogout();
+    } else if (logout) {
+      await logout();
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      setProfileFirstName(user.firstName || '');
+      setProfileLastName(user.lastName || '');
+      setProfilePhone(user.phone || '');
+      setProfileAddress(user.deliveryAddress || user.location?.address || user.address || '');
+      setProfileCity(user.city || user.location?.placeName || user.nativePlace || '');
+      setProfileState(user.state || 'Karnataka');
+      setProfilePincode(user.pincode || '');
+    }
+  }, [user]);
 
   // Reviews State
   const [reviewingItem, setReviewingItem] = useState(null); // { orderId, productId, title, farmerId }
@@ -3697,20 +3724,25 @@ export default function CustomerPortal() {
       const cartItemsPayload = cart.map(i => ({ title: i.title, quantity: i.quantity, unit: i.unit || 'kg' }));
       const res = await aiAPI.recipeAssistant({
         message: promptToSend,
+        query: promptToSend,
         history: updatedMessages.slice(-6),
+        conversationHistory: updatedMessages.slice(-6),
+        userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || undefined,
         cartItems: cartItemsPayload
       });
-      if (res.data?.reply) {
+      const replyText = res.data?.reply || res.data?.answer;
+      if (replyText) {
         setRecipeMessages(prev => [...prev, {
           role: 'assistant',
-          text: res.data.reply,
+          text: replyText,
+          recipe: res.data.recipe || null,
           missingIngredients: res.data.missingIngredients || []
         }]);
       }
     } catch (err) {
       setRecipeMessages(prev => [...prev, {
         role: 'assistant',
-        text: 'I could not connect to the Culinary Assistant at this moment. You can still browse our fresh ingredients and try again in a few moments!'
+        text: 'AI is temporarily unavailable. Please try again.'
       }]);
     } finally {
       setRecipeLoading(false);
@@ -7538,12 +7570,40 @@ export default function CustomerPortal() {
         </div>
       )}
 
-      {/* Dedicated Profile Tab View (Mobile Friendly) */}
+      {/* Dedicated Profile Tab View (Mobile Friendly & Phase 6 Security) */}
       {activeTab === 'profile' && (
         <div style={{ padding: '4px 0 30px' }}>
           <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '800', margin: '0 0 20px 0' }}>
-            Customer Profile & Hub
+            Customer Profile & Account
           </h2>
+
+          {/* 7-Day Modification Lock Banner */}
+          {user?.isProfileLocked && (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1.5px solid #ef4444',
+              borderRadius: '16px',
+              padding: '16px 20px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              boxShadow: '0 4px 18px rgba(239, 68, 68, 0.2)'
+            }}>
+              <Lock size={22} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '800', color: '#fca5a5' }}>
+                  🔒 Profile changes locked
+                </h4>
+                <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#fecaca' }}>
+                  You can edit your profile again in {user?.profileLockRemainingDays || 6} days.
+                </p>
+                <span style={{ fontSize: '12px', color: '#fde047', fontWeight: '700' }}>
+                  Available on: {user?.profileModificationLockedUntil ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '7 days from update'}
+                </span>
+              </div>
+            </div>
+          )}
 
           <div style={{
             background: 'rgba(7, 26, 22, 0.95)',
@@ -7552,11 +7612,12 @@ export default function CustomerPortal() {
             padding: '22px',
             marginBottom: '20px'
           }}>
+            {/* Header: Photo, Name & Verification Status */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{
-                  width: '56px',
-                  height: '56px',
+                  width: '58px',
+                  height: '58px',
                   borderRadius: '16px',
                   background: 'linear-gradient(135deg, #00897b, #004d40)',
                   display: 'flex',
@@ -7571,58 +7632,105 @@ export default function CustomerPortal() {
                 </div>
                 <div>
                   <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
-                    {user?.firstName} {user?.lastName}
+                    {profileFirstName || user?.firstName} {profileLastName || user?.lastName}
                   </div>
-                  <div style={{ color: '#6edbd0', fontSize: '12px', fontWeight: '700', marginTop: '2px' }}>
-                    ✓ Verified Farm Customer
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      background: user?.isVerified ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                      color: user?.isVerified ? '#34d399' : '#fbbf24',
+                      border: `1px solid ${user?.isVerified ? '#34d399' : '#fbbf24'}`,
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px',
+                      fontWeight: '800'
+                    }}>
+                      {user?.isVerified ? '✓ Verified Customer' : '⏳ Verification Pending'}
+                    </span>
+                    <span style={{ fontSize: '11.5px', color: '#9db5aa' }}>
+                      Role: <strong style={{ color: '#effbe7' }}>Customer</strong>
+                    </span>
                   </div>
                 </div>
               </div>
 
               <button
                 onClick={() => {
+                  if (user?.isProfileLocked) {
+                    showToast(`Profile changes locked until ${user.profileModificationLockedUntil ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB') : '7 days'}`, 'warning');
+                    return;
+                  }
                   setProfileFirstName(user?.firstName || '');
                   setProfileLastName(user?.lastName || '');
                   setProfilePhone(user?.phone || '');
-                  setProfileAddress(user?.location?.address || '');
-                  setProfileNative(user?.nativePlace || '');
+                  setProfileAddress(user?.deliveryAddress || user?.location?.address || user?.address || '');
+                  setProfileCity(user?.city || user?.location?.placeName || user?.nativePlace || '');
+                  setProfileState(user?.state || 'Karnataka');
+                  setProfilePincode(user?.pincode || '');
                   setIsEditingProfile(prev => !prev);
                 }}
+                disabled={user?.isProfileLocked}
                 style={{
-                  background: isEditingProfile ? 'rgba(255, 255, 255, 0.08)' : 'rgba(110, 219, 208, 0.15)',
-                  border: '1px solid rgba(110, 219, 208, 0.4)',
-                  color: '#6edbd0',
+                  background: user?.isProfileLocked ? 'rgba(255, 255, 255, 0.05)' : isEditingProfile ? 'rgba(255, 255, 255, 0.08)' : 'rgba(110, 219, 208, 0.15)',
+                  border: `1px solid ${user?.isProfileLocked ? 'rgba(255, 255, 255, 0.1)' : 'rgba(110, 219, 208, 0.4)'}`,
+                  color: user?.isProfileLocked ? '#6b7280' : '#6edbd0',
                   padding: '8px 14px',
                   borderRadius: '10px',
                   fontSize: '12.5px',
                   fontWeight: '700',
-                  cursor: 'pointer',
+                  cursor: user?.isProfileLocked ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px'
                 }}
               >
-                <Edit2 size={14} />
-                <span>{isEditingProfile ? 'Cancel Edit' : 'Edit Profile'}</span>
+                {user?.isProfileLocked ? <Lock size={14} /> : <Edit2 size={14} />}
+                <span>{user?.isProfileLocked ? 'Profile Locked' : isEditingProfile ? 'Cancel Edit' : 'Edit Profile'}</span>
               </button>
+            </div>
+
+            {/* Timestamps: Last Profile Update & Next Modification Date */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '18px' }}>
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <span style={{ fontSize: '10.5px', color: '#a3c2b0', textTransform: 'uppercase', fontWeight: '700', display: 'block' }}>Last Profile Update</span>
+                <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#effbe7', marginTop: '2px', display: 'block' }}>
+                  {user?.lastProfileModifiedAt ? new Date(user.lastProfileModifiedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Initial Registration'}
+                </span>
+              </div>
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <span style={{ fontSize: '10.5px', color: '#a3c2b0', textTransform: 'uppercase', fontWeight: '700', display: 'block' }}>Next Modification Date</span>
+                <span style={{ fontSize: '12.5px', fontWeight: '800', color: user?.isProfileLocked ? '#fde047' : '#34d399', marginTop: '2px', display: 'block' }}>
+                  {user?.isProfileLocked && user?.profileModificationLockedUntil
+                    ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : 'Available Now'}
+                </span>
+              </div>
             </div>
 
             {isEditingProfile ? (
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 setSavingProfile(true);
-                await updateUserProfile({
-                  firstName: profileFirstName,
-                  lastName: profileLastName,
-                  phone: user?.phone || profilePhone,
-                  nativePlace: profileNative,
-                  location: {
-                    address: profileAddress,
-                    placeName: profileNative || 'Bengaluru'
-                  }
-                });
-                setSavingProfile(false);
-                setIsEditingProfile(false);
+                try {
+                  const res = await updateUserProfile({
+                    firstName: profileFirstName,
+                    lastName: profileLastName,
+                    deliveryAddress: profileAddress,
+                    city: profileCity,
+                    state: profileState,
+                    pincode: profilePincode,
+                    nativePlace: profileCity,
+                    location: {
+                      address: profileAddress,
+                      placeName: profileCity || 'Bengaluru'
+                    }
+                  });
+                  showToast('Profile updated successfully! Profile locked for 7 days.', 'success');
+                  setIsEditingProfile(false);
+                } catch (err) {
+                  showToast(err.response?.data?.message || 'Failed to update profile', 'error');
+                } finally {
+                  setSavingProfile(false);
+                }
               }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
                   <div>
@@ -7664,7 +7772,7 @@ export default function CustomerPortal() {
                   </div>
                   <div>
                     <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>
-                      Phone Number (Verified Identity - Locked)
+                      Phone (Login Verified)
                     </label>
                     <input
                       type="text"
@@ -7686,27 +7794,47 @@ export default function CustomerPortal() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Region / Native Place</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email Address</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailOtpModal(true)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#34d399',
+                          fontSize: '10.5px',
+                          fontWeight: '800',
+                          cursor: 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        Change Email (OTP)
+                      </button>
+                    </div>
                     <input
                       type="text"
-                      value={profileNative}
-                      onChange={(e) => setProfileNative(e.target.value)}
+                      value={user?.email || 'customer@agrilink.in'}
+                      disabled
+                      readOnly
                       style={{
                         width: '100%',
                         padding: '10px 12px',
                         borderRadius: '10px',
-                        background: 'rgba(0,0,0,0.4)',
-                        border: '1px solid rgba(110, 219, 208, 0.3)',
-                        color: '#effbe7',
+                        background: 'rgba(0,0,0,0.25)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#9db5aa',
                         fontSize: '13px',
-                        boxSizing: 'border-box'
+                        boxSizing: 'border-box',
+                        cursor: 'not-allowed',
+                        opacity: 0.7
                       }}
                     />
                   </div>
                 </div>
 
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Default Delivery Address</label>
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Delivery Address</label>
                   <input
                     type="text"
                     value={profileAddress}
@@ -7723,6 +7851,63 @@ export default function CustomerPortal() {
                       boxSizing: 'border-box'
                     }}
                   />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>City</label>
+                    <input
+                      type="text"
+                      value={profileCity}
+                      onChange={(e) => setProfileCity(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(110, 219, 208, 0.3)',
+                        color: '#effbe7',
+                        fontSize: '13px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>State</label>
+                    <input
+                      type="text"
+                      value={profileState}
+                      onChange={(e) => setProfileState(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(110, 219, 208, 0.3)',
+                        color: '#effbe7',
+                        fontSize: '13px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Pincode</label>
+                    <input
+                      type="text"
+                      value={profilePincode}
+                      onChange={(e) => setProfilePincode(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(110, 219, 208, 0.3)',
+                        color: '#effbe7',
+                        fontSize: '13px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -7743,7 +7928,7 @@ export default function CustomerPortal() {
                   </button>
                   <button
                     type="submit"
-                    disabled={savingProfile}
+                    disabled={savingProfile || user?.isProfileLocked}
                     style={{
                       padding: '10px 20px',
                       borderRadius: '10px',
@@ -7751,7 +7936,7 @@ export default function CustomerPortal() {
                       border: 'none',
                       color: '#ffffff',
                       fontWeight: '800',
-                      cursor: savingProfile ? 'wait' : 'pointer',
+                      cursor: (savingProfile || user?.isProfileLocked) ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px'
@@ -7765,7 +7950,25 @@ export default function CustomerPortal() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
-                  <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Email</div>
+                    <button
+                      type="button"
+                      onClick={() => setShowEmailOtpModal(true)}
+                      disabled={user?.isProfileLocked}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: user?.isProfileLocked ? '#6b7280' : '#34d399',
+                        fontSize: '10.5px',
+                        fontWeight: '800',
+                        cursor: user?.isProfileLocked ? 'not-allowed' : 'pointer',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Change (OTP)
+                    </button>
+                  </div>
                   <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.email || 'customer@agrilink.in'}</div>
                 </div>
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
@@ -7774,7 +7977,14 @@ export default function CustomerPortal() {
                 </div>
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
                   <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Delivery Address</div>
-                  <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>{user?.location?.address || user?.nativePlace || 'Bengaluru, Karnataka'}</div>
+                  <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginTop: '3px' }}>
+                    {user?.deliveryAddress || user?.location?.address || user?.address || 'Mandya Hub, Karnataka'}
+                  </div>
+                  {(user?.city || user?.state || user?.pincode) && (
+                    <div style={{ color: '#9db5aa', fontSize: '11.5px', marginTop: '2px' }}>
+                      {[user.city, user.state, user.pincode].filter(Boolean).join(', ')}
+                    </div>
+                  )}
                 </div>
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 14px', borderRadius: '12px' }}>
                   <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Orders Placed</div>
@@ -7782,6 +7992,30 @@ export default function CustomerPortal() {
                 </div>
               </div>
             )}
+
+            {/* Logout Action Button */}
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={handleCustomerLogout}
+                style={{
+                  background: 'rgba(220, 38, 38, 0.15)',
+                  border: '1.5px solid #dc2626',
+                  color: '#ef4444',
+                  padding: '10px 20px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <LogOut size={16} />
+                <span>Logout</span>
+              </button>
+            </div>
           </div>
 
           {/* Eco-Impact Card */}
@@ -7939,6 +8173,20 @@ export default function CustomerPortal() {
           <span>Profile</span>
         </button>
       </nav>
+
+      {/* Email OTP Verification Modal for Profile Modification */}
+      <ProfileEmailOtpModal
+        isOpen={showEmailOtpModal}
+        onClose={() => setShowEmailOtpModal(false)}
+        currentEmail={user?.email}
+        onSuccess={(updatedUser) => {
+          if (updateUserProfile) {
+            updateUserProfile(updatedUser);
+          }
+          showToast('✓ Email updated successfully! 7-day modification lock activated.', 'success');
+        }}
+        showToast={showToast}
+      />
     </div>
   );
 }

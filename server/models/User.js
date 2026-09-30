@@ -57,7 +57,26 @@ const userSchema = new mongoose.Schema(
     wishlist: [{ type: String }],
     farmName: { type: String, default: '', trim: true },
     description: { type: String, default: '', trim: true },
+    avatar: { type: String, default: '', trim: true },
+    deliveryAddress: { type: String, default: '', trim: true },
+    city: { type: String, default: '', trim: true },
+    state: { type: String, default: '', trim: true },
+    pincode: { type: String, default: '', trim: true },
+    vehicleType: { type: String, default: '', trim: true },
+    vehicleNumber: { type: String, default: '', trim: true },
+    serviceArea: { type: String, default: '', trim: true },
     isVerified: { type: Boolean, default: false },
+
+    // Phase 6: 7-day Profile Modification Lock
+    lastProfileModifiedAt: { type: Date, default: null },
+    profileModificationLockedUntil: { type: Date, default: null },
+
+    // Phase 6: Profile Email Change OTP Fields
+    pendingEmailChange: { type: String, default: null, lowercase: true, trim: true },
+    pendingEmailOtpHash: { type: String, default: null },
+    pendingEmailOtpExpiresAt: { type: Date, default: null },
+    pendingEmailOtpAttempts: { type: Number, default: 0 },
+    pendingEmailOtpLastSentAt: { type: Date, default: null },
 
     // Password Reset & OTP Fields
     resetOtpHash: { type: String, default: null },

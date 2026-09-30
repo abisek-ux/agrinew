@@ -30,7 +30,10 @@ export const authAPI = {
   forgotPassword: (data) => axios.post(`${API_BASE}/auth/forgot-password`, data),
   resetPassword: (data) => axios.post(`${API_BASE}/auth/reset-password`, data),
   updateLocation: (data) => axios.put(`${API_BASE}/auth/location`, data, { headers: getAuthHeaders() }),
+  getProfile: () => axios.get(`${API_BASE}/auth/profile`, { headers: getAuthHeaders() }),
   updateProfile: (data) => axios.put(`${API_BASE}/auth/profile`, data, { headers: getAuthHeaders() }),
+  requestEmailOtp: (data) => axios.post(`${API_BASE}/auth/profile/request-email-otp`, data, { headers: getAuthHeaders() }),
+  verifyEmailOtp: (data) => axios.post(`${API_BASE}/auth/profile/verify-email-otp`, data, { headers: getAuthHeaders() }),
   getWishlist: () => axios.get(`${API_BASE}/auth/wishlist`, { headers: getAuthHeaders() }),
   toggleWishlist: (data) => axios.put(`${API_BASE}/auth/wishlist/toggle`, data, { headers: getAuthHeaders() }),
   getFarmers: () => axios.get(`${API_BASE}/auth/farmers`),
@@ -64,6 +67,8 @@ export const orderAPI = {
 };
 
 export const aiAPI = {
+  cropAdvisory: (data) => axios.post(`${API_BASE}/ai/crop-advisory`, data, { headers: getAuthHeaders() }),
+  askAgriLinkAi: (data) => axios.post(`${API_BASE}/ai/ask-agrilink`, data, { headers: getAuthHeaders() }),
   diagnoseCrop: (data) => axios.post(`${API_BASE}/ai/diagnose-crop`, data, { headers: getAuthHeaders() }),
   recipeAssistant: (data) => axios.post(`${API_BASE}/ai/recipe-assistant`, data, { headers: getAuthHeaders() })
 };

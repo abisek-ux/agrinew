@@ -44,21 +44,47 @@ const maskPhone = (phone) => {
   const p = String(phone || '');
   return p.length >= 4 ? `******${p.slice(-4)}` : '******';
 };
-const formatUserResponse = (user, token) => ({
-  _id: user._id || user.id,
-  firstName: user.firstName,
-  lastName: user.lastName,
-  email: user.email,
-  phone: user.phone,
-  role: user.role,
-  nativePlace: user.nativePlace,
-  farmName: user.farmName || '',
-  description: user.description || '',
-  isVerified: Boolean(user.isVerified),
-  location: user.location,
-  wishlist: user.wishlist || [],
-  token
-});
+const formatLockDate = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const formatUserResponse = (user, token) => {
+  const isLocked = Boolean(user.profileModificationLockedUntil && new Date() < new Date(user.profileModificationLockedUntil));
+  const remainingDays = isLocked
+    ? Math.max(1, Math.ceil((new Date(user.profileModificationLockedUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
+
+  return {
+    _id: user._id || user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User',
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+    nativePlace: user.nativePlace,
+    farmName: user.farmName || '',
+    description: user.description || '',
+    avatar: user.avatar || '',
+    deliveryAddress: user.deliveryAddress || '',
+    city: user.city || '',
+    state: user.state || '',
+    pincode: user.pincode || '',
+    vehicleType: user.vehicleType || '',
+    vehicleNumber: user.vehicleNumber || '',
+    serviceArea: user.serviceArea || '',
+    isVerified: Boolean(user.isVerified),
+    location: user.location,
+    wishlist: user.wishlist || [],
+    lastProfileModifiedAt: user.lastProfileModifiedAt || null,
+    profileModificationLockedUntil: user.profileModificationLockedUntil || null,
+    isProfileLocked: isLocked,
+    profileLockRemainingDays: remainingDays,
+    token
+  };
+};
 
 const otpPepper = () => {
   return process.env.RESET_OTP_PEPPER || process.env.JWT_SECRET || 'agrilink_secret_otp_pepper_2026';
@@ -80,11 +106,27 @@ const persistUser = async (user) => {
         lastName: user.lastName,
         name: user.name,
         phone: user.phone,
+        email: user.email,
         nativePlace: user.nativePlace,
         farmName: user.farmName,
         description: user.description,
+        avatar: user.avatar,
+        deliveryAddress: user.deliveryAddress,
+        city: user.city,
+        state: user.state,
+        pincode: user.pincode,
+        vehicleType: user.vehicleType,
+        vehicleNumber: user.vehicleNumber,
+        serviceArea: user.serviceArea,
         location: user.location,
         wishlist: user.wishlist,
+        lastProfileModifiedAt: user.lastProfileModifiedAt,
+        profileModificationLockedUntil: user.profileModificationLockedUntil,
+        pendingEmailChange: user.pendingEmailChange,
+        pendingEmailOtpHash: user.pendingEmailOtpHash,
+        pendingEmailOtpExpiresAt: user.pendingEmailOtpExpiresAt,
+        pendingEmailOtpAttempts: user.pendingEmailOtpAttempts,
+        pendingEmailOtpLastSentAt: user.pendingEmailOtpLastSentAt,
         resetOtpHash: user.resetOtpHash,
         resetOtpExpiresAt: user.resetOtpExpiresAt,
         resetOtpAttempts: user.resetOtpAttempts,
@@ -626,6 +668,216 @@ const toggleWishlist = async (req, res) => {
   }
 };
 
+const getProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const user = isConnected()
+      ? await User.findById(userId)
+      : findMemoryUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    return res.json({ success: true, user: formatUserResponse(user) });
+  } catch (error) {
+    console.error('getProfile error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to retrieve profile' });
+  }
+};
+
+const requestProfileEmailOtp = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const user = isConnected()
+      ? await User.findById(userId)
+      : findMemoryUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Strict 7-day modification lock check
+    if (user.profileModificationLockedUntil && new Date() < new Date(user.profileModificationLockedUntil)) {
+      const remainingDays = Math.max(1, Math.ceil((new Date(user.profileModificationLockedUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+      const dateStr = formatLockDate(user.profileModificationLockedUntil);
+      return res.status(403).json({
+        success: false,
+        locked: true,
+        remainingDays,
+        lockedUntil: user.profileModificationLockedUntil,
+        message: `Profile changes locked. You can edit your profile again in ${remainingDays} days. (Available on: ${dateStr})`
+      });
+    }
+
+    const { newEmail } = req.body;
+    if (!newEmail || typeof newEmail !== 'string' || !newEmail.includes('@') || !newEmail.includes('.')) {
+      return res.status(400).json({ success: false, message: 'Provide a valid email address' });
+    }
+
+    const cleanNewEmail = newEmail.toLowerCase().trim();
+    if (cleanNewEmail === (user.email || '').toLowerCase().trim()) {
+      return res.status(400).json({ success: false, message: 'New email must be different from current email address' });
+    }
+
+    // Check if new email is already claimed
+    const existing = await lookupUser(cleanNewEmail);
+    if (existing && String(existing._id || existing.id) !== String(userId)) {
+      return res.status(400).json({ success: false, message: 'An account with this email address already exists' });
+    }
+
+    // 60-second resend cooldown
+    if (user.pendingEmailOtpLastSentAt) {
+      const elapsedMs = Date.now() - new Date(user.pendingEmailOtpLastSentAt).getTime();
+      if (elapsedMs < 60 * 1000) {
+        const waitSec = Math.ceil((60 * 1000 - elapsedMs) / 1000);
+        return res.status(429).json({
+          success: false,
+          cooldownRemainingSeconds: waitSec,
+          message: `Please wait ${waitSec} seconds before requesting a new verification code`
+        });
+      }
+    }
+
+    // Generate 6-digit OTP
+    const otp = crypto.randomInt(100000, 1000000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.pendingEmailChange = cleanNewEmail;
+    user.pendingEmailOtpHash = hashOtp(otp);
+    user.pendingEmailOtpExpiresAt = expiresAt;
+    user.pendingEmailOtpAttempts = 0;
+    user.pendingEmailOtpLastSentAt = new Date();
+
+    let emailSent = false;
+    let emailErrorMsg = null;
+    try {
+      const emailResult = await sendEmail({
+        to: cleanNewEmail,
+        subject: '🔐 AgriLink Profile Email Verification Code',
+        otp,
+        firstName: user.firstName || 'Valued Member',
+        type: 'login'
+      });
+      emailSent = Boolean(emailResult?.isRealDelivered);
+    } catch (err) {
+      emailErrorMsg = err.message;
+    }
+
+    await persistUser(user);
+
+    return res.json({
+      success: true,
+      message: `Verification code sent to your new email (${cleanNewEmail}). Please check your inbox.`,
+      maskedEmail: maskEmail(cleanNewEmail),
+      expiresInSeconds: 600
+    });
+  } catch (error) {
+    console.error('requestProfileEmailOtp error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to request email verification code' });
+  }
+};
+
+const verifyProfileEmailOtp = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const user = isConnected()
+      ? await User.findById(userId)
+      : findMemoryUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Strict 7-day modification lock check
+    if (user.profileModificationLockedUntil && new Date() < new Date(user.profileModificationLockedUntil)) {
+      const remainingDays = Math.max(1, Math.ceil((new Date(user.profileModificationLockedUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+      const dateStr = formatLockDate(user.profileModificationLockedUntil);
+      return res.status(403).json({
+        success: false,
+        locked: true,
+        remainingDays,
+        lockedUntil: user.profileModificationLockedUntil,
+        message: `Profile changes locked. You can edit your profile again in ${remainingDays} days. (Available on: ${dateStr})`
+      });
+    }
+
+    const { otp } = req.body;
+    if (!otp || !validOtp(String(otp).trim())) {
+      return res.status(400).json({ success: false, message: 'Enter a valid 6-digit OTP code' });
+    }
+
+    if (!user.pendingEmailChange || !user.pendingEmailOtpHash || !user.pendingEmailOtpExpiresAt) {
+      return res.status(400).json({ success: false, message: 'No pending email change request found. Please request a new verification code.' });
+    }
+
+    if (new Date() > new Date(user.pendingEmailOtpExpiresAt)) {
+      user.pendingEmailChange = null;
+      user.pendingEmailOtpHash = null;
+      user.pendingEmailOtpExpiresAt = null;
+      user.pendingEmailOtpAttempts = 0;
+      await persistUser(user);
+      return res.status(400).json({ success: false, message: 'Verification code has expired. Please request a new one.' });
+    }
+
+    if ((user.pendingEmailOtpAttempts || 0) >= 5) {
+      user.pendingEmailChange = null;
+      user.pendingEmailOtpHash = null;
+      user.pendingEmailOtpExpiresAt = null;
+      user.pendingEmailOtpAttempts = 0;
+      await persistUser(user);
+      return res.status(429).json({ success: false, message: 'Too many incorrect attempts. Please request a new verification code.' });
+    }
+
+    const submittedHash = hashOtp(String(otp).trim());
+    const subBuf = Buffer.from(submittedHash);
+    const storedBuf = Buffer.from(user.pendingEmailOtpHash);
+    const isMatch = subBuf.length === storedBuf.length && crypto.timingSafeEqual(subBuf, storedBuf);
+
+    if (!isMatch) {
+      user.pendingEmailOtpAttempts = (user.pendingEmailOtpAttempts || 0) + 1;
+      const exhausted = user.pendingEmailOtpAttempts >= 5;
+      if (exhausted) {
+        user.pendingEmailChange = null;
+        user.pendingEmailOtpHash = null;
+        user.pendingEmailOtpExpiresAt = null;
+        user.pendingEmailOtpAttempts = 0;
+      }
+      await persistUser(user);
+      return res.status(exhausted ? 429 : 400).json({
+        success: false,
+        message: exhausted ? 'Too many incorrect attempts. Please request a new verification code.' : 'Incorrect verification code. Please try again.'
+      });
+    }
+
+    // Double check email hasn't been claimed by someone else in the meantime
+    const targetEmail = user.pendingEmailChange;
+    const existing = await lookupUser(targetEmail);
+    if (existing && String(existing._id || existing.id) !== String(userId)) {
+      user.pendingEmailChange = null;
+      user.pendingEmailOtpHash = null;
+      await persistUser(user);
+      return res.status(400).json({ success: false, message: 'This email address is already claimed by another account.' });
+    }
+
+    // Apply email change
+    user.email = targetEmail;
+    user.pendingEmailChange = null;
+    user.pendingEmailOtpHash = null;
+    user.pendingEmailOtpExpiresAt = null;
+    user.pendingEmailOtpAttempts = 0;
+
+    // Apply 7-day modification lock!
+    const lockDurationMs = 7 * 24 * 60 * 60 * 1000;
+    const now = new Date();
+    user.lastProfileModifiedAt = now;
+    user.profileModificationLockedUntil = new Date(now.getTime() + lockDurationMs);
+
+    await persistUser(user);
+
+    const unlockDateStr = formatLockDate(user.profileModificationLockedUntil);
+    return res.json({
+      success: true,
+      message: `Profile email updated successfully. Your profile details cannot be modified again until ${unlockDateStr}.`,
+      lockedUntil: user.profileModificationLockedUntil,
+      user: formatUserResponse(user)
+    });
+  } catch (error) {
+    console.error('verifyProfileEmailOtp error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to verify email verification code' });
+  }
+};
+
 const updateProfile = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
@@ -634,23 +886,49 @@ const updateProfile = async (req, res) => {
       : findMemoryUserById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const { firstName, lastName, phone, email, role, isVerified, nativePlace, farmName, description, location } = req.body;
+    // 1. Strict 7-Day Modification Lock Check
+    if (user.profileModificationLockedUntil && new Date() < new Date(user.profileModificationLockedUntil)) {
+      const remainingDays = Math.max(1, Math.ceil((new Date(user.profileModificationLockedUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+      const dateStr = formatLockDate(user.profileModificationLockedUntil);
+      return res.status(403).json({
+        success: false,
+        locked: true,
+        remainingDays,
+        lockedUntil: user.profileModificationLockedUntil,
+        message: `Profile changes locked. You can edit your profile again in ${remainingDays} days. (Available on: ${dateStr})`
+      });
+    }
 
-    // Strict Security Rule: Verified email, account role, and verification badge are immutable via basic profile editing
+    const {
+      firstName,
+      lastName,
+      phone,
+      email,
+      role,
+      isVerified,
+      nativePlace,
+      farmName,
+      description,
+      avatar,
+      deliveryAddress,
+      city,
+      state,
+      pincode,
+      vehicleType,
+      vehicleNumber,
+      serviceArea,
+      location
+    } = req.body;
+
+    // Strict Security Rule: Email changes must go through the dedicated OTP flow
     if (email && email.toLowerCase().trim() !== (user.email || '').toLowerCase().trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Verified authentication email cannot be modified from profile settings. It is locked to your account identity.'
+        message: 'Email address changes require OTP verification. Please use the Verify Email flow.'
       });
     }
 
-    if (phone && normalizePhone(phone) !== normalizePhone(user.phone)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Verified authentication phone number cannot be modified from profile settings. It is locked to your account identity.'
-      });
-    }
-
+    // Role and verified badge cannot be modified directly
     if (role && role.toLowerCase() !== (user.role || '').toLowerCase()) {
       return res.status(403).json({
         success: false,
@@ -665,7 +943,7 @@ const updateProfile = async (req, res) => {
       });
     }
 
-    // Editable profile fields: name, farm name, native place, description, delivery location
+    // Editable profile fields: name, farm name, native place, description, address, vehicle, etc.
     if (firstName !== undefined && typeof firstName === 'string') user.firstName = firstName.trim();
     if (lastName !== undefined && typeof lastName === 'string') user.lastName = lastName.trim();
     user.name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
@@ -686,15 +964,17 @@ const updateProfile = async (req, res) => {
       user.phone = cleanPhone;
     }
 
-    if (nativePlace !== undefined && typeof nativePlace === 'string') {
-      user.nativePlace = nativePlace.trim();
-    }
-    if (farmName !== undefined && typeof farmName === 'string') {
-      user.farmName = farmName.trim();
-    }
-    if (description !== undefined && typeof description === 'string') {
-      user.description = description.trim();
-    }
+    if (nativePlace !== undefined && typeof nativePlace === 'string') user.nativePlace = nativePlace.trim();
+    if (farmName !== undefined && typeof farmName === 'string') user.farmName = farmName.trim();
+    if (description !== undefined && typeof description === 'string') user.description = description.trim();
+    if (avatar !== undefined && typeof avatar === 'string') user.avatar = avatar.trim();
+    if (deliveryAddress !== undefined && typeof deliveryAddress === 'string') user.deliveryAddress = deliveryAddress.trim();
+    if (city !== undefined && typeof city === 'string') user.city = city.trim();
+    if (state !== undefined && typeof state === 'string') user.state = state.trim();
+    if (pincode !== undefined && typeof pincode === 'string') user.pincode = pincode.trim();
+    if (vehicleType !== undefined && typeof vehicleType === 'string') user.vehicleType = vehicleType.trim();
+    if (vehicleNumber !== undefined && typeof vehicleNumber === 'string') user.vehicleNumber = vehicleNumber.trim();
+    if (serviceArea !== undefined && typeof serviceArea === 'string') user.serviceArea = serviceArea.trim();
 
     if (location && typeof location === 'object') {
       user.location = {
@@ -705,10 +985,18 @@ const updateProfile = async (req, res) => {
       };
     }
 
+    // Apply 7-day modification lock!
+    const lockDurationMs = 7 * 24 * 60 * 60 * 1000;
+    const now = new Date();
+    user.lastProfileModifiedAt = now;
+    user.profileModificationLockedUntil = new Date(now.getTime() + lockDurationMs);
+
     await persistUser(user);
+    const unlockDateStr = formatLockDate(user.profileModificationLockedUntil);
     return res.json({
       success: true,
-      message: 'Profile updated successfully',
+      message: `Profile updated successfully. Your profile details cannot be modified again until ${unlockDateStr}.`,
+      lockedUntil: user.profileModificationLockedUntil,
       user: formatUserResponse(user)
     });
   } catch (error) {
@@ -820,7 +1108,10 @@ module.exports = {
   updateLocation,
   getWishlist,
   toggleWishlist,
+  getProfile,
   updateProfile,
+  requestProfileEmailOtp,
+  verifyProfileEmailOtp,
   getFarmers,
   seedMemoryUser,
   migrateMemoryPasswords,
