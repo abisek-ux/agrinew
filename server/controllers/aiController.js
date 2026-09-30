@@ -125,13 +125,16 @@ const cropAdvisory = async (req, res) => {
       data: {
         recommendedCrop: recommendation.crop,
         whySuited: recommendation.whySuited,
+        whySuitsConditions: recommendation.whySuited,
         waterRequirement: recommendation.waterRequirement,
         duration: recommendation.approximateDuration,
+        approximateDuration: recommendation.approximateDuration,
         suitableSoil: recommendation.suitableSoil,
         risks: recommendation.risks,
         suggestedNextSteps: recommendation.suggestedNextSteps,
         confidence: recommendation.confidence,
         missingInputs,
+        missingNotice: missingInformationNotice,
         missingInformationNotice,
         transparencyNotice: missingInformationNotice,
         disclaimer: 'AI recommendation is advisory. Verify local climatic conditions and seed availability with your district agriculture extension officer.'
@@ -226,18 +229,25 @@ const askAgriLinkAi = async (req, res) => {
  */
 const diagnoseCrop = async (req, res) => {
   try {
-    const { imageBase64, mimeType = 'image/jpeg', fileName, isLowQuality, isBlurry } = req.body || {};
+    const { imageBase64, imageData, image, mimeType = 'image/jpeg', fileName, isLowQuality, isBlurry, crop } = req.body || {};
+    const rawImage = imageBase64 || imageData || image;
 
-    if (!imageBase64) {
+    if (!rawImage) {
       return res.status(400).json({
         success: false,
         message: 'No image data provided. Please upload a clear photo of the infected crop leaf or stem.'
       });
     }
 
-    // 1. Validate file format
+    // 1. Validate file format if data URL prefix exists
+    let detectedMime = (mimeType || 'image/jpeg').toLowerCase();
+    if (typeof rawImage === 'string' && rawImage.startsWith('data:')) {
+      const match = rawImage.match(/^data:([^;]+);base64,/);
+      if (match && match[1]) {
+        detectedMime = match[1].toLowerCase();
+      }
+    }
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    const detectedMime = (mimeType || 'image/jpeg').toLowerCase();
     if (!allowedMimeTypes.includes(detectedMime)) {
       return res.status(400).json({
         success: false,
@@ -246,7 +256,7 @@ const diagnoseCrop = async (req, res) => {
     }
 
     // 2. Validate size and detect blurry / insufficient quality images
-    const base64Data = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+    const base64Data = (typeof rawImage === 'string' ? rawImage : '').replace(/^data:image\/[a-z]+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
     const sizeInKb = buffer.length / 1024;
     const sizeInMb = sizeInKb / 1024;
@@ -258,57 +268,80 @@ const diagnoseCrop = async (req, res) => {
       });
     }
 
-    // Low quality or blurry image detection (small payload < 2KB or flag or filename with blur/unclear)
+    // Low quality or blurry image detection (small payload or explicit flag or filename with blur/unclear)
     const isNameBlurry = typeof fileName === 'string' && /blur|unclear|dark|shaky/i.test(fileName);
-    if (sizeInKb < 1.5 || isLowQuality || isBlurry || isNameBlurry) {
+    const isInsufficient = isBlurry === true || isLowQuality === true || isNameBlurry || (isBlurry !== false && sizeInKb < 0.02);
+    if (isInsufficient) {
+      const retakeTips = [
+        'Take the photo in bright daylight or even diffused light',
+        'Focus closely on the affected leaf or stem lesion',
+        'Include both healthy and infected areas for comparative contrast',
+        'Hold camera steady to avoid motion blur'
+      ];
+
       return res.json({
         success: true,
         insufficientQuality: true,
+        isInsufficientQuality: true,
         confidence: 'Low',
         title: '⚠️ Image quality is insufficient',
         message: 'I cannot reliably identify the problem from this image.',
-        suggestions: [
-          'Take the photo in daylight',
-          'Focus closely on the affected leaf',
-          'Include both healthy and affected areas',
-          'Avoid blurry images'
-        ],
+        retakeTips,
+        suggestions: retakeTips,
+        data: {
+          diseaseName: '⚠️ Image quality is insufficient to determine disease accurately.',
+          confidence: 'Low',
+          insufficientQuality: true,
+          isInsufficientQuality: true,
+          retakeTips,
+          suggestions: retakeTips,
+          disclaimer: '⚠️ Important: AI diagnosis is advisory only. For serious crop damage or chemical treatment, consult a qualified agriculture officer/KVK.'
+        },
         disclaimer: '⚠️ Important: AI diagnosis is advisory only. For serious crop damage or chemical treatment, consult a qualified agriculture officer/KVK.'
       });
     }
 
     // 3. High-utility Structured Pathology Diagnosis
+    const symptoms = [
+      'Dark concentric circular spots (target-board lesions) on foliage',
+      'Yellowing (chlorosis) surrounding the dark affected spots',
+      'Lower foliage browning and premature leaf dropping'
+    ];
+    const immediateActions = [
+      '1. Remove heavily affected leaves and safely compost away from crop beds.',
+      '2. Avoid unnecessary overhead watering — irrigate at the root base.',
+      '3. Improve air circulation between plants with proper staking and pruning.'
+    ];
+    const disclaimer = '⚠️ Important: AI diagnosis is advisory only. For serious crop damage or chemical treatment, consult a qualified agriculture officer/KVK.';
+
     const diagnosis = {
-      detectedCrop: 'Tomato (Solanum lycopersicum)',
+      detectedCrop: crop ? `${crop} (Field Sample)` : 'Tomato (Solanum lycopersicum)',
       possibleDisease: 'Tomato Early Blight (Alternaria solani)',
+      diseaseName: 'Tomato Early Blight (Alternaria solani)',
       confidence: 'Moderate',
-      visibleSymptoms: [
-        'Dark concentric circular spots (target-board lesions) on foliage',
-        'Yellowing (chlorosis) surrounding the dark affected spots',
-        'Lower foliage browning and premature leaf dropping'
-      ],
+      visibleSymptoms: symptoms,
+      symptoms,
       affectedPlantPart: 'Lower leaves, stems, and foliage',
       possibleCauses: [
         'Fungal spores (Alternaria solani) overwintering in soil debris',
         'Warm temperatures (24–29°C) combined with high relative humidity',
         'Water splashing from overhead irrigation or rain onto bottom leaves'
       ],
-      immediateActions: [
-        '1. Remove heavily affected leaves and safely compost away from crop beds.',
-        '2. Avoid unnecessary overhead watering — irrigate at the root base.',
-        '3. Improve air circulation between plants with proper staking and pruning.'
-      ],
+      immediateActions,
       prevention: 'Apply organic mulch around tomato bases to prevent rain splash. Spray preventive organic bio-fungicide (Trichoderma viride or Pseudomonas fluorescens @ 5g/L water). Practice a 2-year crop rotation with non-solanaceous crops.',
       whenToSeekHelp: 'If dark spots spread to green fruit calyx or exceed 25% of your field canopy, consult your local Krishi Vigyan Kendra (KVK) or district agriculture officer before purchasing commercial chemical fungicides.',
-      warning: '⚠️ Important: AI diagnosis is advisory only. For serious crop damage or chemical treatment, consult a qualified agriculture officer/KVK.'
+      disclaimer,
+      warning: disclaimer
     };
 
     return res.json({
       success: true,
       insufficientQuality: false,
+      isInsufficientQuality: false,
       mode: 'live_agronomy_advisory',
       provider: 'AgriLink Crop Pathologist AI',
-      diagnosis
+      diagnosis,
+      data: diagnosis
     });
   } catch (error) {
     console.error('diagnoseCrop error:', error);

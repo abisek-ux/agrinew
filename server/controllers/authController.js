@@ -309,7 +309,26 @@ const verifyRegisterOtp = async (req, res) => {
 
 const registerUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password, role, nativePlace, location, emailOtp, phoneVerificationToken } = req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      password,
+      role,
+      nativePlace,
+      location,
+      emailOtp,
+      phoneVerificationToken,
+      farmName,
+      vehicleType,
+      vehicleNumber,
+      serviceArea,
+      deliveryAddress,
+      city,
+      state,
+      pincode
+    } = req.body;
     if (!firstName || !lastName || !email || !phone || !password) {
       return res.status(400).json({ message: 'Please fill all required fields' });
     }
@@ -349,7 +368,7 @@ const registerUser = async (req, res) => {
 
     const userRole = (role || 'customer').toLowerCase();
     const hashedPassword = await bcrypt.hash(password, 10);
-    const userLocation = location || { lat: 12.9716, lng: 77.5946, address: 'Bengaluru, Karnataka, India', placeName: nativePlace || 'Bengaluru, Karnataka' };
+    const userLocation = location || { lat: 12.9716, lng: 77.5946, address: deliveryAddress || 'Bengaluru, Karnataka, India', placeName: city || nativePlace || 'Bengaluru, Karnataka' };
 
     if (isConnected()) {
       if (await User.findOne({ $or: [{ email: cleanEmail }, { phone: cleanPhone }] })) {
@@ -363,7 +382,15 @@ const registerUser = async (req, res) => {
         phone: cleanPhone,
         password: hashedPassword,
         role: userRole,
-        nativePlace: nativePlace || 'Bengaluru, Karnataka',
+        nativePlace: nativePlace || city || 'Bengaluru, Karnataka',
+        farmName: farmName || '',
+        vehicleType: vehicleType || '',
+        vehicleNumber: vehicleNumber || '',
+        serviceArea: serviceArea || '',
+        deliveryAddress: deliveryAddress || '',
+        city: city || '',
+        state: state || '',
+        pincode: pincode || '',
         location: userLocation
       });
       registrationOtps.delete(cleanEmail);
@@ -382,7 +409,15 @@ const registerUser = async (req, res) => {
       phone: cleanPhone,
       password: hashedPassword,
       role: userRole,
-      nativePlace: nativePlace || 'Bengaluru, Karnataka',
+      nativePlace: nativePlace || city || 'Bengaluru, Karnataka',
+      farmName: farmName || '',
+      vehicleType: vehicleType || '',
+      vehicleNumber: vehicleNumber || '',
+      serviceArea: serviceArea || '',
+      deliveryAddress: deliveryAddress || '',
+      city: city || '',
+      state: state || '',
+      pincode: pincode || '',
       location: userLocation
     };
     memoryUsers.push(user);

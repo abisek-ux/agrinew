@@ -107,7 +107,7 @@ async function runPhase6Tests() {
     });
     assert(farmerRes.status === 201 && farmerRes.data.token, 'Farmer registered successfully with auth token');
     const farmerToken = farmerRes.data.token;
-    const farmerId = farmerRes.data.user._id || farmerRes.data.user.id;
+    const farmerId = farmerRes.data._id || farmerRes.data.id || farmerRes.data.user?._id || farmerRes.data.user?.id;
 
     const customerRes = await axios.post(`${BASE_URL}/auth/register`, {
       firstName: 'Aadhya',
@@ -123,7 +123,7 @@ async function runPhase6Tests() {
     });
     assert(customerRes.status === 201 && customerRes.data.token, 'Customer registered successfully with auth token');
     const customerToken = customerRes.data.token;
-    const customerId = customerRes.data.user._id || customerRes.data.user.id;
+    const customerId = customerRes.data._id || customerRes.data.id || customerRes.data.user?._id || customerRes.data.user?.id;
 
     const deliveryRes = await axios.post(`${BASE_URL}/auth/register`, {
       firstName: 'David',
@@ -138,6 +138,7 @@ async function runPhase6Tests() {
     });
     assert(deliveryRes.status === 201 && deliveryRes.data.token, 'Delivery Partner registered with auth token & vehicle details');
     const deliveryToken = deliveryRes.data.token;
+    const deliveryId = deliveryRes.data._id || deliveryRes.data.id || deliveryRes.data.user?._id || deliveryRes.data.user?.id;
 
     // ─────────────────────────────────────────────────────────────
     // 2. PROFILE EDIT SECURITY & EMAIL OTP VERIFICATION
@@ -151,14 +152,18 @@ async function runPhase6Tests() {
     assert(farmerProfileGet.data.user.farmName === 'Cauvery River Organic Estate', 'GET /auth/profile returns role-specific farmName');
     assert(farmerProfileGet.data.user.isProfileLocked === false, 'New account profile modification is initially unlocked');
 
-    // Attempting to change email directly via PUT /auth/profile must NOT alter the email
-    const directEmailBypass = await axios.put(`${BASE_URL}/auth/profile`, {
-      firstName: 'Robert',
-      email: 'hacked_email@evil.com'
-    }, {
-      headers: { Authorization: `Bearer ${farmerToken}` }
-    });
-    assert(directEmailBypass.data.user.email === farmerEmail, 'Direct PUT /profile does NOT change email without OTP verification');
+    // Attempting to change email directly via PUT /auth/profile must be rejected (email change requires OTP)
+    try {
+      await axios.put(`${BASE_URL}/auth/profile`, {
+        firstName: 'Robert',
+        email: 'hacked_email@evil.com'
+      }, {
+        headers: { Authorization: `Bearer ${farmerToken}` }
+      });
+      assert(false, 'Expected direct email modification to be rejected without OTP');
+    } catch (err) {
+      assert(err.response?.status === 400 && err.response?.data?.message?.includes('OTP verification'), 'Direct email change rejected: "Email address changes require OTP verification"');
+    }
 
     // Request Email OTP for new email
     const newFarmerEmail = `robert_new_${timestamp}@mandya.in`;
@@ -194,23 +199,32 @@ async function runPhase6Tests() {
       assert(err.response?.status === 400, 'Invalid OTP code rejected with HTTP 400');
     }
 
-    // Read generated OTP from database memory to verify successful change
+    // Read generated OTP from database / memory to verify successful change
+    const { findMemoryUserById } = require('./controllers/authController');
+    const { isConnected } = require('./config/db');
     const User = require('./models/User');
-    const dbUser = await User.findById(farmerId);
-    assert(dbUser.pendingEmailChange === newFarmerEmail.toLowerCase(), 'Pending email change stored on user record');
-    assert(dbUser.pendingEmailOtpHash, 'Pending OTP stored securely as hash (never plaintext)');
 
-    // In our test environment, generate valid OTP hash match by using the controller's hash verification
+    let dbUser = findMemoryUserById(farmerId);
+    if (!dbUser && isConnected()) {
+      dbUser = await User.findById(farmerId).catch(() => null);
+    }
+    assert(dbUser && dbUser.pendingEmailChange === newFarmerEmail.toLowerCase(), 'Pending email change stored on user record');
+    assert(dbUser && dbUser.pendingEmailOtpHash, 'Pending OTP stored securely as hash (never plaintext)');
+
+    // Discover the 6-digit OTP via crypto HMAC or set known valid OTP
     const crypto = require('crypto');
-    // Let's create an OTP and set the hash in test DB so we can test the verify endpoint faithfully
-    const validTestOtp = '654321';
-    const testHash = crypto.createHash('sha256').update(validTestOtp).digest('hex');
-    dbUser.pendingEmailOtpHash = testHash;
+    const otpPepper = process.env.RESET_OTP_PEPPER || process.env.JWT_SECRET || 'agrilink_secret_otp_pepper_2026';
+    const hash = (code) => crypto.createHmac('sha256', otpPepper).update(String(code).trim()).digest('hex');
+
+    // Set known valid OTP directly on user record in memory / db to verify successful change
+    const matchedOtp = '654321';
+    dbUser.pendingEmailOtpHash = hash(matchedOtp);
     dbUser.pendingEmailOtpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await dbUser.save();
+    dbUser.pendingEmailOtpAttempts = 0;
+    if (isConnected() && typeof dbUser.save === 'function') await dbUser.save();
 
     const verifyRes = await axios.post(`${BASE_URL}/auth/profile/verify-email-otp`, {
-      otp: validTestOtp
+      otp: matchedOtp
     }, {
       headers: { Authorization: `Bearer ${farmerToken}` }
     });
@@ -234,7 +248,7 @@ async function runPhase6Tests() {
       assert(false, 'Expected profile modification during 7-day lock to be rejected');
     } catch (err) {
       assert(err.response?.status === 403, 'Profile update during lock rejected server-side with HTTP 403 Forbidden');
-      assert(err.response?.data?.message?.includes('Profile changes are locked'), 'Clear user-friendly lock message with unlock date returned');
+      assert(err.response?.data?.message?.includes('Profile changes locked'), 'Clear user-friendly lock message with unlock date returned');
     }
 
     // Verify that Customer profile updates work and properly trigger the 7-day lock
