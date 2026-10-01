@@ -3544,11 +3544,17 @@ export default function CustomerPortal({ onLogout }) {
     }
   }, [products]);
 
-  // Periodic polling for live order radar updates
+  // Periodic polling for live order radar updates and real-time product stock
   useEffect(() => {
-    if (activeTab !== 'orders') return;
-    const interval = setInterval(fetchOrders, 5000);
-    return () => clearInterval(interval);
+    if (activeTab === 'orders') {
+      const interval = setInterval(fetchOrders, 5000);
+      return () => clearInterval(interval);
+    }
+    if (activeTab === 'marketplace' || activeTab === 'cart') {
+      fetchProducts();
+      const interval = setInterval(fetchProducts, 5000);
+      return () => clearInterval(interval);
+    }
   }, [activeTab]);
 
   // Periodic polling for customer notifications
@@ -3919,6 +3925,17 @@ export default function CustomerPortal({ onLogout }) {
         ? res.data
         : (res.data?.orders || [res.data]);
       setOrders(currentOrders => [...newOrders, ...currentOrders]);
+
+      // Optimistically decrement purchased stock in local state immediately so user sees changed stock instantly
+      setProducts(currentProducts => currentProducts.map(p => {
+        const itemBought = cart.find(ci => isSameProduct(ci, p));
+        if (itemBought) {
+          const freshStock = Math.max(0, (Number(p.stock) || 0) - Number(itemBought.quantity));
+          return { ...p, stock: freshStock };
+        }
+        return p;
+      }));
+
       setCart([]);
       setShowCheckoutModal(false);
       setConfirmedOrderResult({
@@ -3929,6 +3946,9 @@ export default function CustomerPortal({ onLogout }) {
         expressDelivery
       });
       fetchNotifications();
+      // Re-fetch products from server to guarantee sync with database
+      await fetchProducts();
+
       if (newOrders.length > 1) {
         showToast(`🎉 Order placed! Multi-farm cart was split into ${newOrders.length} direct-farm dispatches.`, 'success');
       } else {

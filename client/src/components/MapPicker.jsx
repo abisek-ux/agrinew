@@ -8,8 +8,8 @@ export default function MapPicker({ location, onSelectLocation, height = '220px'
   const markerRef = useRef(null);
   const [resolving, setResolving] = useState(false);
 
-  const defaultLat = location?.lat || 37.7749;
-  const defaultLng = location?.lng || -122.4194;
+  const defaultLat = location?.lat || 12.9716;
+  const defaultLng = location?.lng || 77.5946;
 
   // Reverse geocodes coordinates to a human-readable address & hometown name
   const reverseGeocode = async (lat, lng) => {

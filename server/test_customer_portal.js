@@ -229,7 +229,7 @@ async function runTests() {
       role: 'admin',
       isAdmin: true,
       roleTier: 'superadmin'
-    }, customerToken);
+    }, customerBToken);
     assert(res4.status === 200 && res4.data.user.role === 'customer', 'Test 4: Privilege escalation tampering is strictly prohibited (role remains "customer")');
     passed++;
 

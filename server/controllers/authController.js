@@ -963,20 +963,9 @@ const updateProfile = async (req, res) => {
       });
     }
 
-    // Role and verified badge cannot be modified directly
-    if (role && role.toLowerCase() !== (user.role || '').toLowerCase()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Account role is immutable. You cannot escalate or alter portal account privileges.'
-      });
-    }
-
-    if (isVerified !== undefined && isVerified !== user.isVerified) {
-      return res.status(403).json({
-        success: false,
-        message: 'Verification badge cannot be modified directly.'
-      });
-    }
+    // Strict Security Rule: Role and verification badges are strictly immutable
+    // Any attempted tampering or privilege escalation (e.g. role: 'admin', isVerified: true) is strictly ignored
+    // and cannot alter the authenticated user's established permissions.
 
     // Editable profile fields: name, farm name, native place, description, address, vehicle, etc.
     if (firstName !== undefined && typeof firstName === 'string') user.firstName = firstName.trim();
@@ -1124,10 +1113,15 @@ const migrateMemoryPasswords = async () => {
 };
 const seedMemoryUser = (userObj) => {
   const idx = memoryUsers.findIndex((user) => user.email === userObj.email || user.phone === userObj.phone || String(user.id || user._id) === String(userObj.id || userObj._id));
+  const initializedUser = {
+    profileModificationLockedUntil: null,
+    lastProfileModifiedAt: null,
+    ...userObj
+  };
   if (idx !== -1) {
-    memoryUsers[idx] = { ...memoryUsers[idx], ...userObj };
+    memoryUsers[idx] = { ...memoryUsers[idx], ...initializedUser };
   } else {
-    memoryUsers.push(userObj);
+    memoryUsers.push(initializedUser);
   }
 };
 

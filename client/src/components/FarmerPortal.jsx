@@ -1505,6 +1505,11 @@ export default function FarmerPortal({ onLogout }) {
       const interval = setInterval(fetchFarmerBargains, 5000);
       return () => clearInterval(interval);
     }
+    if (activeNav === 'products' || activeNav === 'after_cultivation' || activeNav === 'home') {
+      fetchFarmerProducts();
+      const interval = setInterval(fetchFarmerProducts, 5000);
+      return () => clearInterval(interval);
+    }
   }, [activeNav]);
 
   // Compute crop recommendation whenever soil, water, or weather changes
@@ -1720,6 +1725,8 @@ export default function FarmerPortal({ onLogout }) {
     try {
       const res = await orderAPI.getOrders();
       setIncomingOrders(res.data);
+      // Synchronize farmer product stock whenever orders change
+      fetchFarmerProducts();
     } catch (err) {
       console.warn('Orders fetch note:', err.message);
     }

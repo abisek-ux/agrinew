@@ -153,10 +153,10 @@ const requestPhoneOtp = async ({ phone, purpose = 'authentication' }) => {
 
   // 5. Handle Delivery
   if (mode === 'demo') {
-    // Demo / Development Mode: Log to console only
+    // Demo / Development Mode: Protected console logging
     console.log(`\n======================================================`);
-    console.log(`📱 [PHONE OTP DEMO MODE] Dispatched to: ${normalized}`);
-    console.log(`🔑 Verification Code: ${otp}`);
+    console.log(`📱 [PHONE OTP DEMO MODE] Dispatched to: ${maskPhoneNumber(normalized)}`);
+    console.log(`🔑 Verification Code: [DISPATCHED TO RECIPIENT - HIDDEN FOR SECURITY]`);
     console.log(`⏱️ Valid for 5 minutes (Purpose: ${purpose})`);
     console.log(`======================================================\n`);
 
@@ -168,7 +168,7 @@ const requestPhoneOtp = async ({ phone, purpose = 'authentication' }) => {
       rawPhone: normalized,
       expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
       resendAvailableInSeconds: Math.floor(RESEND_COOLDOWN_MS / 1000),
-      message: `[DEMO MODE] Verification code generated for ${maskPhoneNumber(normalized)}. Check server console.`
+      message: `[DEMO MODE] Verification code generated for ${maskPhoneNumber(normalized)}.`
     };
 
     // Attach demoOtp only if explicitly outside production

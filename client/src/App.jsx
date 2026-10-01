@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import PortalSelection from './components/PortalSelection';
 import LandscapeAuth from './components/LandscapeAuth';
-import CustomerPortal from './components/CustomerPortal';
-import FarmerPortal from './components/FarmerPortal';
-import DeliveryPortal from './components/DeliveryPortal';
 import NotificationToast from './components/NotificationToast';
+
+const CustomerPortal = lazy(() => import('./components/CustomerPortal'));
+const FarmerPortal = lazy(() => import('./components/FarmerPortal'));
+const DeliveryPortal = lazy(() => import('./components/DeliveryPortal'));
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -93,10 +94,15 @@ function AppContent() {
           )
         ) : (
           /* Strictly Separated Role Pages: Logged-in user is routed only to their dedicated portal */
-          <div>
-            {userRole === 'customer' && <CustomerPortal />}
+          <Suspense fallback={
+            <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', color: '#10b981' }}>
+              <div style={{ width: '42px', height: '42px', border: '3px solid rgba(16, 185, 129, 0.2)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <div style={{ fontSize: '14px', fontWeight: '700', color: '#9db5aa', letterSpacing: '0.5px' }}>Loading Portal Experience...</div>
+            </div>
+          }>
+            {userRole === 'customer' && <CustomerPortal onLogout={handleLogout} />}
             {userRole === 'farmer' && <FarmerPortal onLogout={handleLogout} />}
-            {userRole === 'delivery' && <DeliveryPortal />}
+            {userRole === 'delivery' && <DeliveryPortal onLogout={handleLogout} />}
             {!['customer', 'farmer', 'delivery'].includes(userRole) && (
               <div style={{ textAlign: 'center', padding: '60px 20px', color: '#f3f4f6' }}>
                 <p style={{ marginBottom: '16px', color: '#9ca3af' }}>Unrecognized user session ({String(user.role)}). Please reset to select your portal variant:</p>
@@ -105,7 +111,7 @@ function AppContent() {
                 </button>
               </div>
             )}
-          </div>
+          </Suspense>
         )}
       </main>
 

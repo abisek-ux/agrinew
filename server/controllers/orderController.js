@@ -17,7 +17,16 @@ const memoryOrders = [];
 // Helper to find product by id across mongo / memory
 const findProduct = async (prodId) => {
   if (isConnected()) {
-    return await Product.findById(prodId);
+    try {
+      const p = await Product.findById(prodId);
+      if (p) return p;
+    } catch (e) {
+      // not a valid ObjectId or not found by findById
+    }
+    try {
+      const p = await Product.findOne({ $or: [{ id: String(prodId) }, { _id: String(prodId) }] });
+      if (p) return p;
+    } catch (e) {}
   }
   const memoryList = getMemoryProducts();
   return memoryList.find(p => String(p.id || p._id) === String(prodId));
@@ -25,11 +34,10 @@ const findProduct = async (prodId) => {
 
 // Helper to save product after stock decrement
 const saveProductStock = async (productDoc, newStock) => {
-  if (isConnected()) {
-    productDoc.stock = newStock;
+  const stockVal = Math.max(0, Number(newStock));
+  productDoc.stock = stockVal;
+  if (isConnected() && typeof productDoc.save === 'function') {
     await productDoc.save();
-  } else {
-    productDoc.stock = newStock;
   }
 };
 

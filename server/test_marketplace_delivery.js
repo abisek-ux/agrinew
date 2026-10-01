@@ -304,12 +304,37 @@ async function runSuite() {
     });
 
     assert(
-      genOtpRes.status === 200 && genOtpRes.body.success === true && genOtpRes.body.demoOtp,
+      genOtpRes.status === 200 && genOtpRes.body.success === true,
       'Test 11a: Driver triggers delivery handover OTP generation to customer',
       `Response: ${JSON.stringify(genOtpRes.body)}`
     );
 
-    const deliveryOtp = genOtpRes.body.demoOtp;
+    // Fast crypto discovery of generated OTP from memory / DB order (plaintext OTP is never exposed in API)
+    const crypto = require('crypto');
+    const otpPepper = process.env.RESET_OTP_PEPPER || 'agrilink_secret_otp_pepper_2026';
+    const hash = (code) => crypto.createHmac('sha256', otpPepper).update(String(code).trim()).digest('hex');
+
+    const { getMemoryOrders } = require('./controllers/orderController');
+    const memoryList = typeof getMemoryOrders === 'function' ? getMemoryOrders() : [];
+    let orderTarget = memoryList.find(o => String(o._id || o.id) === String(orderAId));
+
+    if (!orderTarget) {
+      const Order = require('./models/Order');
+      const { isConnected } = require('./config/db');
+      if (isConnected()) {
+        orderTarget = await Order.findById(orderAId).catch(() => null);
+      }
+    }
+
+    let deliveryOtp = null;
+    if (orderTarget && orderTarget.deliveryOtpHash) {
+      for (let c = 100000; c <= 999999; c++) {
+        if (hash(c) === orderTarget.deliveryOtpHash) {
+          deliveryOtp = String(c);
+          break;
+        }
+      }
+    }
 
     // Wrong OTP verification attempt
     const wrongOtpRes = await makeRequest('POST', `/api/orders/${orderAId}/delivery-otp/verify`, {

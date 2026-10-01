@@ -208,8 +208,7 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
   }
 
   // 3. Resend HTTPS API (Port 443 - Testing sandbox)
-  const FALLBACK_RESEND_KEY = Buffer.from('cmVfTEU2OW51U3VfQkNINVBka2p4SHZkV3BDQjdMV0tQWThk', 'base64').toString('utf8');
-  const resendApiKey = (process.env.RESEND_API_KEY || FALLBACK_RESEND_KEY).trim();
+  const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
   if (resendApiKey) {
     try {
       const response = await fetch('https://api.resend.com/emails', {
