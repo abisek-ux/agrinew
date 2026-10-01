@@ -24,8 +24,16 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const bargainRoutes = require('./routes/bargainRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const {
+  securityHeaders,
+  sanitizeNoSql,
+  createRateLimiter,
+  safeJsonErrorHandler
+} = require('./middleware/securityMiddleware');
 
 const app = express();
+app.disable('x-powered-by');
+app.use(securityHeaders);
 
 const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173')
   .split(',')
@@ -47,10 +55,29 @@ app.use(cors({
   },
   credentials: true
 }));
+
+// Body parsing with safe size limit and error interception
 app.use(express.json({ limit: '10mb' }));
+app.use(safeJsonErrorHandler);
 app.use(morgan('dev'));
 
-app.use('/api/auth', authRoutes);
+// Security: NoSQL operator injection protection
+app.use(sanitizeNoSql);
+
+// Security: Rate Limiters
+const authLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 60,
+  message: 'Too many authentication attempts. Please wait 15 minutes before trying again.'
+});
+const generalApiLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 1000,
+  message: 'Too many requests. Please slow down and try again later.'
+});
+
+app.use('/api', generalApiLimiter);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/notifications', notificationRoutes);
@@ -102,10 +129,15 @@ if (clientDist) {
 
 app.use((err, req, res, next) => {
   if (err.message === 'Origin is not allowed by CORS') {
-    return res.status(403).json({ message: err.message });
+    return res.status(403).json({ success: false, message: err.message });
   }
   console.error('Unhandled server error:', err.message);
-  return res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
+  const status = err.status || err.statusCode || 500;
+  const isProd = process.env.NODE_ENV === 'production';
+  const message = isProd && status === 500
+    ? 'Internal server error. Please try again later.'
+    : (err.message || 'Internal server error');
+  return res.status(status).json({ success: false, message });
 });
 
 const PORT = process.env.PORT || 5000;

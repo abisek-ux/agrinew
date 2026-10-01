@@ -366,7 +366,11 @@ const registerUser = async (req, res) => {
       }
     }
 
-    const userRole = (role || 'customer').toLowerCase();
+    const ALLOWED_REGISTER_ROLES = ['customer', 'farmer', 'delivery'];
+    let userRole = typeof role === 'string' ? role.trim().toLowerCase() : 'customer';
+    if (!ALLOWED_REGISTER_ROLES.includes(userRole)) {
+      userRole = 'customer';
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
     const userLocation = location || { lat: 12.9716, lng: 77.5946, address: deliveryAddress || 'Bengaluru, Karnataka, India', placeName: city || nativePlace || 'Bengaluru, Karnataka' };
 
@@ -433,7 +437,9 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { identifier, password, requiredRole } = req.body;
-    if (!identifier || !password) return res.status(400).json({ message: 'Provide Email/Phone and Password' });
+    if (!identifier || typeof identifier !== 'string' || !password || typeof password !== 'string') {
+      return res.status(400).json({ message: 'Provide Email/Phone and Password' });
+    }
     const user = await lookupUser(identifier.trim().toLowerCase());
     if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ message: 'Invalid Email/Phone or Password' });
 
@@ -466,7 +472,9 @@ const maskEmail = (email) => {
 const forgotPassword = async (req, res) => {
   try {
     const { identifier } = req.body;
-    if (!identifier) return res.status(400).json({ message: 'Enter your registered email address or phone number' });
+    if (!identifier || typeof identifier !== 'string' || !identifier.trim()) {
+      return res.status(400).json({ message: 'Enter your registered email address or phone number' });
+    }
     const cleanId = identifier.trim().toLowerCase();
     const user = await lookupUser(cleanId);
     if (!user || (!user.email && !user.phone)) {

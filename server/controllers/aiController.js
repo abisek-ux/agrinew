@@ -268,6 +268,22 @@ const diagnoseCrop = async (req, res) => {
       });
     }
 
+    // Security Check: Block malicious files (executables, shell scripts, PHP, HTML/XSS payloads)
+    const headerPrefix = buffer.slice(0, 32).toString('utf8');
+    const isExecutableOrScript =
+      (buffer[0] === 0x4D && buffer[1] === 0x5A) || // Windows PE / DOS 'MZ'
+      (buffer[0] === 0x7F && buffer[1] === 0x45 && buffer[2] === 0x4C && buffer[3] === 0x46) || // Linux ELF '\x7fELF'
+      headerPrefix.startsWith('#!') || // Shell script
+      headerPrefix.toLowerCase().includes('<script') || // HTML / XSS payload
+      headerPrefix.toLowerCase().includes('<?php'); // PHP script
+
+    if (isExecutableOrScript) {
+      return res.status(400).json({
+        success: false,
+        message: 'Security violation: Uploaded file contains an executable or script payload. Only valid crop photos are permitted.'
+      });
+    }
+
     // Low quality or blurry image detection (small payload or explicit flag or filename with blur/unclear)
     const isNameBlurry = typeof fileName === 'string' && /blur|unclear|dark|shaky/i.test(fileName);
     const isInsufficient = isBlurry === true || isLowQuality === true || isNameBlurry || (isBlurry !== false && sizeInKb < 0.02);
