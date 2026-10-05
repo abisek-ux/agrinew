@@ -8,6 +8,7 @@ const { getMemoryProducts } = require('./productController');
 const phoneOtpService = require('../services/phoneOtpService');
 const { pushNotification } = require('./notificationController');
 const sendEmail = require('../utils/sendEmail');
+const { resolveFarmerLocation, sanitizeOrderFarmerDetails } = require('../utils/farmerLocationHelper');
 
 const otpPepper = () => process.env.RESET_OTP_PEPPER || 'agrilink_secret_otp_pepper_2026';
 const hashOtp = (otp) => crypto.createHmac('sha256', otpPepper()).update(String(otp).trim()).digest('hex');
@@ -136,7 +137,7 @@ const createOrder = async (req, res) => {
         farmerName: product.farmerName || 'Farm Origin',
         farmerPhone: product.farmerPhone || '',
         farmerEmail: product.farmerEmail || '',
-        farmerLocation: product.location || { lat: 12.5222, lng: 76.9004, address: 'Farm Depot' }
+        farmerLocation: resolveFarmerLocation(product.location, product.farmerId, req.user)
       });
     }
 
@@ -182,6 +183,17 @@ const createOrder = async (req, res) => {
       }
 
       const totalAmount = subtotal + deliveryFeePerOrder;
+      const groupLocation = resolveFarmerLocation(group.farmerLocation, group.farmerId, req.user);
+      const isRobert = !group.farmerName || String(group.farmerName).toLowerCase().includes('robert') || String(group.farmerName).toLowerCase().includes('murugan') || group.farmerName === 'Farm Origin';
+      const effectiveFarmerName = (req.user && req.user.role === 'farmer')
+        ? `${req.user.firstName || 'gowres'} ${req.user.lastName || ''}`.trim() || 'gowres'
+        : (isRobert ? (groupLocation.defaultFarmerName || 'gowres (Namakkal Farmer)') : group.farmerName);
+
+      const fLat = groupLocation.lat;
+      const fLng = groupLocation.lng;
+      const cLat = currentUserLocation?.lat || 12.9716;
+      const cLng = currentUserLocation?.lng || 77.5946;
+
       const orderPayload = {
         orderId: 'ORD-' + Math.floor(100000 + Math.random() * 900000),
         customerId: currentUserId,
@@ -190,18 +202,20 @@ const createOrder = async (req, res) => {
         customerEmail: currentUserEmail,
         customerLocation: currentUserLocation,
         farmerId: group.farmerId,
-        farmerName: group.farmerName,
-        farmerPhone: group.farmerPhone,
-        farmerEmail: group.farmerEmail,
-        farmerLocation: group.farmerLocation,
+        farmerName: effectiveFarmerName,
+        farmerPhone: group.farmerPhone || (req.user?.role === 'farmer' ? req.user.phone : '+919842100111'),
+        farmerEmail: group.farmerEmail || (req.user?.role === 'farmer' ? req.user.email : 'farmer@agrilink.in'),
+        farmerLocation: groupLocation,
+        farmerGpsLink: `https://www.google.com/maps?q=${fLat},${fLng}`,
+        gpsTrackingLink: `https://www.google.com/maps/dir/?api=1&origin=${fLat},${fLng}&destination=${cLat},${cLng}`,
         deliveryId: null,
         deliveryName: 'Unassigned',
         deliveryPhone: '',
         deliveryEmail: '',
         deliveryLocation: {
-          lat: group.farmerLocation?.lat || 12.5222,
-          lng: group.farmerLocation?.lng || 76.9004,
-          address: 'Farm Packing Depot'
+          lat: groupLocation.lat,
+          lng: groupLocation.lng,
+          address: `${groupLocation.placeName || 'Farm Gate Depot'}`
         },
         items: orderItems,
         totalAmount,
@@ -222,7 +236,7 @@ const createOrder = async (req, res) => {
         recipientRole: 'customer',
         orderId: orderPayload.orderId,
         title: '📦 Order Placed Successfully',
-        message: `Your farm produce order ${orderPayload.orderId} for ₹${totalAmount} has been placed with ${group.farmerName}.`,
+        message: `Your farm produce order ${orderPayload.orderId} for ₹${totalAmount} has been placed with ${effectiveFarmerName}.`,
         category: 'order',
         priority: 'NORMAL'
       });
@@ -238,14 +252,16 @@ const createOrder = async (req, res) => {
       });
     }
 
+    const sanitizedOrders = createdOrders.map(o => sanitizeOrderFarmerDetails(o, req.user));
+
     // Support single order backward compatibility and multi-order array response
-    if (createdOrders.length === 1) {
-      return res.status(201).json(createdOrders[0]);
+    if (sanitizedOrders.length === 1) {
+      return res.status(201).json(sanitizedOrders[0]);
     } else {
       return res.status(201).json({
         success: true,
-        orders: createdOrders,
-        message: `Cart checkout split into ${createdOrders.length} separate farm orders.`
+        orders: sanitizedOrders,
+        message: `Cart checkout split into ${sanitizedOrders.length} separate farm orders.`
       });
     }
   } catch (error) {
@@ -305,7 +321,7 @@ const getOrders = async (req, res) => {
       }
 
       const orders = await Order.find(query).sort({ createdAt: -1 });
-      return res.json(orders);
+      return res.json(orders.map(o => sanitizeOrderFarmerDetails(o, req.user)));
     } else {
       let filtered = [];
       if (userRole === 'customer') {
@@ -329,7 +345,7 @@ const getOrders = async (req, res) => {
         return res.status(403).json({ success: false, message: 'Unauthorized role' });
       }
 
-      return res.json([...filtered].reverse());
+      return res.json([...filtered].reverse().map(o => sanitizeOrderFarmerDetails(o, req.user)));
     }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -550,7 +566,7 @@ const updateOrderStatus = async (req, res) => {
       });
     }
 
-    return res.json(order);
+    return res.json(sanitizeOrderFarmerDetails(order, req.user));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -629,7 +645,7 @@ const assignDeliveryDriver = async (req, res) => {
       priority: 'NORMAL'
     });
 
-    return res.json({ success: true, message: 'Order successfully assigned to driver', order });
+    return res.json({ success: true, message: 'Order successfully assigned to driver', order: sanitizeOrderFarmerDetails(order, req.user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -914,7 +930,7 @@ const verifyDeliveryOtp = async (req, res) => {
       success: true,
       delivered: true,
       message: 'Delivery successfully authenticated and completed!',
-      order
+      order: sanitizeOrderFarmerDetails(order, req.user)
     });
   } catch (error) {
     const status = error.statusCode || 400;
@@ -1007,6 +1023,84 @@ const confirmDispatchSignal = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/orders/pay
+ * or POST /api/orders/:id/pay
+ * Records payment method, transactionId, payment status ('paid'), and updates order status.
+ */
+const processOrderPayment = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const { orderId, orderIds, paymentMethod, transactionId, amountPaid } = req.body;
+    const targetId = req.params.id || orderId;
+    let ids = orderIds || (targetId ? [targetId] : []);
+    if (!Array.isArray(ids)) ids = [ids];
+
+    if (ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'Order ID is required to process payment' });
+    }
+
+    const txnId = transactionId || `TXN-AGRI-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const method = paymentMethod || 'UPI';
+    const updatedOrders = [];
+
+    for (const id of ids) {
+      if (isConnected()) {
+        const order = await Order.findOne({
+          $or: [{ _id: id }, { id: id }, { orderId: id }]
+        });
+        if (order) {
+          order.paymentStatus = 'paid';
+          order.paymentMethod = method;
+          order.transactionId = txnId;
+          order.paidAt = new Date();
+          if (order.status === 'pending') {
+            order.status = 'confirmed';
+          }
+          await order.save();
+          updatedOrders.push(order);
+
+          // Push payment notification to customer
+          pushNotification({
+            recipientId: order.customerId,
+            recipientRole: 'customer',
+            orderId: order.orderId || order._id || order.id,
+            title: '💳 Payment Confirmed & Verified',
+            message: `Payment of ₹${order.totalAmount} via ${method} confirmed for Order ${order.orderId || order._id || order.id}. Txn Ref: ${txnId}`,
+            category: 'order',
+            priority: 'HIGH'
+          });
+        }
+      } else {
+        const order = memoryOrders.find(o => String(o._id || o.id || o.orderId) === String(id));
+        if (order) {
+          order.paymentStatus = 'paid';
+          order.paymentMethod = method;
+          order.transactionId = txnId;
+          order.paidAt = new Date();
+          if (order.status === 'pending') {
+            order.status = 'confirmed';
+          }
+          updatedOrders.push(order);
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Payment received and verified successfully!',
+      transactionId: txnId,
+      paymentMethod: method,
+      orders: updatedOrders.map(o => sanitizeOrderFarmerDetails(o, req.user))
+    });
+  } catch (error) {
+    console.error('processOrderPayment error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Payment processing failed' });
+  }
+};
+
 const seedMemoryOrder = (ord) => memoryOrders.push(ord);
 const getMemoryOrders = () => memoryOrders;
 
@@ -1019,6 +1113,7 @@ module.exports = {
   generateDeliveryOtp,
   verifyDeliveryOtp,
   confirmDispatchSignal,
+  processOrderPayment,
   seedMemoryOrder,
   getMemoryOrders
 };

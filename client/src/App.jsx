@@ -1,9 +1,11 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import Navbar from './components/Navbar';
 import PortalSelection from './components/PortalSelection';
 import LandscapeAuth from './components/LandscapeAuth';
 import NotificationToast from './components/NotificationToast';
+import AgriLinkMobileApp from './components/AgriLinkMobileApp';
 
 const CustomerPortal = lazy(() => import('./components/CustomerPortal'));
 const FarmerPortal = lazy(() => import('./components/FarmerPortal'));
@@ -55,6 +57,9 @@ class ErrorBoundary extends React.Component {
 function AppContent() {
   const { user, logout } = useAuth();
   const [selectedRole, setSelectedRole] = useState(null); // 'farmer' | 'delivery' | 'customer' | null
+  const [showMobileApp, setShowMobileApp] = useState(() => {
+    return window.innerWidth <= 640 || localStorage.getItem('agrilink_mobile_mode') === 'true';
+  });
 
   const handleLogout = () => {
     logout();
@@ -77,6 +82,10 @@ function AppContent() {
           selectedRole={selectedRole}
           onResetPortal={() => setSelectedRole(null)}
           onLogout={handleLogout}
+          onOpenMobileApp={() => {
+            setShowMobileApp(true);
+            localStorage.setItem('agrilink_mobile_mode', 'true');
+          }}
         />
       )}
 
@@ -84,7 +93,13 @@ function AppContent() {
         {!user ? (
           !selectedRole ? (
             /* First page contains only the selection of the variant (Farmer, Delivery, Customer) */
-            <PortalSelection onSelectRole={(role) => setSelectedRole(role)} />
+            <PortalSelection
+              onSelectRole={(role) => setSelectedRole(role)}
+              onOpenMobileApp={() => {
+                setShowMobileApp(true);
+                localStorage.setItem('agrilink_mobile_mode', 'true');
+              }}
+            />
           ) : (
             /* Auth page pre-locked to the chosen variant */
             <LandscapeAuth
@@ -130,6 +145,53 @@ function AppContent() {
         </footer>
       )}
 
+      {/* Persistent Floating 3D Mobile App Toggle */}
+      <button
+        onClick={() => {
+          setShowMobileApp(true);
+          localStorage.setItem('agrilink_mobile_mode', 'true');
+        }}
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 998,
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #0d9488 100%)',
+          color: '#ffffff',
+          border: '1.5px solid rgba(255, 255, 255, 0.4)',
+          borderRadius: '30px',
+          padding: '10px 18px',
+          fontSize: '13px',
+          fontWeight: '800',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          cursor: 'pointer',
+          boxShadow: '0 8px 30px rgba(16, 185, 129, 0.5), 0 0 15px rgba(52, 211, 153, 0.3)',
+          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+        title="Experience AgriLink Flagship 3D Mobile App"
+      >
+        <span style={{ fontSize: '16px' }}>📱</span>
+        <span>3D Mobile App</span>
+        <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.25)', padding: '2px 6px', borderRadius: '10px' }}>PRO</span>
+      </button>
+
+      {/* Flagship 3D Mobile Application Suite Modal / Screen */}
+      {showMobileApp && (
+        <AgriLinkMobileApp
+          onClose={() => {
+            setShowMobileApp(false);
+            localStorage.setItem('agrilink_mobile_mode', 'false');
+          }}
+          initialRole={selectedRole || userRole || 'customer'}
+          onSelectRole={(role) => {
+            setSelectedRole(role);
+            setShowMobileApp(false);
+          }}
+        />
+      )}
+
       <NotificationToast />
     </div>
   );
@@ -138,9 +200,11 @@ function AppContent() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </LanguageProvider>
     </ErrorBoundary>
   );
 }

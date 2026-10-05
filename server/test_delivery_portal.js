@@ -300,7 +300,23 @@ async function runTests() {
     passed++;
 
     // Verify with correct OTP
-    const correctOtp = demoOtp || '123456';
+    let correctOtp = demoOtp;
+    if (!correctOtp) {
+      const { getMemoryOrders } = require('./controllers/orderController');
+      const targetOrder = getMemoryOrders().find(o => String(o._id || o.id) === String(orderId));
+      if (targetOrder?.deliveryOtpHash) {
+        const crypto = require('crypto');
+        const pepper = process.env.RESET_OTP_PEPPER || 'agrilink_secret_otp_pepper_2026';
+        const h = (c) => crypto.createHmac('sha256', pepper).update(String(c).trim()).digest('hex');
+        for (let c = 100000; c <= 999999; c++) {
+          if (h(c) === targetOrder.deliveryOtpHash) {
+            correctOtp = String(c);
+            break;
+          }
+        }
+      }
+    }
+    correctOtp = correctOtp || '123456';
     const verifyOtpRes = await makeRequest('POST', `/api/orders/${orderId}/delivery-otp/verify`, {
       otp: correctOtp
     }, driverAToken);

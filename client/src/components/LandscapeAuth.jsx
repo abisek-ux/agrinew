@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import MapPicker from './MapPicker';
 import { authAPI } from '../services/api';
+import LanguageSelector from './LanguageSelector';
 import {
   Lock, Mail, Phone, User, MapPin, Eye, EyeOff, ArrowRight,
   ShieldCheck, KeyRound, Sparkles, Truck, Sprout, Search, Loader2, CheckCircle, AlertTriangle
@@ -378,6 +379,39 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
     }
   };
 
+  // Quick Demo Login Handler
+  const handleQuickDemo = async (demoRole, demoId, demoPass) => {
+    setIdentifier(demoId);
+    setPassword(demoPass);
+    setRole(demoRole);
+    setRoleMismatchError(null);
+    setLoading(true);
+    try {
+      const res = await login(demoId, demoPass, demoRole);
+      if (!res.success && res.registeredRole) {
+        setRoleMismatchError({
+          message: res.error,
+          detectedRole: res.registeredRole
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Instant Switch to Registered Role and Login
+  const handleSwitchRoleAndLogin = async (targetRole) => {
+    setRole(targetRole);
+    setRoleMismatchError(null);
+    setLoading(true);
+    try {
+      await login(identifier.trim(), password, targetRole);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
   // Send Phone OTP for Registration
   const handleSendPhoneOtp = async (e) => {
     e?.preventDefault();
@@ -667,6 +701,9 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
             </div>
 
             <div className="la-form-wrap">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                <LanguageSelector compact={true} variant="pill" />
+              </div>
               <div className="la-mobile-brand">
                 <AgriLinkLogo size="sm" showText={true} showBadge={true} interactive={false} />
               </div>
@@ -731,6 +768,83 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
               {/* LOGIN FORM */}
               {mode === 'login' && (
                 <form onSubmit={handleLoginSubmit} className="la-form">
+                  {/* Quick 1-Click Demo Accounts Bar */}
+                  <div
+                    style={{
+                      background: 'rgba(6, 24, 21, 0.65)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      borderRadius: '14px',
+                      padding: '10px 12px',
+                      marginBottom: '16px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '800', color: '#86efac', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        ⚡ 1-Click Demo Sign-In:
+                      </span>
+                      <span style={{ fontSize: '10px', color: '#9db5aa' }}>Instant test access</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDemo('customer', 'alex@nexus.io', 'Password123!')}
+                        style={{
+                          background: (selectedRole === 'customer' || !selectedRole) ? 'linear-gradient(135deg, #0d9488, #0f766e)' : 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(45, 212, 191, 0.4)',
+                          color: '#ffffff',
+                          padding: '5px 10px',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        🛒 Customer Demo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDemo('farmer', 'mgowres@gmail.com', 'Password123!')}
+                        style={{
+                          background: selectedRole === 'farmer' ? 'linear-gradient(135deg, #16a34a, #15803d)' : 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(74, 222, 128, 0.4)',
+                          color: '#ffffff',
+                          padding: '5px 10px',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        🌾 Farmer Demo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDemo('delivery', 'driver@nexus.io', 'Password123!')}
+                        style={{
+                          background: selectedRole === 'delivery' ? 'linear-gradient(135deg, #d97706, #b45309)' : 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(251, 191, 36, 0.4)',
+                          color: '#ffffff',
+                          padding: '5px 10px',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        🚚 Driver Demo
+                      </button>
+                    </div>
+                  </div>
+
                   {roleMismatchError && (
                     <div style={{
                       background: 'rgba(239, 68, 68, 0.16)',
@@ -749,31 +863,49 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
                           {roleMismatchError.message}
                         </span>
                       </div>
-                      {onBack && (
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         <button
                           type="button"
-                          onClick={onBack}
+                          onClick={() => handleSwitchRoleAndLogin(roleMismatchError.detectedRole)}
                           style={{
                             background: 'linear-gradient(135deg, #10b981, #059669)',
                             border: '1px solid rgba(255,255,255,0.3)',
                             color: '#ffffff',
                             borderRadius: '8px',
-                            padding: '7px 14px',
+                            padding: '8px 14px',
                             fontSize: '11.5px',
                             fontWeight: '800',
                             cursor: 'pointer',
-                            alignSelf: 'flex-start',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px',
                             boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
                           }}
                         >
-                          👉 Switch to {roleMismatchError.detectedRole?.toUpperCase()} Portal
+                          👉 Switch to {roleMismatchError.detectedRole?.toUpperCase()} Portal & Sign In
                         </button>
-                      )}
+                        {onBack && (
+                          <button
+                            type="button"
+                            onClick={onBack}
+                            style={{
+                              background: 'rgba(255,255,255,0.1)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              color: '#cbd5e1',
+                              borderRadius: '8px',
+                              padding: '8px 12px',
+                              fontSize: '11.5px',
+                              fontWeight: '600',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
+
                   <div className="la-field">
                     <label className="la-label">Email Address or Phone Number</label>
                     <div className="la-input-wrap">

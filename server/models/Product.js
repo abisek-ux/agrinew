@@ -23,9 +23,9 @@ const productSchema = new mongoose.Schema(
     farmerEmail: { type: String, default: '' },
     farmerNative: { type: String, default: '' },
     location: {
-      lat: { type: Number, default: 12.5222 },
-      lng: { type: Number, default: 76.9004 },
-      address: { type: String, default: 'Mandya Organic Farm, Karnataka, India' }
+      lat: { type: Number, default: 11.2189 },
+      lng: { type: Number, default: 78.1674 },
+      address: { type: String, default: 'AgriLink Agro Farm Gate, Mohanur Road, Namakkal, Tamil Nadu 637001, India' }
     },
     // Optional Agricultural Fields (Phase 1 Enrichment)
     variety: { type: String, default: '', trim: true },

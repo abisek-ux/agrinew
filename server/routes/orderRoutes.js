@@ -8,12 +8,16 @@ const {
   updateDeliveryLocation,
   generateDeliveryOtp,
   verifyDeliveryOtp,
-  confirmDispatchSignal
+  confirmDispatchSignal,
+  processOrderPayment
 } = require('../controllers/orderController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.post('/', protect, createOrder);
+router.post('/pay', protect, processOrderPayment);
+router.post('/:id/pay', protect, processOrderPayment);
 router.get('/', protect, getOrders);
+
 router.put('/:id/status', protect, updateOrderStatus);
 router.put('/:id/assign', protect, assignDeliveryDriver);
 router.put('/:id/location', protect, updateDeliveryLocation);

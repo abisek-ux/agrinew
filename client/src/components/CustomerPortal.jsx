@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { productAPI, orderAPI, reviewAPI, authAPI, notificationAPI, bargainAPI, aiAPI } from '../services/api';
 import LiveTrackingMap from './LiveTrackingMap';
 import {
@@ -58,10 +59,15 @@ import {
   ArrowLeft,
   CheckCircle2,
   Lock,
-  LogOut
+  LogOut,
+  Scan
 } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
 import ProfileEmailOtpModal from './ProfileEmailOtpModal';
+import PaymentPortalModal from './PaymentPortalModal';
+import FlipkartMarketplaceHeader from './FlipkartMarketplaceHeader';
+import { CropDoctor3DCanvas, WeatherSphere3DCanvas, ColdChainVan3DCanvas, Produce3DCanvas } from './AgriLinkMobileApp';
+
 
 const getProductId = (p) => {
   if (!p) return '';
@@ -3116,11 +3122,28 @@ function OrderDetailsModal({
                 <span>Producer Farm</span>
               </div>
               <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700' }}>
-                {order.farmerName || 'Mandya Organic Farm Partner'}
+                {order.farmerName || 'Tamil Nadu Farm Partner'}
               </div>
               <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
-                📍 {order.farmerLocation?.address || 'Direct Farm Depot, Karnataka'}
+                📍 {order.farmerLocation?.address || 'AgriLink Harvest Depot, Namakkal / Salem / Coimbatore, Tamil Nadu'}
               </div>
+              <a
+                href={order.farmerGpsLink || `https://www.google.com/maps?q=${order.farmerLocation?.lat || 11.2189},${order.farmerLocation?.lng || 78.1674}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  color: '#34d399',
+                  fontSize: '11.5px',
+                  fontWeight: '700',
+                  marginTop: '6px',
+                  textDecoration: 'none'
+                }}
+              >
+                <span>📍 Open Farm GPS in Maps ↗</span>
+              </a>
             </div>
 
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '14px', padding: '14px' }}>
@@ -3353,6 +3376,7 @@ function OrderDetailsModal({
 ───────────────────────────────────────────────────────────── */
 export default function CustomerPortal({ onLogout }) {
   const { user, showToast, updateUserProfile, logout } = useAuth();
+  const { t, language } = useLanguage();
   const [products, setProducts] = useState([]);
 
   // Cart persisted per customer account in localStorage (Protected against race-condition overwrite)
@@ -3466,7 +3490,10 @@ export default function CustomerPortal({ onLogout }) {
   });
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [confirmedOrderResult, setConfirmedOrderResult] = useState(null);
+  const [showPaymentPortal, setShowPaymentPortal] = useState(false);
+  const [paymentOrderData, setPaymentOrderData] = useState(null);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+
   const [placingOrder, setPlacingOrder] = useState(false);
   const [checkoutError, setCheckoutError] = useState(null);
   const [cancelReasonPreset, setCancelReasonPreset] = useState('');
@@ -3938,14 +3965,18 @@ export default function CustomerPortal({ onLogout }) {
 
       setCart([]);
       setShowCheckoutModal(false);
-      setConfirmedOrderResult({
+      const placedOrderData = {
         orders: newOrders,
         totalAmount,
-        paymentMethod: selectedPaymentMethod === 'upi_delivery' ? 'UPI on Delivery (Scan QR on Handover)' : 'Cash on Delivery (Standard Handover)',
+        paymentMethod: selectedPaymentMethod === 'upi_delivery' ? 'UPI' : 'COD',
         address: checkoutAddress,
         expressDelivery
-      });
+      };
+      setPaymentOrderData(placedOrderData);
+      setShowPaymentPortal(true);
+      setConfirmedOrderResult(placedOrderData);
       fetchNotifications();
+
       // Re-fetch products from server to guarantee sync with database
       await fetchProducts();
 
@@ -4139,9 +4170,25 @@ export default function CustomerPortal({ onLogout }) {
         checkoutError={checkoutError}
       />
 
+      {/* Dedicated Interactive Payment Portal Modal */}
+      <PaymentPortalModal
+        isOpen={showPaymentPortal}
+        orderData={paymentOrderData}
+        onClose={() => setShowPaymentPortal(false)}
+        onPaymentSuccess={(result) => {
+          fetchOrders();
+          showToast(`🎉 Payment of ₹${result.amount} confirmed via ${result.method}!`, 'success');
+        }}
+        onViewOrders={() => {
+          setShowPaymentPortal(false);
+          setActiveTab('orders');
+        }}
+      />
+
       {/* Phase 4 — Order Confirmation Modal */}
       <OrderConfirmationModal
-        isOpen={!!confirmedOrderResult}
+        isOpen={!!confirmedOrderResult && !showPaymentPortal}
+
         orderResult={confirmedOrderResult}
         onClose={() => setConfirmedOrderResult(null)}
         onViewOrders={() => {
@@ -4369,7 +4416,35 @@ export default function CustomerPortal({ onLogout }) {
               }}
             >
               <Package size={18} />
-              <span>Fresh Marketplace</span>
+              <span>{t('Fresh Marketplace')}</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ar_studio')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '11px 14px',
+                borderRadius: '12px',
+                border: '1px solid rgba(52, 211, 153, 0.4)',
+                background: activeTab === 'ar_studio' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(16, 185, 129, 0.12)',
+                color: activeTab === 'ar_studio' ? '#ffffff' : '#6ee7b7',
+                fontWeight: '800',
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'all 0.2s ease',
+                boxShadow: activeTab === 'ar_studio' ? '0 0 16px rgba(16, 185, 129, 0.4)' : 'none',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Scan size={17} color={activeTab === 'ar_studio' ? '#ffffff' : '#34d399'} />
+                <span>3D AR Produce Lab</span>
+              </div>
+              <span style={{ fontSize: '9px', background: 'rgba(52, 211, 153, 0.25)', color: '#34d399', padding: '2px 6px', borderRadius: '8px', fontWeight: '800' }}>3D</span>
             </button>
 
             <button
@@ -4394,7 +4469,7 @@ export default function CustomerPortal({ onLogout }) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Video size={17} color="#ef4444" />
-                <span>Live Farm-Cam 24/7</span>
+                <span>{t('Live Farm-Cam 24/7')}</span>
               </div>
               <span style={{
                 width: '8px',
@@ -4427,7 +4502,7 @@ export default function CustomerPortal({ onLogout }) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Truck size={18} />
-                <span>Track Orders</span>
+                <span>{t('Track Orders')}</span>
               </div>
               {orders.length > 0 && (
                 <span style={{
@@ -4463,7 +4538,7 @@ export default function CustomerPortal({ onLogout }) {
               }}
             >
               <Heart size={18} />
-              <span>Saved Farm Produce</span>
+              <span>{t('Saved Farm Produce')}</span>
             </button>
 
             <button
@@ -4486,7 +4561,7 @@ export default function CustomerPortal({ onLogout }) {
               }}
             >
               <ChefHat size={18} />
-              <span>AI Recipe Studio</span>
+              <span>{t('AI Recipe Studio')}</span>
             </button>
 
             <button
@@ -4514,7 +4589,7 @@ export default function CustomerPortal({ onLogout }) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Handshake size={18} />
-                <span>My Bargains</span>
+                <span>{t('My Bargains')}</span>
               </div>
               {customerBargains.filter(b => b.status === 'PENDING' || b.status === 'COUNTERED').length > 0 && (
                 <span style={{
@@ -4555,7 +4630,7 @@ export default function CustomerPortal({ onLogout }) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Users size={18} />
-                <span>Farmers Directory</span>
+                <span>{t('Farmers Directory')}</span>
               </div>
               {registeredFarmers.length > 0 && (
                 <span style={{
@@ -4635,7 +4710,18 @@ export default function CustomerPortal({ onLogout }) {
         {/* Marketplace View */}
         {(activeTab === 'marketplace' || activeTab === 'favorites') && (
           <div>
+            {/* Flipkart-Style Shopping Header, Category Icons, Carousel Banners & Flash Deals */}
+            <FlipkartMarketplaceHeader
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              filterCategory={filterCategory}
+              setFilterCategory={setFilterCategory}
+              userLocation={user?.location}
+              activeDealsCount={products.length || 10}
+            />
+
             {/* Top Filter and Search Bar */}
+
             <div style={{
               background: 'rgba(9, 43, 39, 0.75)',
               backdropFilter: 'blur(16px)',
@@ -5130,11 +5216,15 @@ export default function CustomerPortal({ onLogout }) {
                     </button>
                   </div>
                 ) : (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))',
-                    gap: '20px'
-                  }}>
+                  <div
+                    className="flipkart-product-grid"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))',
+                      gap: '20px'
+                    }}
+                  >
+
                     {filteredProducts.map(product => {
                       const prodId = getProductId(product);
                       const isFav = favorites.includes(prodId);
@@ -5455,6 +5545,30 @@ export default function CustomerPortal({ onLogout }) {
                                     <span>Bargain</span>
                                   </button>
                                 )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => setInspectProduct(product)}
+                                  title="Inspect 3D quality & hologram"
+                                  style={{
+                                    padding: '12px 14px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(52, 211, 153, 0.16)',
+                                    border: '1px solid rgba(52, 211, 153, 0.5)',
+                                    color: '#34d399',
+                                    fontWeight: '800',
+                                    fontSize: '12.5px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '5px',
+                                    minHeight: '48px'
+                                  }}
+                                >
+                                  <Scan size={14} />
+                                  <span>3D View</span>
+                                </button>
 
                                 <button
                                   disabled={!inStock}
@@ -6056,6 +6170,60 @@ export default function CustomerPortal({ onLogout }) {
           </div>
         )}
 
+        {/* ─── 3D AR PRODUCE & AGRONOMY STUDIO TAB ─── */}
+        {activeTab === 'ar_studio' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ color: '#effbe7', fontSize: '24px', fontWeight: '800', margin: '0 0 4px' }}>
+                  🌿 3D AR Produce Lab & Micro-Climate Studio
+                </h2>
+                <p style={{ color: '#a3c2b0', fontSize: '13.5px', margin: 0 }}>
+                  Interactive 3D produce analysis, zero-pesticide verification, and cold-chain temperature telemetry.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '18px' }}>
+              {/* 3D Produce Model */}
+              <div style={{ background: 'rgba(6, 26, 21, 0.85)', border: '1px solid rgba(52, 211, 153, 0.35)', borderRadius: '20px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#ffffff' }}>🍎 3D Freshness Lens</span>
+                  <span style={{ fontSize: '11px', color: '#34d399', fontWeight: '700' }}>Mass-Spec Verified 0.00 ppm</span>
+                </div>
+                <Produce3DCanvas itemType="tomato" />
+              </div>
+
+              {/* 3D Cold Chain Reefer Truck */}
+              <div style={{ background: 'rgba(6, 26, 21, 0.85)', border: '1px solid rgba(52, 211, 153, 0.35)', borderRadius: '20px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#ffffff' }}>🚚 Active Reefer Logistics</span>
+                  <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '700' }}>-4.2°C Cold Chain Lock</span>
+                </div>
+                <ColdChainVan3DCanvas internalTemp="-4.2°C" />
+              </div>
+
+              {/* 3D Weather Satellite */}
+              <div style={{ background: 'rgba(6, 26, 21, 0.85)', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: '20px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#38bdf8' }}>🛰️ Farm Micro-Climate Globe</span>
+                  <span style={{ fontSize: '11px', color: '#a7f3d0' }}>Mandya & Nashik Hubs</span>
+                </div>
+                <WeatherSphere3DCanvas />
+              </div>
+
+              {/* 3D Crop Doctor */}
+              <div style={{ background: 'rgba(6, 26, 21, 0.85)', border: '1px solid rgba(52, 211, 153, 0.35)', borderRadius: '20px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#34d399' }}>🔬 3D Botanical Health Scanner</span>
+                  <span style={{ fontSize: '11px', color: '#86efac' }}>Health Score: 94%</span>
+                </div>
+                <CropDoctor3DCanvas disease="blight" isSpraying={false} viewMode="realistic" />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Live Orders & GPS Radar View */}
         {activeTab === 'orders' && (
           <div>
@@ -6188,18 +6356,63 @@ export default function CustomerPortal({ onLogout }) {
                         </div>
 
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                          {/* Payment status badge (Requirement 11) */}
-                          <span style={{
-                            background: isDelivered ? 'rgba(55, 189, 120, 0.15)' : isCancelled ? 'rgba(255,255,255,0.05)' : 'rgba(244, 201, 93, 0.15)',
-                            border: `1px solid ${isDelivered ? 'rgba(55, 189, 120, 0.3)' : isCancelled ? 'rgba(255,255,255,0.1)' : 'rgba(244, 201, 93, 0.3)'}`,
-                            color: isDelivered ? '#8be28b' : isCancelled ? '#a3c2b0' : '#f4c95d',
-                            padding: '4px 10px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: '700'
-                          }}>
-                            {isDelivered ? 'Paid on Handover' : isCancelled ? 'No Payment Due' : 'Cash on Delivery • Due on Arrival'}
-                          </span>
+                          {/* Payment status badge */}
+                          {order.paymentStatus === 'paid' ? (
+                            <span style={{
+                              background: 'rgba(16, 185, 129, 0.2)',
+                              border: '1px solid #10b981',
+                              color: '#4ade80',
+                              padding: '4px 10px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              ✓ Paid Online ({order.paymentMethod || 'UPI'})
+                            </span>
+                          ) : (
+                            <span style={{
+                              background: isDelivered ? 'rgba(55, 189, 120, 0.15)' : isCancelled ? 'rgba(255,255,255,0.05)' : 'rgba(244, 201, 93, 0.15)',
+                              border: `1px solid ${isDelivered ? 'rgba(55, 189, 120, 0.3)' : isCancelled ? 'rgba(255,255,255,0.1)' : 'rgba(244, 201, 93, 0.3)'}`,
+                              color: isDelivered ? '#8be28b' : isCancelled ? '#a3c2b0' : '#f4c95d',
+                              padding: '4px 10px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: '700'
+                            }}>
+                              {isDelivered ? 'Paid on Handover' : isCancelled ? 'No Payment Due' : 'Payment Pending / Due on Handover'}
+                            </span>
+                          )}
+
+                          {order.paymentStatus !== 'paid' && !isCancelled && !isDelivered && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentOrderData(order);
+                                setShowPaymentPortal(true);
+                              }}
+                              style={{
+                                background: 'linear-gradient(135deg, #10b981, #059669)',
+                                border: 'none',
+                                color: '#ffffff',
+                                padding: '5px 12px',
+                                borderRadius: '12px',
+                                fontSize: '11.5px',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)'
+                              }}
+                            >
+                              <CreditCard size={13} />
+                              <span>Pay Online</span>
+                            </button>
+                          )}
+
 
                           {/* Order status badge */}
                           <span style={{
@@ -6220,7 +6433,13 @@ export default function CustomerPortal({ onLogout }) {
 
                       {/* Farmer and Courier Quick Info */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', marginBottom: '14px', fontSize: '12.5px', color: '#a3c2b0' }}>
-                        <div>🧑‍🌾 <strong>Farmer:</strong> <span style={{ color: '#effbe7' }}>{order.farmerName || 'Partner Farm'}</span></div>
+                        <div>🧑‍🌾 <strong>Farmer:</strong> <span style={{ color: '#effbe7' }}>{order.farmerName || 'Tamil Nadu Farm Partner'}</span>
+                          {order.farmerLocation?.address && (
+                            <span style={{ fontSize: '11.5px', color: '#6ee7b7', display: 'block', marginTop: '2px' }}>
+                              📍 {order.farmerLocation.address.split(',')[0]} ({order.farmerLocation.placeName || 'Tamil Nadu'})
+                            </span>
+                          )}
+                        </div>
                         <div>🚚 <strong>Courier:</strong> <span style={{ color: '#effbe7' }}>{order.deliveryName || 'Awaiting assignment'}</span></div>
                         <div>📍 <strong>Destination:</strong> <span style={{ color: '#effbe7' }}>{order.customerLocation?.address?.split(',')[0] || 'Doorstep'}</span></div>
                       </div>
@@ -8134,7 +8353,8 @@ export default function CustomerPortal({ onLogout }) {
       </main>
 
       {/* Mobile Bottom Navigation Bar (Home | Search | Cart | Orders | Profile) */}
-      <nav className="mobile-bottom-nav">
+      <nav className="mobile-bottom-nav customer-mobile-nav">
+
         <button
           className={`mobile-nav-btn ${activeTab === 'marketplace' ? 'active' : ''}`}
           onClick={() => {
@@ -8143,7 +8363,15 @@ export default function CustomerPortal({ onLogout }) {
           }}
         >
           <Home size={20} />
-          <span>Home</span>
+          <span>{t('nav_home') || 'Home'}</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeTab === 'ar_studio' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ar_studio')}
+        >
+          <Scan size={20} />
+          <span>3D Lab</span>
         </button>
 
         <button
@@ -8160,7 +8388,7 @@ export default function CustomerPortal({ onLogout }) {
           }}
         >
           <Search size={20} />
-          <span>Search</span>
+          <span>{t('Search') || 'Search'}</span>
         </button>
 
         <button
@@ -8171,7 +8399,7 @@ export default function CustomerPortal({ onLogout }) {
             <ShoppingCart size={20} />
             {cartItemCount > 0 && <span className="mobile-nav-badge">{cartItemCount}</span>}
           </div>
-          <span>Cart</span>
+          <span>{t('cart_title') || 'Cart'}</span>
         </button>
 
         <button
@@ -8182,7 +8410,7 @@ export default function CustomerPortal({ onLogout }) {
             <Truck size={20} />
             {orders.length > 0 && <span className="mobile-nav-badge">{orders.length}</span>}
           </div>
-          <span>Orders</span>
+          <span>{t('nav_orders') || 'Orders'}</span>
         </button>
 
         <button
@@ -8190,9 +8418,21 @@ export default function CustomerPortal({ onLogout }) {
           onClick={() => setActiveTab('profile')}
         >
           <User size={20} />
-          <span>Profile</span>
+          <span>{t('Profile') || 'Profile'}</span>
         </button>
       </nav>
+
+      {/* 3D Produce Quality & Hologram Inspector Modal */}
+      {inspectProduct && (
+        <Produce3DInspector
+          product={inspectProduct}
+          onClose={() => setInspectProduct(null)}
+          onAddToCart={(prod) => {
+            addToCart(prod, Number(prod.minOrderQty) || 1);
+            showToast(`Added ${prod.title || prod.name} to cart!`, 'success');
+          }}
+        />
+      )}
 
       {/* Email OTP Verification Modal for Profile Modification */}
       <ProfileEmailOtpModal

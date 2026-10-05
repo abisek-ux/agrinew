@@ -63,8 +63,10 @@ export const orderAPI = {
   updateLocation: (id, data) => axios.put(`${API_BASE}/orders/${id}/location`, data, { headers: getAuthHeaders() }),
   generateDeliveryOtp: (id) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/generate`, {}, { headers: getAuthHeaders() }),
   verifyDeliveryOtp: (id, data) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/verify`, data, { headers: getAuthHeaders() }),
-  confirmDispatchSignal: (id, data) => axios.post(`${API_BASE}/orders/${id || 'batch'}/dispatch-signal`, data || {}, { headers: getAuthHeaders() })
+  confirmDispatchSignal: (id, data) => axios.post(`${API_BASE}/orders/${id || 'batch'}/dispatch-signal`, data || {}, { headers: getAuthHeaders() }),
+  processPayment: (data) => axios.post(`${API_BASE}/orders/pay`, data, { headers: getAuthHeaders() })
 };
+
 
 export const aiAPI = {
   cropAdvisory: (data) => axios.post(`${API_BASE}/ai/crop-advisory`, data, { headers: getAuthHeaders() }),

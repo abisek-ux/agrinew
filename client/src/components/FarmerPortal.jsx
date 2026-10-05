@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageSelector from './LanguageSelector';
 import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI, authAPI } from '../services/api';
 import LiveTrackingMap from './LiveTrackingMap';
 import MapPicker from './MapPicker';
@@ -397,17 +399,32 @@ const WEATHER_LOCATIONS = {
   'My Farm Location (GPS)': {
     name: 'My Farm Location (GPS)',
     label: '📍 My Farm Location (GPS Default)',
-    lat: 11.3992,
-    lon: 79.6935,
-    region: 'Farmer Local Microclimate',
-    soilType: 'Alluvial Soil',
+    lat: 11.2189,
+    lon: 78.1674,
+    region: 'Namakkal Agro Microclimate',
+    soilType: 'Red Loam Soil',
     defaultTemp: 30,
     defaultFeelsLike: 33,
-    defaultCondition: 'cloudy',
-    defaultHumidity: 68,
-    defaultRainChance: 25,
-    defaultWind: '15 km/h S',
-    defaultAdvisory: 'Microclimate sensor active. Favorable for morning agricultural operations.'
+    defaultCondition: 'sunny',
+    defaultHumidity: 62,
+    defaultRainChance: 15,
+    defaultWind: '14 km/h SW',
+    defaultAdvisory: 'Microclimate sensor active in Namakkal. Favorable for morning agricultural operations.'
+  },
+  Namakkal: {
+    name: 'Namakkal',
+    label: '📍 Namakkal (Agro Gateway)',
+    lat: 11.2189,
+    lon: 78.1674,
+    region: 'Namakkal Agro Gateway',
+    soilType: 'Red Loam Soil',
+    defaultTemp: 30,
+    defaultFeelsLike: 33,
+    defaultCondition: 'sunny',
+    defaultHumidity: 62,
+    defaultRainChance: 15,
+    defaultWind: '14 km/h SW',
+    defaultAdvisory: 'Favorable solar radiation over Namakkal agro farms. Excellent conditions for harvest and sun-drying.'
   },
   Chidambaram: {
     name: 'Chidambaram',
@@ -1080,6 +1097,7 @@ function DeliverySummonModal({ isOpen, orderId, onClose, onDriverConfirmed }) {
 
 export default function FarmerPortal({ onLogout }) {
   const { user, logout, showToast, updateUserProfile, updateUserLocation } = useAuth();
+  const { t } = useLanguage();
   const [farmerProducts, setFarmerProducts] = useState([]);
   const [incomingOrders, setIncomingOrders] = useState([]);
   
@@ -1440,7 +1458,7 @@ export default function FarmerPortal({ onLogout }) {
 
   // Farm Location Picker State
   const [farmLocation, setFarmLocation] = useState(
-    user?.location || { lat: 11.3992, lng: 79.6936, address: 'Chidambaram Delta Basin, Tamil Nadu, India' }
+    user?.location || { lat: 11.2189, lng: 78.1674, address: 'AgriLink Agro Farm Gate, Mohanur Road, Namakkal, Tamil Nadu 637001, India' }
   );
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showDeliverySummon, setShowDeliverySummon] = useState(false);
@@ -1476,11 +1494,11 @@ export default function FarmerPortal({ onLogout }) {
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Profile Edit State
-  const [profileFirstName, setProfileFirstName] = useState(user?.firstName || '');
-  const [profileLastName, setProfileLastName] = useState(user?.lastName || '');
+  const [profileFirstName, setProfileFirstName] = useState(user?.firstName || 'gowres');
+  const [profileLastName, setProfileLastName] = useState(user?.lastName || 'ms');
   const [profileFarmName, setProfileFarmName] = useState(user?.farmName || '');
-  const [profilePhone, setProfilePhone] = useState(user?.phone || '');
-  const [profileNativePlace, setProfileNativePlace] = useState(user?.nativePlace || '');
+  const [profilePhone, setProfilePhone] = useState(user?.phone || '9952712633');
+  const [profileNativePlace, setProfileNativePlace] = useState(user?.nativePlace || 'Namakkal, Tamil Nadu');
   const [profileDescription, setProfileDescription] = useState(user?.description || '');
   const [savingProfile, setSavingProfile] = useState(false);
   const [showProfileMapPicker, setShowProfileMapPicker] = useState(false);
@@ -1838,10 +1856,10 @@ export default function FarmerPortal({ onLogout }) {
         description: description.trim(),
         image: image || PRESET_IMAGES[category]?.[0]?.url || PRESET_IMAGES.vegetable[0].url,
         harvestDate: harvestDate ? new Date(harvestDate) : new Date(),
-        farmerName: `${user?.firstName || 'Aravinth'} ${user?.lastName || 'Kumar'}`.trim(),
-        farmerPhone: user?.phone || '+91 98421 55678',
-        farmerEmail: user?.email || 'farmer@agrisun.in',
-        farmerNative: user?.nativePlace || selectedCity || 'Chidambaram, Tamil Nadu',
+        farmerName: user?.name || `${user?.firstName || 'gowres'} ${user?.lastName || ''}`.trim() || 'gowres',
+        farmerPhone: user?.phone || '9952712633',
+        farmerEmail: user?.email || 'mgowres@gmail.com',
+        farmerNative: user?.nativePlace || selectedCity || 'Namakkal, Tamil Nadu',
         location: farmLocation,
         // Agricultural fields (Phase 1 & 2)
         variety: variety.trim(),
@@ -2081,8 +2099,8 @@ export default function FarmerPortal({ onLogout }) {
   const outOfStockProducts = farmerProducts.filter(p => Number(p.stock) <= 0);
   const recentOrdersList = [...incomingOrders].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
 
-  const farmerDisplayName = user?.firstName || 'Aravinth';
-  const farmerCityName = user?.nativePlace || selectedCity || 'Chidambaram';
+  const farmerDisplayName = user?.name || user?.firstName || 'gowres';
+  const farmerCityName = user?.nativePlace || selectedCity || 'Namakkal';
 
   // Filtered products for search
   const displayedProducts = farmerProducts.filter(p =>
@@ -2109,7 +2127,7 @@ export default function FarmerPortal({ onLogout }) {
               onClick={() => setActiveNav('home')}
             >
               <Home size={18} />
-              <span>Home</span>
+              <span>{t('Home')}</span>
             </button>
 
             <button
@@ -2120,7 +2138,7 @@ export default function FarmerPortal({ onLogout }) {
               }}
             >
               <Sprout size={18} />
-              <span>Before Cultivation</span>
+              <span>{t('Before Cultivation')}</span>
             </button>
 
             <button
@@ -2131,7 +2149,7 @@ export default function FarmerPortal({ onLogout }) {
               }}
             >
               <Layers size={18} />
-              <span>After Cultivation</span>
+              <span>{t('After Cultivation')}</span>
             </button>
 
             <button
@@ -2139,7 +2157,7 @@ export default function FarmerPortal({ onLogout }) {
               onClick={() => setActiveNav('products')}
             >
               <Package size={18} />
-              <span>My Products</span>
+              <span>{t('My Products')}</span>
               <span className="farmer-nav-badge">{farmerProducts.length}</span>
             </button>
 
@@ -2148,7 +2166,7 @@ export default function FarmerPortal({ onLogout }) {
               onClick={() => setActiveNav('orders')}
             >
               <Truck size={18} />
-              <span>Buyer Orders</span>
+              <span>{t('Buyer Orders')}</span>
               {pendingOrdersCount > 0 && (
                 <span className="farmer-nav-badge" style={{ background: '#ef4444' }}>
                   {pendingOrdersCount}
@@ -2168,7 +2186,7 @@ export default function FarmerPortal({ onLogout }) {
               }}
             >
               <IndianRupee size={18} color="#fbbf24" />
-              <span>Bulk Bargains</span>
+              <span>{t('Bulk Bargains')}</span>
               {pendingBargainsCount > 0 && (
                 <span className="farmer-nav-badge" style={{ background: '#f59e0b' }}>
                   {pendingBargainsCount}
@@ -2181,7 +2199,7 @@ export default function FarmerPortal({ onLogout }) {
               onClick={() => setActiveNav('market_prices')}
             >
               <BarChart2 size={18} />
-              <span>Market Prices</span>
+              <span>{t('Market Prices')}</span>
             </button>
 
             <button
@@ -2189,7 +2207,7 @@ export default function FarmerPortal({ onLogout }) {
               onClick={() => setActiveNav('disease_detection')}
             >
               <ShieldCheck size={18} />
-              <span>Disease Detection</span>
+              <span>{t('Disease Detection')}</span>
             </button>
 
             <button
@@ -2202,7 +2220,7 @@ export default function FarmerPortal({ onLogout }) {
             >
               <FlaskConical size={18} color="#34d399" />
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>Medicines & Fertilizers</span>
+                <span>{t('Medicines & Fertilizers')}</span>
                 <span style={{ fontSize: '9px', background: 'rgba(52, 211, 153, 0.25)', color: '#34d399', padding: '1px 5px', borderRadius: '6px', fontWeight: '800' }}>NEW</span>
               </span>
             </button>
@@ -2257,7 +2275,7 @@ export default function FarmerPortal({ onLogout }) {
               onClick={() => setActiveNav('profile')}
             >
               <User size={18} />
-              <span>Profile</span>
+              <span>{t('Profile')}</span>
             </button>
 
             <button
@@ -2265,7 +2283,7 @@ export default function FarmerPortal({ onLogout }) {
               onClick={() => setActiveNav('settings')}
             >
               <Settings size={18} />
-              <span>Settings</span>
+              <span>{t('Settings')}</span>
             </button>
           </nav>
         </div>
@@ -2301,7 +2319,7 @@ export default function FarmerPortal({ onLogout }) {
             }}
           >
             <Smartphone size={15} />
-            <span>Install Mobile App</span>
+            <span>{t('Install Mobile App')}</span>
           </button>
 
           <button
@@ -2333,7 +2351,7 @@ export default function FarmerPortal({ onLogout }) {
             }}
           >
             <LogOut size={16} color="#ef4444" />
-            <span>Logout</span>
+            <span>{t('Logout')}</span>
           </button>
         </div>
       </aside>
@@ -2351,7 +2369,7 @@ export default function FarmerPortal({ onLogout }) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search crops, products, or insights..."
+              placeholder={t('search_placeholder') || "Search crops, products, or insights..."}
             />
             {searchQuery && (
               <button
@@ -2364,6 +2382,9 @@ export default function FarmerPortal({ onLogout }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {/* Top Language Selector */}
+            <LanguageSelector compact={true} variant="pill" />
+
             {/* Quick Refresh Data Button */}
             <button
               onClick={handleRefreshAll}
@@ -2599,6 +2620,33 @@ export default function FarmerPortal({ onLogout }) {
                     >
                       <span>View My Products</span>
                       <ChevronRight size={16} />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveNav('three_d_farm_port')}
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(3, 105, 161, 0.4) 100%)',
+                        backdropFilter: 'blur(16px)',
+                        WebkitBackdropFilter: 'blur(16px)',
+                        color: '#38bdf8',
+                        border: '1px solid rgba(56, 189, 248, 0.45)',
+                        borderTop: '1.5px solid rgba(56, 189, 248, 0.75)',
+                        borderRadius: '12px',
+                        padding: '11px 20px',
+                        fontSize: '13.5px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
+                        transition: 'all 0.25s ease'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)'; e.currentTarget.style.boxShadow = '0 12px 28px rgba(56, 189, 248, 0.4)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(56, 189, 248, 0.25)'; }}
+                    >
+                      <Box size={16} color="#38bdf8" />
+                      <span>3D Digital Twin</span>
                     </button>
                   </div>
                 </div>
@@ -3355,6 +3403,7 @@ export default function FarmerPortal({ onLogout }) {
                       📍 My Farm Location (GPS Default)
                     </option>
                     <optgroup label="── Tamil Nadu Agri Belts ──" style={{ background: '#041610', color: '#34d399', fontWeight: '800' }}>
+                      <option value="Namakkal" style={{ background: '#08241b', color: '#f8fafc' }}>📍 Namakkal (Agro Gateway)</option>
                       <option value="Chidambaram" style={{ background: '#08241b', color: '#f8fafc' }}>📍 Chidambaram (Delta Basin)</option>
                       <option value="Thanjavur" style={{ background: '#08241b', color: '#f8fafc' }}>📍 Thanjavur (Paddy Granary)</option>
                       <option value="Coimbatore" style={{ background: '#08241b', color: '#f8fafc' }}>📍 Coimbatore (Kongu Agro)</option>
@@ -6731,7 +6780,7 @@ export default function FarmerPortal({ onLogout }) {
                       value={profileNativePlace}
                       onChange={e => setProfileNativePlace(e.target.value)}
                       disabled={user?.isProfileLocked}
-                      placeholder="e.g. Mandya / Chidambaram"
+                      placeholder="e.g. Namakkal / Salem"
                       className="input-field"
                     />
                   </div>
@@ -7410,11 +7459,24 @@ export default function FarmerPortal({ onLogout }) {
         </button>
 
         <button
-          className={`mobile-nav-btn ${['farm', 'before_cultivation', 'after_cultivation', 'disease_detection', 'medicines_fertilizers', 'market_prices', 'three_d_farm_port'].includes(activeNav) ? 'active' : ''}`}
+          className={`mobile-nav-btn ${['farm', 'before_cultivation', 'after_cultivation', 'disease_detection', 'medicines_fertilizers', 'market_prices'].includes(activeNav) ? 'active' : ''}`}
           onClick={() => setActiveNav('farm')}
         >
           <Sprout size={20} />
           <span>Farm</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeNav === 'three_d_farm_port' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveNav('three_d_farm_port');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          style={{ position: 'relative' }}
+        >
+          <Box size={20} color={activeNav === 'three_d_farm_port' ? '#38bdf8' : undefined} />
+          <span style={{ color: activeNav === 'three_d_farm_port' ? '#38bdf8' : undefined }}>3D Port</span>
+          <span style={{ position: 'absolute', top: '2px', right: '10px', fontSize: '8px', background: '#0284c7', color: '#fff', padding: '1px 4px', borderRadius: '6px', fontWeight: '900' }}>3D</span>
         </button>
 
         <button

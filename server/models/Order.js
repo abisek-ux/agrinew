@@ -17,9 +17,9 @@ const orderSchema = new mongoose.Schema(
     farmerPhone: { type: String, default: '' },
     farmerEmail: { type: String, default: '' },
     farmerLocation: {
-      lat: { type: Number, default: 12.5222 },
-      lng: { type: Number, default: 76.9004 },
-      address: { type: String, default: '' }
+      lat: { type: Number, default: 11.2189 },
+      lng: { type: Number, default: 78.1674 },
+      address: { type: String, default: 'AgriLink Agro Farm Gate, Mohanur Road, Namakkal, Tamil Nadu 637001, India' }
     },
     deliveryId: { type: String, default: null },
     deliveryName: { type: String, default: 'Unassigned' },

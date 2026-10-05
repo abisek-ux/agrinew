@@ -6,14 +6,14 @@ const Order = require('./models/Order');
 const Review = require('./models/Review');
 const phoneOtpService = require('./services/phoneOtpService');
 
-const secret = process.env.JWT_SECRET || 'nexus_super_secret_jwt_key_2025';
+const secret = process.env.JWT_SECRET || 'agrilink_super_secret_jwt_key_2026';
 
 // Real fixture user IDs from users.json
-const CUSTOMER_A_ID = '6ab94f4042b3f01aa7e76825'; // Alex Rivers
+const CUSTOMER_A_ID = 'user_customer'; // Alex Rivers
 const CUSTOMER_B_ID = '6ab94f4142b3f01aa7e76832'; // Abisek P
-const FARMER_A_ID   = '6ab94f4042b3f01aa7e76829'; // Robert Greenfield
-const FARMER_B_ID   = '6ab94f4142b3f01aa7e76835'; // Gowres MS
-const DRIVER_A_ID   = '6ab94f4142b3f01aa7e7682c'; // David Swift
+const FARMER_A_ID   = 'user_farmer';   // Gowres
+const FARMER_B_ID   = '6ab8e42a52e7e8ff5d16a727'; // Yogalakshmi M
+const DRIVER_A_ID   = 'user_delivery'; // David Swift
 const DRIVER_B_ID   = '6ab94f4142b3f01aa7e7682f'; // Aravinth P
 
 const tokenCustomerA = jwt.sign({ id: CUSTOMER_A_ID, role: 'customer' }, secret, { expiresIn: '1h' });

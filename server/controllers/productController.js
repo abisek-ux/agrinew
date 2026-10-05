@@ -181,11 +181,11 @@ const addProduct = async (req, res) => {
     }
 
     const farmerId = String(req.user.id || req.user._id || 'farmer_1');
-    const computedFarmerName = farmerName || `${req.user.firstName || 'Robert'} ${req.user.lastName || 'Greenfield'}`.trim();
-    const computedFarmerPhone = farmerPhone || req.user.phone || '+919842155678';
-    const computedFarmerEmail = farmerEmail || req.user.email || 'farmer@nexus.io';
-    const computedFarmerNative = farmerNative || req.user.nativePlace || 'Mandya, Karnataka';
-    const computedLocation = location || req.user.location || { lat: 12.5222, lng: 76.9004, address: 'Mandya Organic Farm, Karnataka, India' };
+    const computedFarmerName = farmerName || `${req.user.firstName || 'gowres'} ${req.user.lastName || ''}`.trim() || 'gowres';
+    const computedFarmerPhone = farmerPhone || req.user.phone || '9952712633';
+    const computedFarmerEmail = farmerEmail || req.user.email || 'mgowres@gmail.com';
+    const computedFarmerNative = farmerNative || req.user.nativePlace || 'Namakkal, Tamil Nadu';
+    const computedLocation = location || req.user.location || { lat: 11.2189, lng: 78.1674, address: 'AgriLink Agro Farm Gate, Mohanur Road, Namakkal, Tamil Nadu 637001, India' };
 
     const newProductData = {
       title: title.trim(),

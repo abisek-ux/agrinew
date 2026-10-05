@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageSelector from './LanguageSelector';
 import { orderAPI } from '../services/api';
 import LiveTrackingMap from './LiveTrackingMap';
 import AgriLinkLogo from './AgriLinkLogo';
@@ -694,6 +696,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
 ───────────────────────────────────────────────────────────── */
 export default function DeliveryPortal({ onLogout }) {
   const { user, showToast, updateUserProfile, logout } = useAuth();
+  const { t } = useLanguage();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
@@ -825,10 +828,10 @@ export default function DeliveryPortal({ onLogout }) {
 
   const simulateGpsMovement = async (order) => {
     const orderId = String(order._id || order.id);
-    const fLat = order.farmerLocation?.lat || 12.5222;
-    const fLng = order.farmerLocation?.lng || 76.9004;
-    const cLat = order.customerLocation?.lat || 12.9716;
-    const cLng = order.customerLocation?.lng || 77.5946;
+    const fLat = order.farmerLocation?.lat || 11.2189;
+    const fLng = order.farmerLocation?.lng || 78.1674;
+    const cLat = order.customerLocation?.lat || 11.0168;
+    const cLng = order.customerLocation?.lng || 76.9558;
 
     setSimulating(true);
     setActiveOrderId(orderId);
@@ -934,7 +937,7 @@ export default function DeliveryPortal({ onLogout }) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Truck size={18} />
-                <span>Active Delivery</span>
+                <span>{t('Active Delivery')}</span>
               </div>
               {activeOrders.length > 0 && (
                 <span style={{
@@ -972,7 +975,7 @@ export default function DeliveryPortal({ onLogout }) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Package size={18} />
-                <span>Available Pickups</span>
+                <span>{t('Available Pickups')}</span>
               </div>
               {availableOrders.length > 0 && (
                 <span style={{
@@ -1009,7 +1012,7 @@ export default function DeliveryPortal({ onLogout }) {
               }}
             >
               <CheckCircle2 size={18} />
-              <span>History & Earnings</span>
+              <span>{t('History & Earnings')}</span>
             </button>
 
             {/* 4. Telemetry & Cold-Chain (Preserved) */}
@@ -1033,7 +1036,7 @@ export default function DeliveryPortal({ onLogout }) {
               }}
             >
               <Snowflake size={18} color={activeNavTab === 'telemetry' ? '#fff' : '#6edbd0'} />
-              <span>Cold-Chain Telemetry</span>
+              <span>{t('Cold-Chain Telemetry')}</span>
             </button>
 
             {/* 5. Driver Profile Tab */}
@@ -1057,7 +1060,7 @@ export default function DeliveryPortal({ onLogout }) {
               }}
             >
               <User size={18} />
-              <span>Courier Profile</span>
+              <span>{t('Profile')}</span>
             </button>
           </div>
 
@@ -1158,6 +1161,7 @@ export default function DeliveryPortal({ onLogout }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <LanguageSelector compact={true} variant="pill" />
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>
                 Today's Payout
@@ -1327,8 +1331,25 @@ export default function DeliveryPortal({ onLogout }) {
                         {currentActiveOrder.farmerName || 'Partner Farm Depot'}
                       </div>
                       <div style={{ color: '#a3c2b0', fontSize: '12.5px', marginTop: '4px', lineHeight: '1.4' }}>
-                        {currentActiveOrder.farmerLocation?.address || 'Direct Farm Packing Depot'}
+                        {currentActiveOrder.farmerLocation?.address || 'Direct Farm Packing Depot, Namakkal / Salem / Coimbatore, Tamil Nadu'}
                       </div>
+                      <a
+                        href={currentActiveOrder.farmerGpsLink || `https://www.google.com/maps?q=${currentActiveOrder.farmerLocation?.lat || 11.2189},${currentActiveOrder.farmerLocation?.lng || 78.1674}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          color: '#34d399',
+                          fontSize: '11.5px',
+                          fontWeight: '700',
+                          marginTop: '6px',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <span>📍 Open Farm Gate in Google Maps GPS ↗</span>
+                      </a>
                     </div>
 
                     {currentActiveOrder.farmerPhone && (
@@ -1742,7 +1763,15 @@ export default function DeliveryPortal({ onLogout }) {
                         <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', marginBottom: '16px', fontSize: '12.5px' }}>
                           <div style={{ color: '#f4c95d', fontWeight: '700' }}>1. Pickup Origin:</div>
                           <div style={{ color: '#effbe7', fontWeight: '600' }}>{order.farmerName}</div>
-                          <div style={{ color: '#a3c2b0', fontSize: '11.5px', marginBottom: '8px' }}>{order.farmerLocation?.address || 'Farm Origin'}</div>
+                          <div style={{ color: '#a3c2b0', fontSize: '11.5px', marginBottom: '4px' }}>{order.farmerLocation?.address || 'AgriLink Tamil Nadu Farm Depot'}</div>
+                          <a
+                            href={order.farmerGpsLink || `https://www.google.com/maps?q=${order.farmerLocation?.lat || 11.2189},${order.farmerLocation?.lng || 78.1674}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#34d399', fontSize: '11px', fontWeight: '700', textDecoration: 'none', display: 'inline-block', marginBottom: '8px' }}
+                          >
+                            📍 Open GPS Map ↗
+                          </a>
 
                           <div style={{ color: '#38bdf8', fontWeight: '700' }}>2. Customer Destination:</div>
                           <div style={{ color: '#effbe7', fontWeight: '600' }}>{order.customerName}</div>

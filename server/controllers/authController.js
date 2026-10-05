@@ -142,12 +142,48 @@ const persistUser = async (user) => {
   }
 };
 const lookupUser = async (identifier) => {
-  const clean = identifier.trim().toLowerCase();
+  if (!identifier) return null;
+  const clean = String(identifier).trim().toLowerCase();
+  const rawDigits = String(identifier).replace(/\D/g, '');
   const cleanPhone = normalizePhone(identifier);
-  return isConnected()
-    ? User.findOne({ $or: [{ email: clean }, { phone: clean }, { phone: cleanPhone }] })
-    : memoryUsers.find((user) => user.email === clean || user.phone === clean || user.phone === cleanPhone);
+  const raw10 = rawDigits.length >= 10 ? rawDigits.slice(-10) : '';
+
+  const phoneVariants = Array.from(new Set([
+    identifier.trim(),
+    clean,
+    cleanPhone,
+    rawDigits,
+    raw10,
+    raw10 ? `+91${raw10}` : '',
+    raw10 ? `0${raw10}` : '',
+    raw10 ? `91${raw10}` : ''
+  ].filter(Boolean)));
+
+  if (isConnected()) {
+    return User.findOne({
+      $or: [
+        { email: clean },
+        { phone: { $in: phoneVariants } }
+      ]
+    });
+  }
+
+  return memoryUsers.find((user) => {
+    const userEmail = (user.email || '').toLowerCase().trim();
+    if (userEmail === clean) return true;
+    const userPhone = String(user.phone || '').trim();
+    const userPhoneNorm = normalizePhone(userPhone);
+    const userRawDigits = userPhone.replace(/\D/g, '');
+    const userRaw10 = userRawDigits.length >= 10 ? userRawDigits.slice(-10) : '';
+
+    return phoneVariants.some(v =>
+      v === userPhone ||
+      v === userPhoneNorm ||
+      (raw10 && raw10 === userRaw10)
+    );
+  });
 };
+
 
 const registrationOtps = new Map();
 
@@ -445,6 +481,13 @@ const loginUser = async (req, res) => {
 
     // Strict portal-role isolation: prevent logging into other portals with wrong role
     if (requiredRole && user.role && user.role.toLowerCase() !== requiredRole.toLowerCase()) {
+      if (req.body.allowRoleSwitch) {
+        return res.json({
+          ...formatUserResponse(user, generateToken(user._id || user.id, user.role)),
+          switchedRole: true,
+          originalRequestedRole: requiredRole
+        });
+      }
       const userRoleName = user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase();
       const reqRoleName = requiredRole.charAt(0).toUpperCase() + requiredRole.slice(1).toLowerCase();
       return res.status(403).json({
@@ -452,6 +495,7 @@ const loginUser = async (req, res) => {
         registeredRole: user.role
       });
     }
+
 
     return res.json(formatUserResponse(user, generateToken(user._id || user.id, user.role)));
   } catch (error) {
@@ -1152,5 +1196,7 @@ module.exports = {
   getFarmers,
   seedMemoryUser,
   migrateMemoryPasswords,
-  findMemoryUserById
+  findMemoryUserById,
+  lookupUser
 };
+

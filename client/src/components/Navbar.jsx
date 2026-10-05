@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Sprout, LogOut, Database, ArrowLeft, ShieldCheck, Truck, ShoppingBag, Smartphone, Sparkles, Activity } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
+import LanguageSelector from './LanguageSelector';
 
-export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
+export default function Navbar({ selectedRole, onResetPortal, onLogout, onOpenMobileApp }) {
   const { user, logout, dbStatus } = useAuth();
+  const { t } = useLanguage();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
 
@@ -57,13 +60,13 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
   const getRoleLabel = (role) => {
     switch (role) {
       case 'farmer':
-        return '🌾 Farmer Dedicated Portal';
+        return t('portal_farmer', '🌾 Farmer Hub & Studio');
       case 'delivery':
-        return '🚚 Delivery Logistics Hub';
+        return t('portal_delivery', '🚚 Express Logistics Fleet');
       case 'customer':
-        return '🛒 Customer Marketplace';
+        return t('portal_customer', '🛒 Direct Farm Marketplace');
       default:
-        return 'AgriLink Ecosystem';
+        return t('portal_ecosystem', 'AgriLink Ecosystem');
     }
   };
 
@@ -167,7 +170,7 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; }}
                 >
                   <ArrowLeft size={13} />
-                  <span>Switch Role</span>
+                  <span>{t('switch_role', 'Switch Role')}</span>
                 </button>
               )}
             </div>
@@ -227,6 +230,33 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
             <span>Email OTP Active</span>
           </div>
 
+          {/* 3D Mobile App Launcher */}
+          {onOpenMobileApp && (
+            <button
+              onClick={onOpenMobileApp}
+              className="nav-mobile-app-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                color: '#ffffff',
+                background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                padding: '6px 14px',
+                borderRadius: '20px',
+                fontWeight: '800',
+                border: '1px solid rgba(244, 114, 182, 0.6)',
+                cursor: 'pointer',
+                boxShadow: '0 0 18px rgba(139, 92, 246, 0.45)',
+                transition: 'transform 0.15s ease'
+              }}
+              title="Open 3D Flagship Mobile Application"
+            >
+              <Smartphone size={13} color="#fdf4ff" />
+              <span>📱 3D Mobile App</span>
+            </button>
+          )}
+
           {/* PWA Mobile Install */}
           {!isStandalone && (
             <button
@@ -250,9 +280,12 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
               title="Install AgriLink as a Mobile App"
             >
               <Smartphone size={13} />
-              <span>Install App</span>
+              <span>{t('install_app', 'Install App')}</span>
             </button>
           )}
+
+          {/* Language Selector at the Top */}
+          <LanguageSelector variant="navbar" />
 
           {/* User Profile / Logout */}
           {user ? (
@@ -290,7 +323,7 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout }) {
                 title="Sign out of AgriLink"
               >
                 <LogOut size={14} color="#ef4444" />
-                <span>Logout</span>
+                <span>{t('logout', 'Logout')}</span>
               </button>
             </div>
           ) : null}
