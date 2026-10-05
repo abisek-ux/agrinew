@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSelector from './LanguageSelector';
 import AgriLinkLogo from './AgriLinkLogo';
-import { CropDoctor3DCanvas, WeatherSphere3DCanvas, ColdChainVan3DCanvas, Produce3DCanvas, playHapticTone } from './AgriLinkMobileApp';
+import { CropDoctor3DCanvas, WeatherSphere3DCanvas, ColdChainVan3DCanvas, Produce3DCanvas, playHapticTone } from './ThreeDCanvases';
 
 /**
  * 3D Golden Rice Seed & Spore Particle Simulation Canvas
@@ -151,13 +151,26 @@ function NatureSeed3DCanvas() {
         ctx.restore();
       }
 
-      animationFrameId = requestAnimationFrame(render);
+      if (document.visibilityState === 'visible') {
+        animationFrameId = requestAnimationFrame(render);
+      }
     };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     render();
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
     };

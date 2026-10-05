@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { productAPI, orderAPI, reviewAPI, authAPI, notificationAPI, bargainAPI, aiAPI } from '../services/api';
+import usePolling from '../hooks/usePolling';
 import LiveTrackingMap from './LiveTrackingMap';
 import {
   ShoppingCart,
@@ -66,7 +67,7 @@ import AgriLinkLogo from './AgriLinkLogo';
 import ProfileEmailOtpModal from './ProfileEmailOtpModal';
 import PaymentPortalModal from './PaymentPortalModal';
 import FlipkartMarketplaceHeader from './FlipkartMarketplaceHeader';
-import { CropDoctor3DCanvas, WeatherSphere3DCanvas, ColdChainVan3DCanvas, Produce3DCanvas } from './AgriLinkMobileApp';
+import { CropDoctor3DCanvas, WeatherSphere3DCanvas, ColdChainVan3DCanvas, Produce3DCanvas } from './ThreeDCanvases';
 
 
 const getProductId = (p) => {
@@ -299,11 +300,26 @@ function Produce3DInspector({ product, onClose, onAddToCart }) {
       ctx.restore();
 
       angle += 1;
-      animFrame.current = requestAnimationFrame(render);
+      if (document.visibilityState === 'visible') {
+        animFrame.current = requestAnimationFrame(render);
+      }
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        cancelAnimationFrame(animFrame.current);
+        animFrame.current = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(animFrame.current);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     render();
-    return () => cancelAnimationFrame(animFrame.current);
+    return () => {
+      cancelAnimationFrame(animFrame.current);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [rotX, rotY, isDragging, viewMode]);
 
   return (
@@ -3571,27 +3587,23 @@ export default function CustomerPortal({ onLogout }) {
     }
   }, [products]);
 
-  // Periodic polling for live order radar updates and real-time product stock
-  useEffect(() => {
-    if (activeTab === 'orders') {
-      const interval = setInterval(fetchOrders, 5000);
-      return () => clearInterval(interval);
-    }
-    if (activeTab === 'marketplace' || activeTab === 'cart') {
-      fetchProducts();
-      const interval = setInterval(fetchProducts, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [activeTab]);
+  // Periodic polling using visibility-aware hook: stops on hidden tab, prevents overlaps
+  usePolling(fetchOrders, 20000, {
+    enabled: activeTab === 'orders'
+  });
 
-  // Periodic polling for customer notifications
-  useEffect(() => {
-    const interval = setInterval(fetchNotifications, 8000);
-    return () => clearInterval(interval);
-  }, [user]);
+  usePolling(() => fetchProducts(true), 30000, {
+    enabled: activeTab === 'marketplace' || activeTab === 'cart'
+  });
 
-  const fetchProducts = async () => {
-    setLoading(true);
+  usePolling(fetchNotifications, 45000, {
+    enabled: Boolean(user)
+  });
+
+  const fetchProducts = async (isBackground = false) => {
+    if (!isBackground) {
+      setLoading(true);
+    }
     setProductError(null);
     try {
       const res = await productAPI.getProducts();
@@ -3599,9 +3611,13 @@ export default function CustomerPortal({ onLogout }) {
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Unable to load products. Please check network connection.';
       setProductError(msg);
-      showToast('Could not load produce catalog', 'error');
+      if (!isBackground) {
+        showToast('Could not load produce catalog', 'error');
+      }
     } finally {
-      setLoading(false);
+      if (!isBackground) {
+        setLoading(false);
+      }
     }
   };
 

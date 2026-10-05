@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSelector from './LanguageSelector';
 import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI, authAPI } from '../services/api';
+import usePolling from '../hooks/usePolling';
 import LiveTrackingMap from './LiveTrackingMap';
 import MapPicker from './MapPicker';
 import MedicineFertilizerHub from './MedicineFertilizerHub';
@@ -754,11 +755,26 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
         ctx.fill();
       });
 
-      animId = requestAnimationFrame(render);
+      if (document.visibilityState === 'visible') {
+        animId = requestAnimationFrame(render);
+      }
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        cancelAnimationFrame(animId);
+        animId = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(animId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     render();
-    return () => cancelAnimationFrame(animId);
+    return () => {
+      cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [dripActive]);
 
   const [showExplainer, setShowExplainer] = useState(false);
@@ -1514,21 +1530,18 @@ export default function FarmerPortal({ onLogout }) {
     fetchFarmerBargains();
   }, []);
 
-  useEffect(() => {
-    if (activeNav === 'orders') {
-      const interval = setInterval(fetchIncomingOrders, 5000);
-      return () => clearInterval(interval);
-    }
-    if (activeNav === 'bargains') {
-      const interval = setInterval(fetchFarmerBargains, 5000);
-      return () => clearInterval(interval);
-    }
-    if (activeNav === 'products' || activeNav === 'after_cultivation' || activeNav === 'home') {
-      fetchFarmerProducts();
-      const interval = setInterval(fetchFarmerProducts, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [activeNav]);
+  // Periodic polling using visibility-aware hook: stops on hidden tab, prevents overlaps
+  usePolling(fetchIncomingOrders, 20000, {
+    enabled: activeNav === 'orders'
+  });
+
+  usePolling(fetchFarmerBargains, 30000, {
+    enabled: activeNav === 'bargains'
+  });
+
+  usePolling(fetchFarmerProducts, 30000, {
+    enabled: activeNav === 'products' || activeNav === 'after_cultivation' || activeNav === 'home'
+  });
 
   // Compute crop recommendation whenever soil, water, or weather changes
   useEffect(() => {
@@ -1743,8 +1756,6 @@ export default function FarmerPortal({ onLogout }) {
     try {
       const res = await orderAPI.getOrders();
       setIncomingOrders(res.data);
-      // Synchronize farmer product stock whenever orders change
-      fetchFarmerProducts();
     } catch (err) {
       console.warn('Orders fetch note:', err.message);
     }

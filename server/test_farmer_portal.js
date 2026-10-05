@@ -15,6 +15,7 @@
  * 12. Real-time Farmer Notifications for Order Milestones
  */
 
+require('dotenv').config();
 const http = require('http');
 const jwt = require('jsonwebtoken');
 

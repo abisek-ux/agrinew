@@ -5,11 +5,10 @@ import Navbar from './components/Navbar';
 import PortalSelection from './components/PortalSelection';
 import LandscapeAuth from './components/LandscapeAuth';
 import NotificationToast from './components/NotificationToast';
-import AgriLinkMobileApp from './components/AgriLinkMobileApp';
-
 const CustomerPortal = lazy(() => import('./components/CustomerPortal'));
 const FarmerPortal = lazy(() => import('./components/FarmerPortal'));
 const DeliveryPortal = lazy(() => import('./components/DeliveryPortal'));
+const AgriLinkMobileApp = lazy(() => import('./components/AgriLinkMobileApp'));
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -179,17 +178,19 @@ function AppContent() {
 
       {/* Flagship 3D Mobile Application Suite Modal / Screen */}
       {showMobileApp && (
-        <AgriLinkMobileApp
-          onClose={() => {
-            setShowMobileApp(false);
-            localStorage.setItem('agrilink_mobile_mode', 'false');
-          }}
-          initialRole={selectedRole || userRole || 'customer'}
-          onSelectRole={(role) => {
-            setSelectedRole(role);
-            setShowMobileApp(false);
-          }}
-        />
+        <Suspense fallback={null}>
+          <AgriLinkMobileApp
+            onClose={() => {
+              setShowMobileApp(false);
+              localStorage.setItem('agrilink_mobile_mode', 'false');
+            }}
+            initialRole={selectedRole || userRole || 'customer'}
+            onSelectRole={(role) => {
+              setSelectedRole(role);
+              setShowMobileApp(false);
+            }}
+          />
+        </Suspense>
       )}
 
       <NotificationToast />

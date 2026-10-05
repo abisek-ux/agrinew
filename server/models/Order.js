@@ -57,4 +57,11 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// High-performance compound indexes matching query filter -> sort patterns
+orderSchema.index({ customerId: 1, createdAt: -1 });
+orderSchema.index({ farmerId: 1, createdAt: -1 });
+orderSchema.index({ deliveryId: 1, status: 1 });
+orderSchema.index({ deliveryId: 1, createdAt: -1 });
+orderSchema.index({ status: 1, createdAt: -1 });
+
 module.exports = mongoose.models.Order || mongoose.model('Order', orderSchema);

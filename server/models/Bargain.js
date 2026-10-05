@@ -36,4 +36,9 @@ const bargainSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// High-performance query indexes for bargain negotiation lookups
+bargainSchema.index({ customerId: 1, createdAt: -1 });
+bargainSchema.index({ farmerId: 1, createdAt: -1 });
+bargainSchema.index({ productId: 1, status: 1 });
+
 module.exports = mongoose.models.Bargain || mongoose.model('Bargain', bargainSchema);

@@ -14,12 +14,13 @@
  * 11. Rate limiting & brute force defense (HTTP 429 + Retry-After headers)
  */
 
+require('dotenv').config();
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const { app } = require('./server');
 
-const TEST_PORT = 59170 + Math.floor(Math.random() * 500);
-const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
+let TEST_PORT;
+let BASE_URL;
 const JWT_SECRET = process.env.JWT_SECRET || 'agrilink_super_secret_jwt_key_2026';
 
 let server;
@@ -86,8 +87,10 @@ async function runSecurityAudit() {
   console.log('🛡️ RUNNING AGRILINK PHASE 7 PRODUCTION SECURITY AUDIT');
   console.log('======================================================\n');
 
-  server = app.listen(TEST_PORT);
+  server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
+  TEST_PORT = server.address().port;
+  BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
   console.log(`📡 Security audit test server listening on ${BASE_URL}\n`);
 
   try {

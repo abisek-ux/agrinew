@@ -132,6 +132,7 @@ async function sendEmail({ to, subject, otp, firstName, type = 'reset' }) {
       const response = await fetch(googleScriptUrl, {
         method: 'POST',
         redirect: 'follow',
+        signal: AbortSignal.timeout(5000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: to,

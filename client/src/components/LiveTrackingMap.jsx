@@ -41,6 +41,9 @@ function getFallbackTamilNaduHub(seedKey) {
   return TAMIL_NADU_HUBS[0];
 }
 
+// Module-level cache for verified road geometries
+const ROUTE_CACHE = new Map();
+
 export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliveryLoc, status }) {
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
@@ -89,13 +92,10 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
   const driverGpsUrl = `https://www.google.com/maps?q=${dLat || fLat},${dLng || fLng}`;
   const turnByTurnUrl = order?.gpsTrackingLink || `https://www.google.com/maps/dir/?api=1&origin=${fLat},${fLng}&destination=${cLat},${cLng}`;
 
+  // 1. Initialize Leaflet Map ONCE on mount
   useEffect(() => {
     if (!mapRef.current) return;
-
-    if (leafletMap.current) {
-      leafletMap.current.remove();
-      leafletMap.current = null;
-    }
+    if (leafletMap.current) return;
 
     const centerLat = dLat || fLat || cLat || resolvedHub.lat;
     const centerLng = dLng || fLng || cLng || resolvedHub.lng;
@@ -107,96 +107,153 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
+    // Only destroy the map during actual component unmount
+    return () => {
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+        markersRef.current = {};
+        roadPolylineRef.current = null;
+      }
+    };
+  }, []);
+
+  // 2. Dynamically update marker positions using setLatLng without map destruction
+  useEffect(() => {
+    const map = leafletMap.current;
+    if (!map) return;
+
     const latLngPoints = [];
 
-    // 1. Customer Destination Marker
+    // Customer Destination Marker
     if (cLat && cLng) {
-      const customerIcon = L.divIcon({
-        className: 'marker-c',
-        html: `<div style="background:#059669;color:white;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid #d1fae5;box-shadow:0 0 15px rgba(5,150,105,0.7);">🏠</div>`,
-        iconSize: [34, 34],
-        iconAnchor: [17, 17]
-      });
-      markersRef.current.customer = L.marker([cLat, cLng], { icon: customerIcon })
-        .addTo(map)
-        .bindPopup(`
-          <div style="font-family:inherit;min-width:180px;color:#092b27;padding:2px;">
-            <strong style="color:#059669;font-size:12px;">🏠 Delivery Destination</strong><br/>
-            <span style="font-size:11.5px;color:#374151;">${effectiveCustomer?.address || 'Customer Doorstep'}</span>
-          </div>
-        `);
+      if (markersRef.current.customer) {
+        markersRef.current.customer.setLatLng([cLat, cLng]);
+      } else {
+        const customerIcon = L.divIcon({
+          className: 'marker-c',
+          html: `<div style="background:#059669;color:white;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid #d1fae5;box-shadow:0 0 15px rgba(5,150,105,0.7);">🏠</div>`,
+          iconSize: [34, 34],
+          iconAnchor: [17, 17]
+        });
+        markersRef.current.customer = L.marker([cLat, cLng], { icon: customerIcon })
+          .addTo(map)
+          .bindPopup(`
+            <div style="font-family:inherit;min-width:180px;color:#092b27;padding:2px;">
+              <strong style="color:#059669;font-size:12px;">🏠 Delivery Destination</strong><br/>
+              <span style="font-size:11.5px;color:#374151;">${effectiveCustomer?.address || 'Customer Doorstep'}</span>
+            </div>
+          `);
+      }
       latLngPoints.push([cLat, cLng]);
     }
 
-    // 2. Farmer Origin Marker (Namakkal / Salem / Coimbatore)
+    // Farmer Origin Marker
     if (fLat && fLng) {
-      const farmerIcon = L.divIcon({
-        className: 'marker-f',
-        html: `<div style="background:#d97706;color:white;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;border:3px solid #fef3c7;box-shadow:0 0 18px rgba(217,119,6,0.7);">🌾</div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      });
-      markersRef.current.farmer = L.marker([fLat, fLng], { icon: farmerIcon })
-        .addTo(map)
-        .bindPopup(`
-          <div style="font-family:inherit;min-width:210px;color:#092b27;padding:4px;">
-            <div style="color:#d97706;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">🌾 Farm Origin (${farmerDistrict})</div>
-            <div style="font-weight:800;font-size:13.5px;color:#092b27;margin-bottom:3px;">${farmerDisplayName}</div>
-            <div style="font-size:11.5px;color:#4b5563;line-height:1.3;margin-bottom:8px;">📍 ${farmerAddr}</div>
-            <a href="${farmerGpsUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-weight:700;font-size:11px;padding:5px 12px;border-radius:6px;box-shadow:0 2px 6px rgba(5,150,105,0.3);">
-              📍 Open Farm GPS in Maps ↗
-            </a>
-          </div>
-        `);
+      if (markersRef.current.farmer) {
+        markersRef.current.farmer.setLatLng([fLat, fLng]);
+      } else {
+        const farmerIcon = L.divIcon({
+          className: 'marker-f',
+          html: `<div style="background:#d97706;color:white;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;border:3px solid #fef3c7;box-shadow:0 0 18px rgba(217,119,6,0.7);">🌾</div>`,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18]
+        });
+        markersRef.current.farmer = L.marker([fLat, fLng], { icon: farmerIcon })
+          .addTo(map)
+          .bindPopup(`
+            <div style="font-family:inherit;min-width:210px;color:#092b27;padding:4px;">
+              <div style="color:#d97706;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">🌾 Farm Origin (${farmerDistrict})</div>
+              <div style="font-weight:800;font-size:13.5px;color:#092b27;margin-bottom:3px;">${farmerDisplayName}</div>
+              <div style="font-size:11.5px;color:#4b5563;line-height:1.3;margin-bottom:8px;">📍 ${farmerAddr}</div>
+              <a href="${farmerGpsUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-weight:700;font-size:11px;padding:5px 12px;border-radius:6px;box-shadow:0 2px 6px rgba(5,150,105,0.3);">
+                📍 Open Farm GPS in Maps ↗
+              </a>
+            </div>
+          `);
+      }
       latLngPoints.push([fLat, fLng]);
     }
 
-    // 3. Delivery Courier Marker (only if broadcasted)
-    if (hasDriverBroadcast) {
-      const deliveryIcon = L.divIcon({
-        className: 'marker-d',
-        html: `<div style="background:#ef4444;color:white;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid #fee2e2;box-shadow:0 0 20px rgba(239,68,68,0.85);">🚚</div>`,
-        iconSize: [38, 38],
-        iconAnchor: [19, 19]
-      });
-      markersRef.current.delivery = L.marker([dLat, dLng], { icon: deliveryIcon })
-        .addTo(map)
-        .bindPopup(`
-          <div style="font-family:inherit;min-width:180px;color:#092b27;padding:2px;">
-            <strong style="color:#ef4444;font-size:12px;">🚚 Courier: ${order?.deliveryName || 'En Route'}</strong><br/>
-            <span style="font-size:11.5px;color:#374151;">Status: ${ordStatus.replace('_', ' ')}</span>
-          </div>
-        `);
+    // Delivery Courier Marker
+    if (hasDriverBroadcast && dLat && dLng) {
+      if (markersRef.current.delivery) {
+        markersRef.current.delivery.setLatLng([dLat, dLng]);
+      } else {
+        const deliveryIcon = L.divIcon({
+          className: 'marker-d',
+          html: `<div style="background:#ef4444;color:white;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid #fee2e2;box-shadow:0 0 20px rgba(239,68,68,0.85);">🚚</div>`,
+          iconSize: [38, 38],
+          iconAnchor: [19, 19]
+        });
+        markersRef.current.delivery = L.marker([dLat, dLng], { icon: deliveryIcon })
+          .addTo(map)
+          .bindPopup(`
+            <div style="font-family:inherit;min-width:180px;color:#092b27;padding:2px;">
+              <strong style="color:#ef4444;font-size:12px;">🚚 Courier: ${order?.deliveryName || 'En Route'}</strong><br/>
+              <span style="font-size:11.5px;color:#374151;">Status: ${ordStatus.replace('_', ' ')}</span>
+            </div>
+          `);
+      }
       latLngPoints.push([dLat, dLng]);
+    } else if (markersRef.current.delivery) {
+      map.removeLayer(markersRef.current.delivery);
+      delete markersRef.current.delivery;
     }
 
-    // Fit bounds to markers
     if (latLngPoints.length > 0) {
       const bounds = L.latLngBounds(latLngPoints);
-      map.fitBounds(bounds, { padding: [50, 50] });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    }
+  }, [cLat, cLng, fLat, fLng, dLat, dLng, hasDriverBroadcast, ordStatus]);
+
+  // 3. Stable waypoint key rounded to ~100m to prevent redundant OSRM requests
+  const routeKey = `${fLat?.toFixed(3)},${fLng?.toFixed(3)};${hasDriverBroadcast && dLat ? dLat.toFixed(3) + ',' + dLng.toFixed(3) + ';' : ''}${cLat?.toFixed(3)},${cLng?.toFixed(3)}`;
+
+  // 4. Fetch / Cache Road Routing from OSRM with duplicate prevention and abort controller
+  useEffect(() => {
+    const map = leafletMap.current;
+    if (!map) return;
+
+    let waypoints = [];
+    if (fLat && fLng) waypoints.push(`${fLng.toFixed(4)},${fLat.toFixed(4)}`);
+    if (hasDriverBroadcast && dLat && dLng) waypoints.push(`${dLng.toFixed(4)},${dLat.toFixed(4)}`);
+    if (cLat && cLng) waypoints.push(`${cLng.toFixed(4)},${cLat.toFixed(4)}`);
+
+    if (waypoints.length < 2) {
+      setRouteInfo(null);
+      return;
     }
 
-    // 4. Fetch Actual Road Routing from OSRM
-    const fetchRoadRoute = async () => {
-      let waypoints = [];
-      if (fLat && fLng) waypoints.push(`${fLng},${fLat}`);
-      if (hasDriverBroadcast && dLat && dLng) waypoints.push(`${dLng},${dLat}`);
-      if (cLat && cLng) waypoints.push(`${cLng},${cLat}`);
-
-      if (waypoints.length < 2) {
-        setRouteInfo(null);
-        return;
+    // Check module-level cache first
+    const cached = ROUTE_CACHE.get(routeKey);
+    if (cached) {
+      if (roadPolylineRef.current) {
+        map.removeLayer(roadPolylineRef.current);
       }
-
-      setLoadingRoute(true);
+      roadPolylineRef.current = L.polyline(cached.coords, {
+        color: '#10b981',
+        weight: 5,
+        opacity: 0.85,
+        lineJoin: 'round'
+      }).addTo(map);
+      setRouteInfo(cached.info);
       setRouteUnavailable(false);
+      return;
+    }
 
-      try {
-        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
-        const res = await fetch(osrmUrl);
+    const abortCtrl = new AbortController();
+    setLoadingRoute(true);
+    setRouteUnavailable(false);
+
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
+
+    fetch(osrmUrl, { signal: abortCtrl.signal })
+      .then(res => {
         if (!res.ok) throw new Error(`Routing status ${res.status}`);
-        const data = await res.json();
-
+        return res.json();
+      })
+      .then(data => {
         if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
           const route = data.routes[0];
           const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
@@ -212,39 +269,35 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
             lineJoin: 'round'
           }).addTo(map);
 
-          map.fitBounds(roadPolylineRef.current.getBounds(), { padding: [40, 40] });
-
-          const distKm = (route.distance / 1000).toFixed(1);
-          const durMins = Math.round(route.duration / 60);
-
-          setRouteInfo({
-            distanceKm: distKm,
-            durationMins: durMins,
+          const info = {
+            distanceKm: (route.distance / 1000).toFixed(1),
+            durationMins: Math.round(route.duration / 60),
             isRoadRoute: true
-          });
+          };
+
+          ROUTE_CACHE.set(routeKey, { coords, info });
+          setRouteInfo(info);
           setRouteUnavailable(false);
         } else {
           setRouteUnavailable(true);
           setRouteInfo(null);
         }
-      } catch (err) {
-        console.warn('Road routing service notice:', err.message);
-        setRouteUnavailable(true);
-        setRouteInfo(null);
-      } finally {
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') {
+          console.warn('Road routing service notice:', err.message);
+          setRouteUnavailable(true);
+          setRouteInfo(null);
+        }
+      })
+      .finally(() => {
         setLoadingRoute(false);
-      }
-    };
-
-    fetchRoadRoute();
+      });
 
     return () => {
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
-      }
+      abortCtrl.abort();
     };
-  }, [cLat, cLng, fLat, fLng, dLat, dLng, ordStatus]);
+  }, [routeKey]);
 
   if (!hasValidOrigin && !hasValidDest) {
     return (

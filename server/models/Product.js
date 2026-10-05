@@ -38,4 +38,9 @@ const productSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// High-performance query indexes for marketplace filter and sort
+productSchema.index({ farmerId: 1, createdAt: -1 });
+productSchema.index({ category: 1, createdAt: -1 });
+productSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.models.Product || mongoose.model('Product', productSchema);

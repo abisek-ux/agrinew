@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSelector from './LanguageSelector';
 import { orderAPI } from '../services/api';
+import usePolling from '../hooks/usePolling';
 import LiveTrackingMap from './LiveTrackingMap';
 import AgriLinkLogo from './AgriLinkLogo';
 import {
@@ -144,11 +145,26 @@ function FleetTelemetryHUD({ speed = 48, battery = 88, satelliteCount = 11 }) {
       ctx.restore();
 
       angle++;
-      animId = requestAnimationFrame(render);
+      if (document.visibilityState === 'visible') {
+        animId = requestAnimationFrame(render);
+      }
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        cancelAnimationFrame(animId);
+        animId = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(animId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     render();
-    return () => cancelAnimationFrame(animId);
+    return () => {
+      cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [speed]);
 
   return (
@@ -289,11 +305,26 @@ function ColdChainTelemetry3D({ temp = 4.2, humidity = 88, onBoostCryo }) {
         ctx.fill();
       });
 
-      animId = requestAnimationFrame(render);
+      if (document.visibilityState === 'visible') {
+        animId = requestAnimationFrame(render);
+      }
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        cancelAnimationFrame(animId);
+        animId = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(animId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     render();
-    return () => cancelAnimationFrame(animId);
+    return () => {
+      cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [boostActive]);
 
   return (
@@ -739,9 +770,12 @@ export default function DeliveryPortal({ onLogout }) {
 
   useEffect(() => {
     fetchDeliveryOrders(true);
-    const interval = setInterval(() => fetchDeliveryOrders(false), 5000);
-    return () => clearInterval(interval);
   }, []);
+
+  // Periodic polling using visibility-aware hook: stops on hidden tab, prevents overlaps (20s)
+  usePolling(() => fetchDeliveryOrders(false), 20000, {
+    enabled: isDriver
+  });
 
   const fetchDeliveryOrders = async (initial = false) => {
     if (initial) setLoading(true);

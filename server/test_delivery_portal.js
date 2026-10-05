@@ -15,6 +15,7 @@
  * 12. Persisted Completed Delivery & Real Earnings Verification
  */
 
+require('dotenv').config();
 const http = require('http');
 const jwt = require('jsonwebtoken');
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 
 export const LANGUAGES = [
   { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧', region: 'Global' },
@@ -815,6 +815,17 @@ export const TRANSLATIONS = {
   }
 };
 
+// Module-level pre-indexed O(1) reverse lookup: English text -> translation key
+const REVERSE_ENGLISH_MAP = new Map();
+if (TRANSLATIONS && TRANSLATIONS.en) {
+  for (const [key, value] of Object.entries(TRANSLATIONS.en)) {
+    if (value && typeof value === 'string') {
+      REVERSE_ENGLISH_MAP.set(value, key);
+      REVERSE_ENGLISH_MAP.set(value.toLowerCase().trim(), key);
+    }
+  }
+}
+
 const LanguageContext = createContext();
 
 export function LanguageProvider({ children }) {
@@ -822,14 +833,13 @@ export function LanguageProvider({ children }) {
     try {
       const saved = localStorage.getItem('agrilink_language');
       if (saved && TRANSLATIONS[saved]) return saved;
-      // Default to Tamil (or English)
       return 'en';
     } catch {
       return 'en';
     }
   });
 
-  const setLanguage = (langCode) => {
+  const setLanguage = useCallback((langCode) => {
     if (TRANSLATIONS[langCode]) {
       setLanguageState(langCode);
       try {
@@ -840,32 +850,43 @@ export function LanguageProvider({ children }) {
         console.warn('Could not persist language to localStorage:', err);
       }
     }
-  };
+  }, []);
 
   /**
-   * Translate function
-   * @param {string} key - The dictionary key or fallback text
-   * @param {string} fallbackText - Optional default text if key not found
+   * Memoized translation function with O(1) reverse dictionary lookup
    */
-  const t = (key, fallbackText) => {
+  const t = useCallback((key, fallbackText) => {
     if (!key) return '';
     const currentDict = TRANSLATIONS[language] || TRANSLATIONS.en;
     if (currentDict[key]) return currentDict[key];
 
-    // Try finding by exact text in English dictionary
-    const enDict = TRANSLATIONS.en;
-    const foundKey = Object.keys(enDict).find(k => enDict[k] === key || enDict[k] === fallbackText);
+    // O(1) reverse lookup by exact or trimmed English text
+    let foundKey = REVERSE_ENGLISH_MAP.get(key);
+    if (!foundKey && fallbackText) {
+      foundKey = REVERSE_ENGLISH_MAP.get(fallbackText);
+    }
+
     if (foundKey && currentDict[foundKey]) {
       return currentDict[foundKey];
     }
 
     return fallbackText || key;
-  };
+  }, [language]);
 
-  const currentLangMeta = LANGUAGES.find(l => l.code === language) || LANGUAGES[0];
+  const currentLangMeta = useMemo(() => {
+    return LANGUAGES.find(l => l.code === language) || LANGUAGES[0];
+  }, [language]);
+
+  const contextValue = useMemo(() => ({
+    language,
+    setLanguage,
+    t,
+    languages: LANGUAGES,
+    currentLangMeta
+  }), [language, setLanguage, t, currentLangMeta]);
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t, languages: LANGUAGES, currentLangMeta }}>
+    <LanguageContext.Provider value={contextValue}>
       {children}
     </LanguageContext.Provider>
   );

@@ -9,6 +9,7 @@
  * 6. Customer Data Isolation & Authorization Protection
  */
 
+require('dotenv').config();
 const http = require('http');
 const jwt = require('jsonwebtoken');
 

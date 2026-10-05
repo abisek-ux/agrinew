@@ -409,12 +409,25 @@ export default function ThreeDPortViewer({
         ctx.fillText('📡 IoT Soil Moisture: 74%', sensorPt.px + 12, sensorPt.py);
       }
 
-      animationFrameRef.current = requestAnimationFrame(render);
+      if (document.visibilityState === 'visible') {
+        animationFrameRef.current = requestAnimationFrame(render);
+      }
     };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = requestAnimationFrame(render);
+      } else {
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     render();
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [mode, viewStyle, diseaseName, severity, medicineData, sprayActive, timeOfDay]);
 
