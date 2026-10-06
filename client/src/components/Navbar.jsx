@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Sprout, LogOut, ArrowLeft, Truck, ShoppingBag, Sparkles, Activity } from 'lucide-react';
+import { Sprout, LogOut, ArrowLeft, Truck, ShoppingBag, Sparkles, Activity, Smartphone } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
 import LanguageSelector from './LanguageSelector';
 
