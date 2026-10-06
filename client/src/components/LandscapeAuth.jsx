@@ -250,28 +250,28 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
     return () => clearInterval(timer);
   }, [otpCooldown]);
 
-  // Feature Slides
+  // Feature Slides (Synchronized with Title Page)
   const slides = [
     {
-      title: 'Direct Farm-to-Table Portal',
-      subtitle: 'Google-grade multi-role authentication connecting Farmers, Customers, and Delivery Drivers directly.',
-      badge: 'LEAF GREEN & DEEP GREEN',
+      title: '🌾 Farmer AI Studio: 100% Direct Farm-to-Table',
+      subtitle: 'Autonomous Sowing & Direct Harvest. Manage harvest inventory, set your own fair prices without middleman cuts, and receive direct customer orders.',
+      badge: 'FARMER STUDIO • 0% BROKER FEE',
       icon: <Sprout size={36} color="#F1F8E9" />,
       bgGradient: 'linear-gradient(135deg, #1B5E20, #2E7D32)'
     },
     {
-      title: 'Farmer Set Prices & Produce Catalog',
-      subtitle: 'Eliminate middleman fees. Farmers directly set prices for high-yield seeds & fresh organic fruits.',
-      badge: 'HARVEST GOLD & FIELD GREEN',
+      title: '🛒 Direct Farm Marketplace: Organic Produce',
+      subtitle: 'Pure certified organic produce direct from farmers. Negotiate bulk prices directly, inspect crop batches, and enjoy guaranteed fair trades.',
+      badge: 'CUSTOMER PORTAL • 100% ORGANIC',
       icon: <ShieldCheck size={36} color="#F1F8E9" />,
-      bgGradient: 'linear-gradient(135deg, #2E7D32, #66BB6A)'
+      bgGradient: 'linear-gradient(135deg, #0d9488, #115e59)'
     },
     {
-      title: 'Real-Time Delivery GPS Tracking',
-      subtitle: 'Live map triangulation displaying Customer, Farmer, and Delivery Driver in real-time.',
-      badge: 'SOIL BROWN & HARVEST GOLD',
+      title: '🚚 Autonomous Fleet Logistics: GPS Dispatch',
+      subtitle: 'Cold-chain refrigerated transport with real-time GPS telemetry radar, route dispatch optimization, and instant shift earnings.',
+      badge: 'DELIVERY FLEET • QUANTUM GPS',
       icon: <Truck size={36} color="#F1F8E9" />,
-      bgGradient: 'linear-gradient(135deg, #8D5E34, #F9A825)'
+      bgGradient: 'linear-gradient(135deg, #b45309, #d97706)'
     }
   ];
 
@@ -768,80 +768,130 @@ export default function LandscapeAuth({ selectedRole, onBack, onNavigateToReset 
               {/* LOGIN FORM */}
               {mode === 'login' && (
                 <form onSubmit={handleLoginSubmit} className="la-form">
-                  {/* Quick 1-Click Demo Accounts Bar */}
+                  {/* ─── 1-CLICK INSTANT DEMO PORTALS (FROM TITLE PAGE) ─── */}
                   <div
                     style={{
-                      background: 'rgba(6, 24, 21, 0.65)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
-                      borderRadius: '14px',
-                      padding: '10px 12px',
-                      marginBottom: '16px'
+                      background: 'linear-gradient(145deg, rgba(6, 28, 22, 0.85) 0%, rgba(4, 18, 15, 0.95) 100%)',
+                      border: '1.5px solid rgba(52, 211, 153, 0.4)',
+                      borderRadius: '16px',
+                      padding: '14px',
+                      marginBottom: '18px',
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: '800', color: '#86efac', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        ⚡ 1-Click Demo Sign-In:
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Sparkles size={14} color="#fbbf24" />
+                        <span style={{ fontSize: '11.5px', fontWeight: '900', color: '#86efac', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                          ⚡ 1-Click Demo Portals
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '10.5px', color: '#9db5aa', fontWeight: '600' }}>
+                        Instant Test Access • No Password Needed
                       </span>
-                      <span style={{ fontSize: '10px', color: '#9db5aa' }}>Instant test access</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleQuickDemo('customer', 'alex@nexus.io', 'Password123!')}
-                        style={{
-                          background: (selectedRole === 'customer' || !selectedRole) ? 'linear-gradient(135deg, #0d9488, #0f766e)' : 'rgba(255,255,255,0.06)',
-                          border: '1px solid rgba(45, 212, 191, 0.4)',
-                          color: '#ffffff',
-                          padding: '5px 10px',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        🛒 Customer Demo
-                      </button>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: '8px' }}>
+                      {/* Farmer Demo Portal */}
                       <button
                         type="button"
                         onClick={() => handleQuickDemo('farmer', 'mgowres@gmail.com', 'Password123!')}
                         style={{
-                          background: selectedRole === 'farmer' ? 'linear-gradient(135deg, #16a34a, #15803d)' : 'rgba(255,255,255,0.06)',
-                          border: '1px solid rgba(74, 222, 128, 0.4)',
-                          color: '#ffffff',
-                          padding: '5px 10px',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                          fontWeight: '700',
+                          background: selectedRole === 'farmer' ? 'linear-gradient(135deg, rgba(22, 163, 74, 0.4), rgba(21, 128, 61, 0.6))' : 'rgba(255, 255, 255, 0.04)',
+                          border: `1.5px solid ${selectedRole === 'farmer' ? '#4ade80' : 'rgba(74, 222, 128, 0.3)'}`,
+                          borderRadius: '12px',
+                          padding: '10px 8px',
+                          textAlign: 'left',
                           cursor: 'pointer',
+                          transition: 'all 0.2s ease',
                           display: 'flex',
-                          alignItems: 'center',
+                          flexDirection: 'column',
                           gap: '4px'
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
                       >
-                        🌾 Farmer Demo
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '800', color: '#86efac' }}>🌾 Farmer AI Studio</span>
+                          <span style={{ fontSize: '9px', background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', padding: '1px 5px', borderRadius: '8px', fontWeight: '800' }}>0% FEE</span>
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#c0d9cb', lineHeight: '1.3' }}>
+                          Autonomous Sowing & Direct Harvest
+                        </div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#4ade80', marginTop: '4px' }}>
+                          Launch Demo ➔
+                        </div>
                       </button>
+
+                      {/* Customer Demo Portal */}
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDemo('customer', 'alex@nexus.io', 'Password123!')}
+                        style={{
+                          background: (selectedRole === 'customer' || !selectedRole) ? 'linear-gradient(135deg, rgba(13, 148, 136, 0.4), rgba(15, 118, 110, 0.6))' : 'rgba(255, 255, 255, 0.04)',
+                          border: `1.5px solid ${(selectedRole === 'customer' || !selectedRole) ? '#2dd4bf' : 'rgba(45, 212, 191, 0.3)'}`,
+                          borderRadius: '12px',
+                          padding: '10px 8px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '800', color: '#5eead4' }}>🛒 Farm Marketplace</span>
+                          <span style={{ fontSize: '9px', background: 'rgba(45, 212, 191, 0.2)', color: '#2dd4bf', padding: '1px 5px', borderRadius: '8px', fontWeight: '800' }}>ORGANIC</span>
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#c0d9cb', lineHeight: '1.3' }}>
+                          Direct Organic Produce Catalog
+                        </div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#2dd4bf', marginTop: '4px' }}>
+                          Launch Demo ➔
+                        </div>
+                      </button>
+
+                      {/* Delivery Driver Demo Portal */}
                       <button
                         type="button"
                         onClick={() => handleQuickDemo('delivery', 'driver@nexus.io', 'Password123!')}
                         style={{
-                          background: selectedRole === 'delivery' ? 'linear-gradient(135deg, #d97706, #b45309)' : 'rgba(255,255,255,0.06)',
-                          border: '1px solid rgba(251, 191, 36, 0.4)',
-                          color: '#ffffff',
-                          padding: '5px 10px',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                          fontWeight: '700',
+                          background: selectedRole === 'delivery' ? 'linear-gradient(135deg, rgba(217, 119, 6, 0.4), rgba(180, 83, 9, 0.6))' : 'rgba(255, 255, 255, 0.04)',
+                          border: `1.5px solid ${selectedRole === 'delivery' ? '#fbbf24' : 'rgba(251, 191, 36, 0.3)'}`,
+                          borderRadius: '12px',
+                          padding: '10px 8px',
+                          textAlign: 'left',
                           cursor: 'pointer',
+                          transition: 'all 0.2s ease',
                           display: 'flex',
-                          alignItems: 'center',
+                          flexDirection: 'column',
                           gap: '4px'
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
                       >
-                        🚚 Driver Demo
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '800', color: '#fde047' }}>🚚 Fleet Logistics</span>
+                          <span style={{ fontSize: '9px', background: 'rgba(251, 191, 36, 0.2)', color: '#fbbf24', padding: '1px 5px', borderRadius: '8px', fontWeight: '800' }}>GPS RADAR</span>
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#c0d9cb', lineHeight: '1.3' }}>
+                          Cold-Chain Real-Time Delivery
+                        </div>
+                        <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#fbbf24', marginTop: '4px' }}>
+                          Launch Demo ➔
+                        </div>
                       </button>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0 4px', gap: '8px' }}>
+                      <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+                      <span style={{ fontSize: '10px', color: '#6ee7b7', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: '700' }}>
+                        Or Enter Your Credentials
+                      </span>
+                      <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
                     </div>
                   </div>
 

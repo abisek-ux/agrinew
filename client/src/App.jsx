@@ -144,38 +144,6 @@ function AppContent() {
         </footer>
       )}
 
-      {/* Persistent Floating 3D Mobile App Toggle */}
-      <button
-        onClick={() => {
-          setShowMobileApp(true);
-          localStorage.setItem('agrilink_mobile_mode', 'true');
-        }}
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          zIndex: 998,
-          background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #0d9488 100%)',
-          color: '#ffffff',
-          border: '1.5px solid rgba(255, 255, 255, 0.4)',
-          borderRadius: '30px',
-          padding: '10px 18px',
-          fontSize: '13px',
-          fontWeight: '800',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          cursor: 'pointer',
-          boxShadow: '0 8px 30px rgba(16, 185, 129, 0.5), 0 0 15px rgba(52, 211, 153, 0.3)',
-          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-        }}
-        title="Experience AgriLink Flagship 3D Mobile App"
-      >
-        <span style={{ fontSize: '16px' }}>📱</span>
-        <span>3D Mobile App</span>
-        <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.25)', padding: '2px 6px', borderRadius: '10px' }}>PRO</span>
-      </button>
-
       {/* Flagship 3D Mobile Application Suite Modal / Screen */}
       {showMobileApp && (
         <Suspense fallback={null}>

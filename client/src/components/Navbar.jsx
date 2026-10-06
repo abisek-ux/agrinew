@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Sprout, LogOut, Database, ArrowLeft, ShieldCheck, Truck, ShoppingBag, Smartphone, Sparkles, Activity } from 'lucide-react';
+import { Sprout, LogOut, ArrowLeft, Truck, ShoppingBag, Sparkles, Activity } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
 import LanguageSelector from './LanguageSelector';
 
@@ -196,67 +196,6 @@ export default function Navbar({ selectedRole, onResetPortal, onLogout, onOpenMo
 
         {/* Right Section: System Telemetry & Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Cloud Database Pill */}
-          <div className="nav-pill-telemetry" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            color: dbStatus?.connected ? '#86efac' : '#fde047',
-            background: 'rgba(4, 20, 18, 0.7)',
-            padding: '6px 14px',
-            borderRadius: '20px',
-            fontWeight: '700',
-            border: `1px solid ${dbStatus?.connected ? 'rgba(74, 222, 128, 0.35)' : 'rgba(251, 191, 36, 0.35)'}`
-          }}>
-            <Database size={13} color={dbStatus?.connected ? '#4ade80' : '#fbbf24'} />
-            <span>{dbStatus?.connected ? 'MongoDB Online' : 'Memory Store'}</span>
-          </div>
-
-          {/* OTP Security Pill */}
-          <div className="nav-pill-telemetry" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            color: '#86efac',
-            background: 'rgba(20, 83, 45, 0.35)',
-            padding: '6px 14px',
-            borderRadius: '20px',
-            fontWeight: '700',
-            border: '1px solid rgba(74, 222, 128, 0.35)'
-          }}>
-            <ShieldCheck size={14} color="#4ade80" />
-            <span>Email OTP Active</span>
-          </div>
-
-          {/* 3D Mobile App Launcher */}
-          {onOpenMobileApp && (
-            <button
-              onClick={onOpenMobileApp}
-              className="nav-mobile-app-btn"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '12px',
-                color: '#ffffff',
-                background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                padding: '6px 14px',
-                borderRadius: '20px',
-                fontWeight: '800',
-                border: '1px solid rgba(244, 114, 182, 0.6)',
-                cursor: 'pointer',
-                boxShadow: '0 0 18px rgba(139, 92, 246, 0.45)',
-                transition: 'transform 0.15s ease'
-              }}
-              title="Open 3D Flagship Mobile Application"
-            >
-              <Smartphone size={13} color="#fdf4ff" />
-              <span>📱 3D Mobile App</span>
-            </button>
-          )}
-
           {/* PWA Mobile Install */}
           {!isStandalone && (
             <button
