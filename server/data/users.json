@@ -8,7 +8,7 @@
     "lastName": "Rivers",
     "email": "alex@nexus.io",
     "phone": "+15550192834",
-    "password": "$2a$10$tTLJXu1kAq2JMCWYiObS4uTJEY3jbbWCHFPxpY95r7kHPtaURt4UC",
+    "password": "$2a$10$CnY8h0S1/D.z2qui/IOVEe8hHxc7M/3hwtrTbfOKi1Svb6wUB2Th6",
     "role": "customer",
     "nativePlace": "Bengaluru, Karnataka",
     "location": {
@@ -27,7 +27,7 @@
     "name": "gowres",
     "email": "mgowres@gmail.com",
     "phone": "9952712633",
-    "password": "$2a$10$6waS6b9xBemm7wDjaRhjiOLf8qCv75WutgUdZUt88jXt0guH1Onie",
+    "password": "$2a$10$aohTlI7IdZ7nG55CoQedj.7nDVTkEbFQa56jXfyPmY5SH7lLhQBL6",
     "role": "farmer",
     "nativePlace": "Namakkal, Tamil Nadu",
     "location": {
@@ -46,7 +46,7 @@
     "lastName": "Swift",
     "email": "driver@nexus.io",
     "phone": "+15550197766",
-    "password": "$2a$10$H.wHsBectuDxiZqWp1SLO.RE5E5p9wpN6xYVzVb7S2LAK4gLmztDG",
+    "password": "$2a$10$U7fo2piKTzbfqsHE.eKts.4IeSK7VM7xp6GVrRYg.VFP4phdle8Yq",
     "role": "delivery",
     "nativePlace": "Mysuru, Karnataka",
     "location": {
