@@ -1531,15 +1531,15 @@ export default function FarmerPortal({ onLogout }) {
   }, []);
 
   // Periodic polling using visibility-aware hook: stops on hidden tab, prevents overlaps
-  usePolling(fetchIncomingOrders, 20000, {
+  usePolling(() => fetchIncomingOrders(), 20000, {
     enabled: activeNav === 'orders'
   });
 
-  usePolling(fetchFarmerBargains, 30000, {
+  usePolling(() => fetchFarmerBargains(), 30000, {
     enabled: activeNav === 'bargains'
   });
 
-  usePolling(fetchFarmerProducts, 30000, {
+  usePolling(() => fetchFarmerProducts(), 30000, {
     enabled: activeNav === 'products' || activeNav === 'after_cultivation' || activeNav === 'home'
   });
 

@@ -3588,7 +3588,7 @@ export default function CustomerPortal({ onLogout }) {
   }, [products]);
 
   // Periodic polling using visibility-aware hook: stops on hidden tab, prevents overlaps
-  usePolling(fetchOrders, 20000, {
+  usePolling(() => fetchOrders(), 20000, {
     enabled: activeTab === 'orders'
   });
 
@@ -3596,7 +3596,7 @@ export default function CustomerPortal({ onLogout }) {
     enabled: activeTab === 'marketplace' || activeTab === 'cart'
   });
 
-  usePolling(fetchNotifications, 45000, {
+  usePolling(() => fetchNotifications(), 45000, {
     enabled: Boolean(user)
   });
 
