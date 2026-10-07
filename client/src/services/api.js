@@ -56,7 +56,7 @@ export const productAPI = {
 };
 
 export const orderAPI = {
-  createOrder: (data) => axios.post(`${API_BASE}/orders`, data, { headers: getAuthHeaders() }),
+  createOrder: (data, customHeaders = {}) => axios.post(`${API_BASE}/orders`, data, { headers: { ...getAuthHeaders(), ...customHeaders } }),
   getOrders: (params) => axios.get(`${API_BASE}/orders`, { headers: getAuthHeaders(), params }),
   updateStatus: (id, data) => axios.put(`${API_BASE}/orders/${id}/status`, data, { headers: getAuthHeaders() }),
   assignDriver: (id) => axios.put(`${API_BASE}/orders/${id}/assign`, {}, { headers: getAuthHeaders() }),

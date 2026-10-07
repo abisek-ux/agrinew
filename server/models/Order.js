@@ -52,7 +52,15 @@ const orderSchema = new mongoose.Schema(
     deliveryOtpLastSentAt: { type: Date, default: null },
     deliveryOtpVerifiedAt: { type: Date, default: null },
     dispatchSignaledAt: { type: Date, default: null },
-    cancellationReason: { type: String, default: '' }
+    cancellationReason: { type: String, default: '' },
+    // Phase 8 Commerce & Inventory Reliability fields
+    idempotencyKey: { type: String, default: null },
+    checkoutId: { type: String, default: null },
+    stockRestored: { type: Boolean, default: false },
+    paymentMethod: { type: String, enum: ['cod', 'upi', 'COD', 'UPI'], default: 'cod' },
+    paymentStatus: { type: String, enum: ['pending', 'paid', 'refunded', 'failed'], default: 'pending' },
+    transactionId: { type: String, default: null },
+    paidAt: { type: Date, default: null }
   },
   { timestamps: true }
 );
@@ -63,5 +71,7 @@ orderSchema.index({ farmerId: 1, createdAt: -1 });
 orderSchema.index({ deliveryId: 1, status: 1 });
 orderSchema.index({ deliveryId: 1, createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ idempotencyKey: 1 }, { sparse: true });
+orderSchema.index({ checkoutId: 1 }, { sparse: true });
 
 module.exports = mongoose.models.Order || mongoose.model('Order', orderSchema);

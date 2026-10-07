@@ -3938,6 +3938,7 @@ export default function CustomerPortal({ onLogout }) {
     const totalAmount = expressDelivery ? baseTotal + 49 : baseTotal;
 
     const fullDoorstep = `${checkoutAddress.addressLine}, ${checkoutAddress.city || 'Bengaluru'}, ${checkoutAddress.state || 'Karnataka'} - ${checkoutAddress.pincode || '560001'}`;
+    const clientCheckoutKey = 'IDEMP-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
 
     const orderPayload = {
       customerId: user?._id || user?.id,
@@ -3959,11 +3960,13 @@ export default function CustomerPortal({ onLogout }) {
         farmerId: i.farmerId
       })),
       totalAmount,
-      expressDelivery
+      expressDelivery,
+      idempotencyKey: clientCheckoutKey,
+      paymentMethod: selectedPaymentMethod === 'upi_delivery' ? 'upi' : 'cod'
     };
 
     try {
-      const res = await orderAPI.createOrder(orderPayload);
+      const res = await orderAPI.createOrder(orderPayload, { 'Idempotency-Key': clientCheckoutKey });
       const newOrders = Array.isArray(res.data)
         ? res.data
         : (res.data?.orders || [res.data]);

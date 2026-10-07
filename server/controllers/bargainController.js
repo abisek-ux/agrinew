@@ -183,17 +183,110 @@ const farmerRespond = async (req, res) => {
       return res.status(400).json({ success: false, message: `Bargain is already resolved (status: ${bargain.status})` });
     }
 
-    if (act === 'ACCEPT') {
-      bargain.status = 'ACCEPTED';
-      bargain.farmerNote = note || 'Offer accepted by farmer';
-      bargain.responseHistory.push({
-        senderRole: 'farmer',
-        action: 'accept',
-        proposedPrice: bargain.proposedPrice,
-        note: bargain.farmerNote,
-        timestamp: new Date()
-      });
+    let updateQuery = null;
 
+    if (act === 'ACCEPT') {
+      const product = await findProduct(bargain.productId);
+      if (!product) {
+        return res.status(404).json({ success: false, message: 'Marketplace product no longer exists' });
+      }
+
+      const farmerNote = note || 'Offer accepted by farmer';
+      updateQuery = {
+        $set: { status: 'ACCEPTED', farmerNote },
+        $push: {
+          responseHistory: {
+            senderRole: 'farmer',
+            action: 'accept',
+            proposedPrice: bargain.proposedPrice,
+            note: farmerNote,
+            timestamp: new Date()
+          }
+        }
+      };
+    } else if (act === 'REJECT') {
+      const farmerNote = note || 'Offer declined due to high harvest/production costs';
+      updateQuery = {
+        $set: { status: 'REJECTED', farmerNote },
+        $push: {
+          responseHistory: {
+            senderRole: 'farmer',
+            action: 'reject',
+            note: farmerNote,
+            timestamp: new Date()
+          }
+        }
+      };
+    } else if (act === 'COUNTER') {
+      const cPrice = Number(counterPrice);
+      if (!cPrice || cPrice <= 0) {
+        return res.status(400).json({ success: false, message: 'Counter price is required' });
+      }
+      const farmerNote = note || `Farmer offered counter-price of ₹${cPrice}/${bargain.unit}`;
+      updateQuery = {
+        $set: { status: 'COUNTERED', counterPrice: cPrice, farmerNote },
+        $push: {
+          responseHistory: {
+            senderRole: 'farmer',
+            action: 'counter',
+            counterPrice: cPrice,
+            note: farmerNote,
+            timestamp: new Date()
+          }
+        }
+      };
+    }
+
+    if (isConnected()) {
+      const updated = await Bargain.findOneAndUpdate(
+        { _id: bargain._id, status: 'PENDING' },
+        updateQuery,
+        { new: true }
+      );
+      if (!updated) {
+        return res.status(400).json({ success: false, message: `Bargain is already resolved (status: ${bargain.status})` });
+      }
+      bargain = updated;
+    } else {
+      if (bargain.status !== 'PENDING') {
+        return res.status(400).json({ success: false, message: `Bargain is already resolved (status: ${bargain.status})` });
+      }
+      if (act === 'ACCEPT') {
+        bargain.status = 'ACCEPTED';
+        bargain.farmerNote = note || 'Offer accepted by farmer';
+        bargain.responseHistory.push({
+          senderRole: 'farmer',
+          action: 'accept',
+          proposedPrice: bargain.proposedPrice,
+          note: bargain.farmerNote,
+          timestamp: new Date()
+        });
+      } else if (act === 'REJECT') {
+        bargain.status = 'REJECTED';
+        bargain.farmerNote = note || 'Offer declined due to high harvest/production costs';
+        bargain.responseHistory.push({
+          senderRole: 'farmer',
+          action: 'reject',
+          note: bargain.farmerNote,
+          timestamp: new Date()
+        });
+      } else if (act === 'COUNTER') {
+        const cPrice = Number(counterPrice);
+        bargain.status = 'COUNTERED';
+        bargain.counterPrice = cPrice;
+        bargain.farmerNote = note || `Farmer offered counter-price of ₹${cPrice}/${bargain.unit}`;
+        bargain.responseHistory.push({
+          senderRole: 'farmer',
+          action: 'counter',
+          counterPrice: cPrice,
+          note: bargain.farmerNote,
+          timestamp: new Date()
+        });
+      }
+    }
+
+    // Push notification based on resolved state
+    if (bargain.status === 'ACCEPTED') {
       pushNotification({
         recipientId: bargain.customerId,
         recipientRole: 'customer',
@@ -202,16 +295,7 @@ const farmerRespond = async (req, res) => {
         category: 'order',
         priority: 'HIGH'
       });
-    } else if (act === 'REJECT') {
-      bargain.status = 'REJECTED';
-      bargain.farmerNote = note || 'Offer declined due to high harvest/production costs';
-      bargain.responseHistory.push({
-        senderRole: 'farmer',
-        action: 'reject',
-        note: bargain.farmerNote,
-        timestamp: new Date()
-      });
-
+    } else if (bargain.status === 'REJECTED') {
       pushNotification({
         recipientId: bargain.customerId,
         recipientRole: 'customer',
@@ -220,34 +304,15 @@ const farmerRespond = async (req, res) => {
         category: 'order',
         priority: 'NORMAL'
       });
-    } else if (act === 'COUNTER') {
-      const cPrice = Number(counterPrice);
-      if (!cPrice || cPrice <= 0) {
-        return res.status(400).json({ success: false, message: 'Counter price is required' });
-      }
-      bargain.status = 'COUNTERED';
-      bargain.counterPrice = cPrice;
-      bargain.farmerNote = note || `Farmer offered counter-price of ₹${cPrice}/${bargain.unit}`;
-      bargain.responseHistory.push({
-        senderRole: 'farmer',
-        action: 'counter',
-        counterPrice: cPrice,
-        note: bargain.farmerNote,
-        timestamp: new Date()
-      });
-
+    } else if (bargain.status === 'COUNTERED') {
       pushNotification({
         recipientId: bargain.customerId,
         recipientRole: 'customer',
         title: '🌾 Farmer Sent Counter-Offer',
-        message: `Farmer ${bargain.farmerName} countered with ₹${cPrice}/${bargain.unit} for "${bargain.productTitle}". Review and accept to buy.`,
+        message: `Farmer ${bargain.farmerName} countered with ₹${bargain.counterPrice}/${bargain.unit} for "${bargain.productTitle}". Review and accept to buy.`,
         category: 'order',
         priority: 'HIGH'
       });
-    }
-
-    if (isConnected()) {
-      await bargain.save();
     }
 
     return res.json({ success: true, message: `Bargain updated to ${bargain.status}`, bargain });
@@ -290,16 +355,66 @@ const customerRespond = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Can only respond to COUNTERED bargains' });
     }
 
+    let updateQuery = null;
     if (act === 'ACCEPT') {
-      bargain.status = 'ACCEPTED';
-      bargain.proposedPrice = bargain.counterPrice; // Customer agreed to counter price
-      bargain.responseHistory.push({
-        senderRole: 'customer',
-        action: 'accept_counter',
-        proposedPrice: bargain.counterPrice,
-        timestamp: new Date()
-      });
+      updateQuery = {
+        $set: { status: 'ACCEPTED', proposedPrice: bargain.counterPrice },
+        $push: {
+          responseHistory: {
+            senderRole: 'customer',
+            action: 'accept_counter',
+            proposedPrice: bargain.counterPrice,
+            timestamp: new Date()
+          }
+        }
+      };
+    } else {
+      updateQuery = {
+        $set: { status: 'REJECTED' },
+        $push: {
+          responseHistory: {
+            senderRole: 'customer',
+            action: 'reject_counter',
+            timestamp: new Date()
+          }
+        }
+      };
+    }
 
+    if (isConnected()) {
+      const updated = await Bargain.findOneAndUpdate(
+        { _id: bargain._id, status: 'COUNTERED' },
+        updateQuery,
+        { new: true }
+      );
+      if (!updated) {
+        return res.status(400).json({ success: false, message: 'Can only respond to COUNTERED bargains' });
+      }
+      bargain = updated;
+    } else {
+      if (bargain.status !== 'COUNTERED') {
+        return res.status(400).json({ success: false, message: 'Can only respond to COUNTERED bargains' });
+      }
+      if (act === 'ACCEPT') {
+        bargain.status = 'ACCEPTED';
+        bargain.proposedPrice = bargain.counterPrice;
+        bargain.responseHistory.push({
+          senderRole: 'customer',
+          action: 'accept_counter',
+          proposedPrice: bargain.counterPrice,
+          timestamp: new Date()
+        });
+      } else {
+        bargain.status = 'REJECTED';
+        bargain.responseHistory.push({
+          senderRole: 'customer',
+          action: 'reject_counter',
+          timestamp: new Date()
+        });
+      }
+    }
+
+    if (bargain.status === 'ACCEPTED') {
       pushNotification({
         recipientId: bargain.farmerId,
         recipientRole: 'farmer',
@@ -308,17 +423,6 @@ const customerRespond = async (req, res) => {
         category: 'order',
         priority: 'HIGH'
       });
-    } else {
-      bargain.status = 'REJECTED';
-      bargain.responseHistory.push({
-        senderRole: 'customer',
-        action: 'reject_counter',
-        timestamp: new Date()
-      });
-    }
-
-    if (isConnected()) {
-      await bargain.save();
     }
 
     return res.json({ success: true, message: `Counter-offer ${bargain.status.toLowerCase()}`, bargain });

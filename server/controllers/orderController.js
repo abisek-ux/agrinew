@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const User = require('../models/User');
 const Bargain = require('../models/Bargain');
+const Idempotency = require('../models/Idempotency');
 const { isConnected } = require('../config/db');
 const { getMemoryProducts } = require('./productController');
 const phoneOtpService = require('../services/phoneOtpService');
@@ -14,6 +15,7 @@ const otpPepper = () => process.env.RESET_OTP_PEPPER || 'agrilink_secret_otp_pep
 const hashOtp = (otp) => crypto.createHmac('sha256', otpPepper()).update(String(otp).trim()).digest('hex');
 
 const memoryOrders = [];
+const memoryIdempotency = new Map();
 
 // Helper to find product by id across mongo / memory
 const findProduct = async (prodId) => {
@@ -33,7 +35,71 @@ const findProduct = async (prodId) => {
   return memoryList.find(p => String(p.id || p._id) === String(prodId));
 };
 
-// Helper to save product after stock decrement
+// Phase 8: Atomic conditional stock decrement ($gte check + atomic $inc decrement)
+const atomicDecrementStock = async (prodId, qty) => {
+  const reqQty = Math.max(1, Number(qty) || 1);
+  if (isConnected()) {
+    try {
+      const updated = await Product.findOneAndUpdate(
+        { _id: prodId, stock: { $gte: reqQty } },
+        { $inc: { stock: -reqQty } },
+        { new: true }
+      );
+      if (updated) return updated;
+    } catch (e) {}
+    try {
+      const updated = await Product.findOneAndUpdate(
+        { $or: [{ id: String(prodId) }, { _id: String(prodId) }], stock: { $gte: reqQty } },
+        { $inc: { stock: -reqQty } },
+        { new: true }
+      );
+      if (updated) return updated;
+    } catch (e) {}
+  }
+
+  // In-memory fallback: single-threaded synchronous atomic check & decrement
+  const memoryList = getMemoryProducts();
+  const p = memoryList.find(item => String(item.id || item._id) === String(prodId));
+  if (p && Number(p.stock) >= reqQty) {
+    p.stock = Number(p.stock) - reqQty;
+    return p;
+  }
+  return null;
+};
+
+// Phase 8: Atomic stock restore ($inc increment)
+const atomicRestoreStock = async (prodId, qty) => {
+  const restoreQty = Math.max(1, Number(qty) || 1);
+  if (isConnected()) {
+    try {
+      const updated = await Product.findOneAndUpdate(
+        { _id: prodId },
+        { $inc: { stock: restoreQty } },
+        { new: true }
+      );
+      if (updated) return updated;
+    } catch (e) {}
+    try {
+      const updated = await Product.findOneAndUpdate(
+        { $or: [{ id: String(prodId) }, { _id: String(prodId) }] },
+        { $inc: { stock: restoreQty } },
+        { new: true }
+      );
+      if (updated) return updated;
+    } catch (e) {}
+  }
+
+  // In-memory fallback
+  const memoryList = getMemoryProducts();
+  const p = memoryList.find(item => String(item.id || item._id) === String(prodId));
+  if (p) {
+    p.stock = (Number(p.stock) || 0) + restoreQty;
+    return p;
+  }
+  return null;
+};
+
+// Backward-compatible helper for callers expecting saveProductStock
 const saveProductStock = async (productDoc, newStock) => {
   const stockVal = Math.max(0, Number(newStock));
   productDoc.stock = stockVal;
@@ -44,12 +110,41 @@ const saveProductStock = async (productDoc, newStock) => {
 
 /**
  * POST /api/orders
- * Supports multi-farmer cart splitting and backend stock management
+ * Supports:
+ * - Idempotency-Key duplicate request protection & caching
+ * - Server-authoritative pricing (discards manipulated client price unless accepted bargain verified)
+ * - Server-enforced minimum order quantity (minOrderQty)
+ * - Atomic inventory decrement with compensating rollback across multi-farmer carts
  */
 const createOrder = async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Authentication required to place an order' });
+    }
+
+    const currentUserId = String(req.user.id || req.user._id);
+
+    // 0. Idempotency Check: Return cached response if request was already processed
+    const rawIdempotencyKey = req.headers['idempotency-key'] || req.body.idempotencyKey || null;
+    const idempotencyKey = rawIdempotencyKey && typeof rawIdempotencyKey === 'string' ? rawIdempotencyKey.trim() : null;
+
+    if (idempotencyKey) {
+      if (isConnected()) {
+        try {
+          const cached = await Idempotency.findOne({ key: idempotencyKey, userId: currentUserId });
+          if (cached) {
+            res.set('X-Idempotent-Replay', 'true');
+            return res.status(cached.statusCode).json(cached.responseBody);
+          }
+        } catch (e) {}
+      } else {
+        const memKey = `${currentUserId}_${idempotencyKey}`;
+        if (memoryIdempotency.has(memKey)) {
+          const cached = memoryIdempotency.get(memKey);
+          res.set('X-Idempotent-Replay', 'true');
+          return res.status(cached.statusCode).json(cached.responseBody);
+        }
+      }
     }
 
     const {
@@ -58,20 +153,21 @@ const createOrder = async (req, res) => {
       customerEmail,
       customerLocation,
       items,
-      expressDelivery
+      expressDelivery,
+      paymentMethod
     } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: 'Order items are required' });
     }
 
-    const currentUserId = String(req.user.id || req.user._id);
     const currentUserName = customerName || `${req.user.firstName || 'Customer'} ${req.user.lastName || 'Shopper'}`.trim();
     const currentUserPhone = customerPhone || req.user.phone || '+919840012345';
     const currentUserEmail = customerEmail || req.user.email || '';
     const currentUserLocation = customerLocation || req.user.location || { lat: 12.9716, lng: 77.5946, address: 'Customer Address, Bengaluru' };
+    const checkoutId = req.body.checkoutId || ('CHK-' + Date.now() + '-' + crypto.randomInt(1000, 9999));
 
-    // 1. Stock validation & Product resolution
+    // 1. Stock validation, Minimum Order Quantity & Authoritative Price Resolution
     const resolvedItems = [];
     for (const item of items) {
       const prodId = item.productId || item.id || item._id;
@@ -89,13 +185,24 @@ const createOrder = async (req, res) => {
         return res.status(404).json({ success: false, message: `Product "${item.title || prodId}" not found in catalog` });
       }
 
-      if (product.stock < qty) {
+      // Enforce server-side minimum order quantity
+      const minQty = Math.max(1, Number(product.minOrderQty) || 1);
+      if (qty < minQty) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum order quantity for "${product.title}" is ${minQty} ${product.unit || 'kg'}. Requested: ${qty}`
+        });
+      }
+
+      // Fast check: verify current recorded stock before attempting decrement
+      if (Number(product.stock) < qty) {
         return res.status(400).json({
           success: false,
           message: `Insufficient stock for "${product.title}". Requested: ${qty}, Available: ${product.stock}`
         });
       }
 
+      // Server-authoritative pricing: discard client price unless verified ACCEPTED bargain exists
       let effectivePrice = Number(product.price);
       if (item.price && Number(item.price) < effectivePrice) {
         let acceptedBargain = null;
@@ -141,7 +248,24 @@ const createOrder = async (req, res) => {
       });
     }
 
-    // 2. Group items by farmerId (Solves the Multi-Farmer Cart Problem)
+    // 2. Concurrency-Safe Atomic Decrement with Compensating Rollback
+    const decrementedItems = [];
+    for (const rItem of resolvedItems) {
+      const decResult = await atomicDecrementStock(rItem.productId, rItem.quantity);
+      if (!decResult) {
+        // Compensating Rollback: restore stock for any items decremented so far in this checkout
+        for (const prev of decrementedItems) {
+          await atomicRestoreStock(prev.productId, prev.quantity);
+        }
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for "${rItem.title}". Requested: ${rItem.quantity}, Available: ${rItem.productDoc.stock || 0}`
+        });
+      }
+      decrementedItems.push(rItem);
+    }
+
+    // 3. Group items by farmerId (Solves the Multi-Farmer Cart Problem)
     const farmerGroups = {};
     for (const item of resolvedItems) {
       const fId = item.farmerId;
@@ -158,9 +282,10 @@ const createOrder = async (req, res) => {
       farmerGroups[fId].items.push(item);
     }
 
-    // 3. Atomically decrement stock and create an order per farmer
+    // 4. Create one order per farmer group
     const createdOrders = [];
     const deliveryFeePerOrder = expressDelivery ? 49 : 0;
+    const cleanPaymentMethod = (paymentMethod || 'cod').toLowerCase();
 
     for (const fId of Object.keys(farmerGroups)) {
       const group = farmerGroups[fId];
@@ -169,9 +294,6 @@ const createOrder = async (req, res) => {
       const orderItems = [];
       for (const item of group.items) {
         subtotal += item.price * item.quantity;
-        // Decrement stock safely
-        await saveProductStock(item.productDoc, item.productDoc.stock - item.quantity);
-
         orderItems.push({
           productId: item.productId,
           title: item.title,
@@ -219,7 +341,12 @@ const createOrder = async (req, res) => {
         },
         items: orderItems,
         totalAmount,
-        status: 'pending'
+        status: 'pending',
+        idempotencyKey,
+        checkoutId,
+        stockRestored: false,
+        paymentMethod: cleanPaymentMethod,
+        paymentStatus: 'pending'
       };
 
       if (isConnected()) {
@@ -253,17 +380,38 @@ const createOrder = async (req, res) => {
     }
 
     const sanitizedOrders = createdOrders.map(o => sanitizeOrderFarmerDetails(o, req.user));
+    const responseBody = sanitizedOrders.length === 1
+      ? sanitizedOrders[0]
+      : {
+          success: true,
+          orders: sanitizedOrders,
+          message: `Cart checkout split into ${sanitizedOrders.length} separate farm orders.`
+        };
 
-    // Support single order backward compatibility and multi-order array response
-    if (sanitizedOrders.length === 1) {
-      return res.status(201).json(sanitizedOrders[0]);
-    } else {
-      return res.status(201).json({
-        success: true,
-        orders: sanitizedOrders,
-        message: `Cart checkout split into ${sanitizedOrders.length} separate farm orders.`
-      });
+    // 5. Cache Idempotency response if Idempotency-Key was provided
+    if (idempotencyKey) {
+      if (isConnected()) {
+        try {
+          await Idempotency.create({
+            key: idempotencyKey,
+            userId: currentUserId,
+            endpoint: '/api/orders',
+            statusCode: 201,
+            responseBody
+          });
+        } catch (idempErr) {
+          // Ignore unique duplicate key collision if identical request raced
+        }
+      } else {
+        const memKey = `${currentUserId}_${idempotencyKey}`;
+        memoryIdempotency.set(memKey, {
+          statusCode: 201,
+          responseBody
+        });
+      }
     }
+
+    return res.status(201).json(responseBody);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -401,9 +549,14 @@ const updateOrderStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Order has already been cancelled' });
     }
 
-    // Role-based authorization
+    // Idempotent delivery/logistics status update: if already in requested active status, return cleanly
+    if (order.status === status) {
+      return res.json(sanitizeOrderFarmerDetails(order, req.user));
+    }
+
+    // Role-based authorization & State Machine Validation
     if (userRole === 'farmer') {
-      if (String(order.farmerId) !== userId) {
+      if (String(order.farmerId) !== userId && req.user.role !== 'admin') {
         return res.status(403).json({ success: false, message: 'You are not authorized to update another farmer\'s order' });
       }
       if (!['confirmed', 'accepted', 'packed', 'cancelled'].includes(status)) {
@@ -412,23 +565,17 @@ const updateOrderStatus = async (req, res) => {
           message: `Farmers can only transition orders to confirmed, packed, or cancelled (requested: ${status})`
         });
       }
-      if (status === 'cancelled') {
-        if (!['pending', 'confirmed', 'accepted'].includes(order.status)) {
-          return res.status(400).json({
-            success: false,
-            message: `Cannot cancel order at stage "${order.status}". Only pending or confirmed orders can be cancelled.`
-          });
-        }
-        // Replenish stock for all items
-        for (const item of order.items || []) {
-          const prodId = item.productId || item.product;
-          if (prodId) {
-            const pDoc = await findProduct(prodId);
-            if (pDoc) {
-              await saveProductStock(pDoc, (Number(pDoc.stock) || 0) + Number(item.quantity));
-            }
-          }
-        }
+      if (status === 'packed' && !['confirmed', 'accepted'].includes(order.status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot pack order with status "${order.status}". Order must be confirmed first.`
+        });
+      }
+      if (status === 'cancelled' && !['pending', 'confirmed', 'accepted'].includes(order.status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot cancel order at stage "${order.status}". Only pending or confirmed orders can be cancelled.`
+        });
       }
     } else if (userRole === 'customer') {
       // Customer cancellation support
@@ -444,21 +591,6 @@ const updateOrderStatus = async (req, res) => {
           message: `Cannot cancel order at stage "${order.status}". Only orders that have not yet been packed or dispatched can be cancelled.`
         });
       }
-
-      // Replenish product stock on inventory
-      for (const item of order.items || []) {
-        const prodId = item.productId || item.product;
-        if (prodId) {
-          const pDoc = await findProduct(prodId);
-          if (pDoc) {
-            await saveProductStock(pDoc, (Number(pDoc.stock) || 0) + Number(item.quantity));
-          }
-        }
-      }
-
-      // Unassign delivery if it was assigned
-      order.deliveryId = null;
-      order.deliveryName = 'Unassigned';
     } else if (userRole === 'delivery') {
       if (order.deliveryId && order.deliveryId !== 'Unassigned' && String(order.deliveryId) !== userId) {
         return res.status(403).json({ success: false, message: 'This order is assigned to another delivery agent' });
@@ -499,16 +631,71 @@ const updateOrderStatus = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized role to modify order status' });
     }
 
-    order.status = status;
+    // Phase 8: Idempotent Single-Restoration Cancellation Safety
     if (status === 'cancelled') {
-      order.cancellationReason = req.body.cancellationReason || 'Order cancelled by user';
-    }
-    if (deliveryLocation) {
-      order.deliveryLocation = deliveryLocation;
-    }
+      const cancelReason = req.body.cancellationReason || (userRole === 'farmer' ? 'Cancelled by farmer' : 'Cancelled by customer');
+      if (isConnected()) {
+        const updated = await Order.findOneAndUpdate(
+          {
+            _id: order._id,
+            status: { $in: ['pending', 'confirmed', 'accepted'] },
+            stockRestored: { $ne: true }
+          },
+          {
+            $set: {
+              status: 'cancelled',
+              stockRestored: true,
+              cancellationReason: cancelReason,
+              deliveryId: null,
+              deliveryName: 'Unassigned'
+            }
+          },
+          { new: true }
+        );
 
-    if (isConnected()) {
-      await order.save();
+        if (!updated) {
+          if (order.status === 'cancelled' || order.stockRestored) {
+            return res.status(400).json({ success: false, message: 'Order has already been cancelled' });
+          }
+          return res.status(400).json({ success: false, message: `Cannot cancel order at stage "${order.status}".` });
+        }
+
+        // Restore stock exactly once
+        for (const item of updated.items || []) {
+          const prodId = item.productId || item.product;
+          if (prodId && Number(item.quantity) > 0) {
+            await atomicRestoreStock(prodId, Number(item.quantity));
+          }
+        }
+        order = updated;
+      } else {
+        if (order.status === 'cancelled' || order.stockRestored) {
+          return res.status(400).json({ success: false, message: 'Order has already been cancelled' });
+        }
+        if (!['pending', 'confirmed', 'accepted'].includes(order.status)) {
+          return res.status(400).json({ success: false, message: `Cannot cancel order at stage "${order.status}".` });
+        }
+        order.status = 'cancelled';
+        order.stockRestored = true;
+        order.cancellationReason = cancelReason;
+        order.deliveryId = null;
+        order.deliveryName = 'Unassigned';
+
+        for (const item of order.items || []) {
+          const prodId = item.productId || item.product;
+          if (prodId && Number(item.quantity) > 0) {
+            await atomicRestoreStock(prodId, Number(item.quantity));
+          }
+        }
+      }
+    } else {
+      order.status = status;
+      if (deliveryLocation) {
+        order.deliveryLocation = deliveryLocation;
+      }
+      if (isConnected()) {
+        await order.save();
+      }
     }
 
     // Send notifications on status milestones
@@ -601,8 +788,17 @@ const assignDeliveryDriver = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Order has already been assigned to another courier' });
     }
 
+    // Idempotent: already assigned to this driver
+    if (order.deliveryId && String(order.deliveryId) === driverId) {
+      return res.json({ success: true, message: 'Order already assigned to driver', order: sanitizeOrderFarmerDetails(order, req.user) });
+    }
+
     if (order.status === 'delivered') {
       return res.status(400).json({ success: false, message: 'Order is already delivered' });
+    }
+
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'Cannot assign cancelled order' });
     }
 
     order.deliveryId = driverId;
@@ -1052,6 +1248,10 @@ const processOrderPayment = async (req, res) => {
           $or: [{ _id: id }, { id: id }, { orderId: id }]
         });
         if (order) {
+          if (order.paymentStatus === 'paid') {
+            updatedOrders.push(order);
+            continue;
+          }
           order.paymentStatus = 'paid';
           order.paymentMethod = method;
           order.transactionId = txnId;
@@ -1076,6 +1276,10 @@ const processOrderPayment = async (req, res) => {
       } else {
         const order = memoryOrders.find(o => String(o._id || o.id || o.orderId) === String(id));
         if (order) {
+          if (order.paymentStatus === 'paid') {
+            updatedOrders.push(order);
+            continue;
+          }
           order.paymentStatus = 'paid';
           order.paymentMethod = method;
           order.transactionId = txnId;
