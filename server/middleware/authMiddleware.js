@@ -3,7 +3,7 @@ const User = require('../models/User');
 const { isConnected } = require('../config/db');
 const { findMemoryUserById } = require('../controllers/authController');
 
-const secret = process.env.JWT_SECRET || 'agrilink_super_secret_jwt_key_2026';
+const getSecret = () => process.env.JWT_SECRET || 'agrilink_super_secret_jwt_key_2026';
 
 const protect = async (req, res, next) => {
   let token;
@@ -12,7 +12,7 @@ const protect = async (req, res, next) => {
     try {
       token = req.headers.authorization.split(' ')[1];
       if (token && token !== 'undefined' && token !== 'null') {
-        const decoded = jwt.verify(token, secret);
+        const decoded = jwt.verify(token, getSecret());
 
         if (isConnected()) {
           let user = null;
@@ -66,7 +66,7 @@ const optionalProtect = async (req, res, next) => {
     try {
       const token = req.headers.authorization.split(' ')[1];
       if (token && token !== 'undefined' && token !== 'null') {
-        const decoded = jwt.verify(token, secret);
+        const decoded = jwt.verify(token, getSecret());
         if (isConnected()) {
           let user = null;
           try {

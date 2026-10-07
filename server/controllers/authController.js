@@ -160,12 +160,17 @@ const lookupUser = async (identifier) => {
   ].filter(Boolean)));
 
   if (isConnected()) {
-    return User.findOne({
-      $or: [
-        { email: clean },
-        { phone: { $in: phoneVariants } }
-      ]
-    });
+    try {
+      const dbUser = await User.findOne({
+        $or: [
+          { email: clean },
+          { phone: { $in: phoneVariants } }
+        ]
+      });
+      if (dbUser) return dbUser;
+    } catch (dbErr) {
+      console.warn('MongoDB lookup notice, checking memory fallback:', dbErr.message);
+    }
   }
 
   return memoryUsers.find((user) => {
@@ -419,7 +424,7 @@ const registerUser = async (req, res) => {
         lastName: lastName.trim(),
         name: `${firstName} ${lastName}`.trim(),
         email: cleanEmail,
-        phone: cleanPhone,
+        phone: normalizedPhone || cleanPhone,
         password: hashedPassword,
         role: userRole,
         nativePlace: nativePlace || city || 'Bengaluru, Karnataka',
@@ -433,6 +438,12 @@ const registerUser = async (req, res) => {
         pincode: pincode || '',
         location: userLocation
       });
+      seedMemoryUser({
+        ...(user.toObject ? user.toObject() : user),
+        id: String(user._id || user.id),
+        _id: String(user._id || user.id)
+      });
+      saveMemoryUsers();
       registrationOtps.delete(cleanEmail);
       return res.status(201).json(formatUserResponse(user, generateToken(user._id, user.role)));
     }
@@ -446,7 +457,7 @@ const registerUser = async (req, res) => {
       lastName: lastName.trim(),
       name: `${firstName} ${lastName}`.trim(),
       email: cleanEmail,
-      phone: cleanPhone,
+      phone: normalizedPhone || cleanPhone,
       password: hashedPassword,
       role: userRole,
       nativePlace: nativePlace || city || 'Bengaluru, Karnataka',
