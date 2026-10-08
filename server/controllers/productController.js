@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const { isConnected } = require('../config/db');
 
@@ -86,6 +87,9 @@ const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
     if (isConnected()) {
+      if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(404).json({ success: false, message: 'Product not found' });
+      }
       const product = await Product.findById(id);
       if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
       return res.json(product);
@@ -95,6 +99,9 @@ const getProductById = async (req, res) => {
       return res.json(product);
     }
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
