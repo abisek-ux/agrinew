@@ -7,12 +7,21 @@ const { pushNotification } = require('./notificationController');
 
 const memoryBargains = [];
 
+const mongoose = require('mongoose');
+
 /**
- * Helper to resolve product
+ * Helper to resolve product safely without throwing CastError
  */
 const findProduct = async (prodId) => {
   if (isConnected()) {
-    return await Product.findById(prodId);
+    try {
+      if (mongoose.Types.ObjectId.isValid(prodId)) {
+        const p = await Product.findById(prodId);
+        if (p) return p;
+      }
+      const p = await Product.findOne({ $or: [{ id: String(prodId) }, { _id: String(prodId) }] });
+      if (p) return p;
+    } catch (e) {}
   }
   const prods = getMemoryProducts();
   return prods.find(p => String(p._id || p.id) === String(prodId));
@@ -21,6 +30,7 @@ const findProduct = async (prodId) => {
 /**
  * POST /api/bargains
  * Customer proposes bulk bargain to farmer. Initial status is ALWAYS PENDING.
+ * Server authoritatively derives farmerId from product record (BUG 6, 7).
  */
 const createBargain = async (req, res) => {
   try {
@@ -46,6 +56,7 @@ const createBargain = async (req, res) => {
     const product = await findProduct(productId);
     if (!product) return res.status(404).json({ success: false, message: 'Product not found in marketplace' });
 
+    // Server authoritatively derives farmer identity from loaded product
     const farmerId = String(product.farmerId);
     if (customerId === farmerId) {
       return res.status(400).json({ success: false, message: 'You cannot bargain on your own produce' });
@@ -70,6 +81,8 @@ const createBargain = async (req, res) => {
       customerPhone: req.user.phone || '',
       farmerId,
       farmerName: product.farmerName || 'Origin Farm',
+      farmerEmail: product.farmerEmail || '',
+      farmerPhone: product.farmerPhone || '',
       productId: String(product._id || product.id),
       productTitle: product.title,
       quantity: qty,
@@ -123,20 +136,28 @@ const getBargains = async (req, res) => {
 
     const userId = String(req.user.id || req.user._id);
     const userRole = String(req.user.role || '').toLowerCase();
+    const idCandidates = [userId];
+    if (req.user._id && String(req.user._id) !== userId) idCandidates.push(String(req.user._id));
+    if (req.user.id && String(req.user.id) !== userId) idCandidates.push(String(req.user.id));
 
     let list = [];
     if (isConnected()) {
-      const query = userRole === 'farmer'
-        ? { farmerId: userId }
-        : userRole === 'customer'
-        ? { customerId: userId }
-        : {};
+      let query = {};
+      if (userRole === 'farmer') {
+        const orConditions = [{ farmerId: { $in: idCandidates } }];
+        if (req.user.email) orConditions.push({ farmerEmail: req.user.email });
+        query = { $or: orConditions };
+      } else if (userRole === 'customer') {
+        const orConditions = [{ customerId: { $in: idCandidates } }];
+        if (req.user.email) orConditions.push({ customerEmail: req.user.email });
+        query = { $or: orConditions };
+      }
       list = await Bargain.find(query).sort({ createdAt: -1 });
     } else {
       if (userRole === 'farmer') {
-        list = memoryBargains.filter(b => String(b.farmerId) === userId);
+        list = memoryBargains.filter(b => idCandidates.includes(String(b.farmerId)) || (req.user.email && b.farmerEmail === req.user.email));
       } else if (userRole === 'customer') {
-        list = memoryBargains.filter(b => String(b.customerId) === userId);
+        list = memoryBargains.filter(b => idCandidates.includes(String(b.customerId)) || (req.user.email && b.customerEmail === req.user.email));
       } else {
         list = [...memoryBargains];
       }
@@ -157,7 +178,6 @@ const getBargains = async (req, res) => {
 const farmerRespond = async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
-    const farmerId = String(req.user.id || req.user._id);
     const { id } = req.params;
     const { action, counterPrice, note } = req.body;
     const act = String(action || '').trim().toUpperCase();
@@ -168,14 +188,23 @@ const farmerRespond = async (req, res) => {
 
     let bargain;
     if (isConnected()) {
-      bargain = await Bargain.findOne({ $or: [{ _id: id }, { bargainId: id }] });
+      const orConditions = [{ bargainId: id }];
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        orConditions.push({ _id: id });
+      }
+      bargain = await Bargain.findOne({ $or: orConditions });
     } else {
       bargain = memoryBargains.find(b => String(b.bargainId) === id || String(b.id || b._id) === id);
     }
 
     if (!bargain) return res.status(404).json({ success: false, message: 'Bargain not found' });
 
-    if (String(bargain.farmerId) !== farmerId && req.user.role !== 'admin') {
+    const userIds = [String(req.user.id || ''), String(req.user._id || '')].filter(Boolean);
+    const isAuthorizedFarmer = userIds.includes(String(bargain.farmerId)) ||
+      (req.user.email && bargain.farmerEmail && req.user.email.toLowerCase() === bargain.farmerEmail.toLowerCase()) ||
+      req.user.role === 'admin';
+
+    if (!isAuthorizedFarmer) {
       return res.status(403).json({ success: false, message: 'You are not authorized to respond to another farmer\'s bargain' });
     }
 
@@ -340,7 +369,11 @@ const customerRespond = async (req, res) => {
 
     let bargain;
     if (isConnected()) {
-      bargain = await Bargain.findOne({ $or: [{ _id: id }, { bargainId: id }] });
+      const orConditions = [{ bargainId: id }];
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        orConditions.push({ _id: id });
+      }
+      bargain = await Bargain.findOne({ $or: orConditions });
     } else {
       bargain = memoryBargains.find(b => String(b.bargainId) === id || String(b.id || b._id) === id);
     }

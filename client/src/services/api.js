@@ -43,8 +43,14 @@ export const authAPI = {
 export const bargainAPI = {
   createBargain: (data) => axios.post(`${API_BASE}/bargains`, data, { headers: getAuthHeaders() }),
   getBargains: () => axios.get(`${API_BASE}/bargains`, { headers: getAuthHeaders() }),
+  getFarmerBargains: () => axios.get(`${API_BASE}/bargains`, { headers: getAuthHeaders() }),
   farmerRespond: (id, data) => axios.put(`${API_BASE}/bargains/${id}/farmer-respond`, data, { headers: getAuthHeaders() }),
+  updateBargainStatus: (id, data) => axios.put(`${API_BASE}/bargains/${id}/farmer-respond`, data, { headers: getAuthHeaders() }),
   customerRespond: (id, data) => axios.put(`${API_BASE}/bargains/${id}/customer-respond`, data, { headers: getAuthHeaders() })
+};
+
+export const weatherAPI = {
+  getForecast: (params) => axios.get(`${API_BASE}/weather/forecast`, { params })
 };
 
 export const productAPI = {

@@ -24,6 +24,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const bargainRoutes = require('./routes/bargainRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const weatherRoutes = require('./routes/weatherRoutes');
 const {
   securityHeaders,
   sanitizeNoSql,
@@ -84,6 +85,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/bargains', bargainRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/weather', weatherRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({

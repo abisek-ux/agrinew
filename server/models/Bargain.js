@@ -9,6 +9,8 @@ const bargainSchema = new mongoose.Schema(
     customerPhone: { type: String, default: '' },
     farmerId: { type: String, required: true },
     farmerName: { type: String, required: true },
+    farmerEmail: { type: String, default: '' },
+    farmerPhone: { type: String, default: '' },
     productId: { type: String, required: true },
     productTitle: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },

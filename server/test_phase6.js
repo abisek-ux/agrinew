@@ -230,28 +230,34 @@ async function runPhase6Tests() {
     });
     assert(verifyRes.status === 200 && verifyRes.data.success, 'OTP verification successful');
     assert(verifyRes.data.user.email === newFarmerEmail.toLowerCase(), 'Email address successfully updated after OTP verification');
-    assert(verifyRes.data.user.isProfileLocked === true, '7-day profile modification lock activated upon successful update');
-    assert(verifyRes.data.user.profileLockRemainingDays >= 6, 'Profile lock remaining days correctly reported (6-7 days)');
+    assert(verifyRes.data.user.isProfileLocked === false, 'Profile modification remains unlocked after email update (7-day lock removed)');
 
     // ─────────────────────────────────────────────────────────────
-    // 3. 7-DAY PROFILE MODIFICATION LOCK ENFORCEMENT
+    // 3. REPEATED PROFILE UPDATES PERMITTED (NO 7-DAY LOCK)
     // ─────────────────────────────────────────────────────────────
-    console.log('\n--- 3. 7-DAY PROFILE MODIFICATION LOCK ENFORCEMENT ---');
+    console.log('\n--- 3. REPEATED PROFILE UPDATES PERMITTED (NO 7-DAY LOCK) ---');
 
-    // Attempting profile update while locked MUST return HTTP 403 Forbidden
-    try {
-      await axios.put(`${BASE_URL}/auth/profile`, {
-        firstName: 'Robbie'
-      }, {
-        headers: { Authorization: `Bearer ${farmerToken}` }
-      });
-      assert(false, 'Expected profile modification during 7-day lock to be rejected');
-    } catch (err) {
-      assert(err.response?.status === 403, 'Profile update during lock rejected server-side with HTTP 403 Forbidden');
-      assert(err.response?.data?.message?.includes('Profile changes locked'), 'Clear user-friendly lock message with unlock date returned');
-    }
+    // Repeated farmer profile update MUST succeed immediately without waiting 7 days
+    const farmerUpdate1 = await axios.put(`${BASE_URL}/auth/profile`, {
+      firstName: 'Robbie'
+    }, {
+      headers: { Authorization: `Bearer ${farmerToken}` }
+    });
+    assert(farmerUpdate1.status === 200, 'First farmer profile update succeeds');
+    assert(farmerUpdate1.data.user.firstName === 'Robbie', 'Farmer first name updated to Robbie');
 
-    // Verify that Customer profile updates work and properly trigger the 7-day lock
+    // Immediate second farmer profile update MUST also succeed without 7-day restriction
+    const farmerUpdate2 = await axios.put(`${BASE_URL}/auth/profile`, {
+      firstName: 'Robert Re-edited',
+      farmName: 'Cauvery River Organic Estate Updated'
+    }, {
+      headers: { Authorization: `Bearer ${farmerToken}` }
+    });
+    assert(farmerUpdate2.status === 200, 'Immediate repeated farmer profile update succeeds without 7-day lock');
+    assert(farmerUpdate2.data.user.firstName === 'Robert Re-edited', 'Farmer re-edited successfully');
+    assert(farmerUpdate2.data.user.isProfileLocked === false, 'Farmer profile remains unlocked for future edits');
+
+    // Verify Customer profile update and immediate repeated edit
     const custUpdateRes = await axios.put(`${BASE_URL}/auth/profile`, {
       firstName: 'Aadhya Updated',
       city: 'Mysuru',
@@ -262,18 +268,23 @@ async function runPhase6Tests() {
     });
     assert(custUpdateRes.status === 200, 'Customer profile updated successfully');
     assert(custUpdateRes.data.user.city === 'Mysuru', 'Customer city updated');
-    assert(custUpdateRes.data.user.isProfileLocked === true, 'Customer profile now locked for 7 days');
 
-    // Customer immediate second update blocked
+    // Customer immediate second update also succeeds
+    const custUpdateRes2 = await axios.put(`${BASE_URL}/auth/profile`, {
+      firstName: 'Aadhya Second Edit',
+      city: 'Bengaluru'
+    }, {
+      headers: { Authorization: `Bearer ${customerToken}` }
+    });
+    assert(custUpdateRes2.status === 200, 'Immediate second customer profile update succeeds');
+    assert(custUpdateRes2.data.user.city === 'Bengaluru', 'Customer updated again without restriction');
+
+    // Unauthorized update without token must still be blocked (HTTP 401)
     try {
-      await axios.put(`${BASE_URL}/auth/profile`, {
-        firstName: 'Another Change'
-      }, {
-        headers: { Authorization: `Bearer ${customerToken}` }
-      });
-      assert(false, 'Expected customer second update to be rejected by 7-day lock');
-    } catch (err) {
-      assert(err.response?.status === 403, 'Subsequent customer update rejected with HTTP 403');
+      await axios.put(`${BASE_URL}/auth/profile`, { firstName: 'Hacker' });
+      assert(false, 'Unauthorized profile update must be rejected');
+    } catch (unauthErr) {
+      assert(unauthErr.response?.status === 401, 'Unauthorized profile update rejected with HTTP 401');
     }
 
     // ─────────────────────────────────────────────────────────────

@@ -51,11 +51,6 @@ const formatLockDate = (date) => {
 };
 
 const formatUserResponse = (user, token) => {
-  const isLocked = Boolean(user.profileModificationLockedUntil && new Date() < new Date(user.profileModificationLockedUntil));
-  const remainingDays = isLocked
-    ? Math.max(1, Math.ceil((new Date(user.profileModificationLockedUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    : 0;
-
   return {
     _id: user._id || user.id,
     firstName: user.firstName,
@@ -79,9 +74,9 @@ const formatUserResponse = (user, token) => {
     location: user.location,
     wishlist: user.wishlist || [],
     lastProfileModifiedAt: user.lastProfileModifiedAt || null,
-    profileModificationLockedUntil: user.profileModificationLockedUntil || null,
-    isProfileLocked: isLocked,
-    profileLockRemainingDays: remainingDays,
+    profileModificationLockedUntil: null,
+    isProfileLocked: false,
+    profileLockRemainingDays: 0,
     token
   };
 };
@@ -788,19 +783,6 @@ const requestProfileEmailOtp = async (req, res) => {
       : findMemoryUserById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    // Strict 7-day modification lock check
-    if (user.profileModificationLockedUntil && new Date() < new Date(user.profileModificationLockedUntil)) {
-      const remainingDays = Math.max(1, Math.ceil((new Date(user.profileModificationLockedUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-      const dateStr = formatLockDate(user.profileModificationLockedUntil);
-      return res.status(403).json({
-        success: false,
-        locked: true,
-        remainingDays,
-        lockedUntil: user.profileModificationLockedUntil,
-        message: `Profile changes locked. You can edit your profile again in ${remainingDays} days. (Available on: ${dateStr})`
-      });
-    }
-
     const { newEmail } = req.body;
     if (!newEmail || typeof newEmail !== 'string' || !newEmail.includes('@') || !newEmail.includes('.')) {
       return res.status(400).json({ success: false, message: 'Provide a valid email address' });
@@ -877,19 +859,6 @@ const verifyProfileEmailOtp = async (req, res) => {
       : findMemoryUserById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    // Strict 7-day modification lock check
-    if (user.profileModificationLockedUntil && new Date() < new Date(user.profileModificationLockedUntil)) {
-      const remainingDays = Math.max(1, Math.ceil((new Date(user.profileModificationLockedUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-      const dateStr = formatLockDate(user.profileModificationLockedUntil);
-      return res.status(403).json({
-        success: false,
-        locked: true,
-        remainingDays,
-        lockedUntil: user.profileModificationLockedUntil,
-        message: `Profile changes locked. You can edit your profile again in ${remainingDays} days. (Available on: ${dateStr})`
-      });
-    }
-
     const { otp } = req.body;
     if (!otp || !validOtp(String(otp).trim())) {
       return res.status(400).json({ success: false, message: 'Enter a valid 6-digit OTP code' });
@@ -955,19 +924,17 @@ const verifyProfileEmailOtp = async (req, res) => {
     user.pendingEmailOtpExpiresAt = null;
     user.pendingEmailOtpAttempts = 0;
 
-    // Apply 7-day modification lock!
-    const lockDurationMs = 7 * 24 * 60 * 60 * 1000;
+    // Profile email updated without 7-day lock
     const now = new Date();
     user.lastProfileModifiedAt = now;
-    user.profileModificationLockedUntil = new Date(now.getTime() + lockDurationMs);
+    user.profileModificationLockedUntil = null;
 
     await persistUser(user);
 
-    const unlockDateStr = formatLockDate(user.profileModificationLockedUntil);
     return res.json({
       success: true,
-      message: `Profile email updated successfully. Your profile details cannot be modified again until ${unlockDateStr}.`,
-      lockedUntil: user.profileModificationLockedUntil,
+      message: 'Profile email updated successfully.',
+      lockedUntil: null,
       user: formatUserResponse(user)
     });
   } catch (error) {
@@ -983,19 +950,6 @@ const updateProfile = async (req, res) => {
       ? await User.findById(userId)
       : findMemoryUserById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-    // 1. Strict 7-Day Modification Lock Check
-    if (user.profileModificationLockedUntil && new Date() < new Date(user.profileModificationLockedUntil)) {
-      const remainingDays = Math.max(1, Math.ceil((new Date(user.profileModificationLockedUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-      const dateStr = formatLockDate(user.profileModificationLockedUntil);
-      return res.status(403).json({
-        success: false,
-        locked: true,
-        remainingDays,
-        lockedUntil: user.profileModificationLockedUntil,
-        message: `Profile changes locked. You can edit your profile again in ${remainingDays} days. (Available on: ${dateStr})`
-      });
-    }
 
     const {
       firstName,
@@ -1072,18 +1026,16 @@ const updateProfile = async (req, res) => {
       };
     }
 
-    // Apply 7-day modification lock!
-    const lockDurationMs = 7 * 24 * 60 * 60 * 1000;
+    // Profile updated without 7-day lock
     const now = new Date();
     user.lastProfileModifiedAt = now;
-    user.profileModificationLockedUntil = new Date(now.getTime() + lockDurationMs);
+    user.profileModificationLockedUntil = null;
 
     await persistUser(user);
-    const unlockDateStr = formatLockDate(user.profileModificationLockedUntil);
     return res.json({
       success: true,
-      message: `Profile updated successfully. Your profile details cannot be modified again until ${unlockDateStr}.`,
-      lockedUntil: user.profileModificationLockedUntil,
+      message: 'Profile updated successfully.',
+      lockedUntil: null,
       user: formatUserResponse(user)
     });
   } catch (error) {

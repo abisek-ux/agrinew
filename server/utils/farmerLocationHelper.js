@@ -93,30 +93,16 @@ function resolveFarmerLocation(rawLoc, seedKey, loggedInUser) {
   return getRandomTamilNaduHub(seedKey);
 }
 
-/**
- * Sanitizes and enriches order object to guarantee Tamil Nadu farmer origin and GPS links
- */
 function sanitizeOrderFarmerDetails(order, currentUser) {
   if (!order) return order;
   const ord = typeof order.toObject === 'function' ? order.toObject() : { ...order };
   const seedKey = ord._id || ord.id || ord.orderId || ord.farmerId;
 
-  const isRobert = !ord.farmerName ||
-    String(ord.farmerName).toLowerCase().includes('robert') ||
-    ord.farmerName === 'Farm Origin' ||
-    ord.farmerName === 'Mandya Organic Farm Partner';
+  const hub = resolveFarmerLocation(ord.farmerLocation, seedKey);
 
-  const hub = resolveFarmerLocation(ord.farmerLocation, seedKey, currentUser);
-
-  if (currentUser && currentUser.role === 'farmer') {
-    const isOwnOrder = String(ord.farmerId) === String(currentUser._id || currentUser.id);
-    if (isOwnOrder || isRobert) {
-      ord.farmerName = `${currentUser.firstName || 'Farmer'} ${currentUser.lastName || ''}`.trim() || hub.defaultFarmerName;
-      ord.farmerPhone = currentUser.phone || ord.farmerPhone || '+919842100111';
-      ord.farmerEmail = currentUser.email || ord.farmerEmail || 'farmer@agrilink.in';
-    }
-  } else if (isRobert) {
-    ord.farmerName = hub.defaultFarmerName;
+  // Authoritative identity preservation: NEVER overwrite legitimate farmer names
+  if (!ord.farmerName || ord.farmerName === 'Farm Origin') {
+    ord.farmerName = hub.defaultFarmerName || 'Farm Producer';
   }
 
   ord.farmerLocation = hub;

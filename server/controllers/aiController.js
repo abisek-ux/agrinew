@@ -160,58 +160,108 @@ const askAgriLinkAi = async (req, res) => {
     }
 
     const qLower = cleanQuery.toLowerCase();
+    const normalized = qLower.replace(/[?!.,;:]+$/, '').trim();
 
-    // Guardrail: Check if question is outside agriculture
-    const offTopicKeywords = [
-      'movie', 'actor', 'cinema', 'bollywood', 'hollywood',
-      'football', 'cricket match score', 'nba',
-      'crypto', 'bitcoin', 'ethereum', 'stock options',
-      'javascript', 'python code', 'write a poem about love', 'recipe for pizza',
-      'car engine', 'smartphone review', 'video game', 'politics', 'election candidate'
-    ];
-
-    const isOffTopic = offTopicKeywords.some(kw => qLower.includes(kw));
-
-    if (isOffTopic) {
-      return res.json({
-        success: true,
-        isOffTopic: true,
-        answer: "I'm AgriLink's agricultural assistant. I can help with farming, crops, soil, irrigation, weather, diseases and related questions.",
-        reply: "I'm AgriLink's agricultural assistant. I can help with farming, crops, soil, irrigation, weather, diseases and related questions.",
-        suggestedQuestions: [
-          'What should I grow this season?',
-          'How often should I irrigate tomatoes?',
-          'Will heavy rain affect my crop?',
-          'What should I do if my leaves turn yellow?'
-        ]
-      });
-    }
-
-    // Agricultural intent responses
-    let answerText = '';
     const suggestedQuestions = [
       'What should I grow this season?',
       'How often should I irrigate tomatoes?',
-      'Will heavy rain affect my crop?',
-      'What should I do if my leaves turn yellow?'
+      'My tomato leaves are yellow',
+      'What fertilizer should I use?'
     ];
 
-    if (/what (crop|should I) (can I |grow|plant)/i.test(cleanQuery)) {
-      answerText = "Based on current seasonal conditions and regional soil characteristics, crops like Tomatoes, Finger Millet (Ragi), Groundnut, and seasonal pulses are well-suited. Ensure your field has adequate drainage before the monsoon, and check your soil moisture level before transplanting seedlings.";
-    } else if (/irrigate|irrigation|water/i.test(cleanQuery)) {
-      answerText = "For tomato and vegetable crops, irrigate in the early morning or late afternoon using drip systems to minimize evaporation. Maintain uniform moisture during flowering and fruit setting; avoid alternating between extreme dryness and heavy watering to prevent fruit cracking and blossom end rot.";
-    } else if (/rain|weather|monsoon|storm/i.test(cleanQuery)) {
-      answerText = "Heavy rainfall can cause waterlogging and rapid fungal spore proliferation. Create drainage furrows every 4–6 rows, clear blocked field trenches, and delay synthetic fertilizer spraying until after heavy showers cease to avoid nutrient leaching.";
+    // 1. Strict Intent: Greetings ("hii", "hello", "namaste", "vanakkam", etc.)
+    const isGreeting =
+      /^(hi|hii|hiii|hello|hey|heyy|namaste|vanakkam|good\s*(morning|afternoon|evening)|howdy|greetings)$/i.test(normalized) ||
+      (/^(hi|hello|hey|namaste|vanakkam)\b/i.test(normalized) && normalized.split(/\s+/).length <= 3 && !/crop|plant|grow|soil|water|pest|fertilizer|seed/i.test(normalized));
+
+    if (isGreeting) {
+      const greetingReply = "Namaste! Hello! I am AgriLink's Agricultural Assistant. How can I help you with your crops, soil, irrigation, weather adaptation, or farming practices today?";
+      return res.json({
+        success: true,
+        intent: 'greeting',
+        isOffTopic: false,
+        answer: greetingReply,
+        reply: greetingReply,
+        suggestedQuestions
+      });
+    }
+
+    // 2. Strict Intent: Conversational / Well-being
+    const isConversational = /^(how are you|how're you|how do you do|who are you|what('s| is) your name)\b/i.test(normalized);
+    if (isConversational) {
+      const convReply = "I'm doing well, thank you! I am AgriLink's Agricultural Assistant, dedicated to helping farmers and growers with reliable agronomic advice, crop planning, irrigation schedules, and plant health troubleshooting. How can I assist your farm today?";
+      return res.json({
+        success: true,
+        intent: 'conversational',
+        isOffTopic: false,
+        answer: convReply,
+        reply: convReply,
+        suggestedQuestions
+      });
+    }
+
+    // 3. Strict Intent: Capabilities / Help ("what can you do?", "what are your features?")
+    const isCapabilities = /^(what can you do|what are your (features|capabilities)|how can you help( me)?|help( me)?|what do you do|tell me what you can do)\b/i.test(normalized);
+    if (isCapabilities) {
+      const capReply = "Here is what I can assist you with:\n\n• 🌱 Crop Selection: Recommendations based on your season, soil texture, and water source.\n• 💧 Irrigation Guidance: Optimal watering schedules and drip irrigation practices.\n• 🔬 Plant Health & Pest Troubleshooting: Safe diagnostic guidance and organic remedies for leaf symptoms.\n• 🧪 Soil & Fertilizer Guidance: Balanced N-P-K nutrient management and organic compost practices.\n• 🌦️ Weather & Climate Resilience: Practical measures to safeguard fields against rain or heat stress.\n\nFeel free to ask any farming or crop question!";
+      return res.json({
+        success: true,
+        intent: 'capabilities',
+        isOffTopic: false,
+        answer: capReply,
+        reply: capReply,
+        suggestedQuestions
+      });
+    }
+
+    // 4. Guardrail: Off-Topic / Non-Agricultural Questions
+    const offTopicKeywords = [
+      'movie', 'actor', 'cinema', 'bollywood', 'hollywood',
+      'football', 'cricket', 'nba', 'match score',
+      'crypto', 'bitcoin', 'ethereum', 'stock',
+      'javascript', 'python code', 'write a poem', 'recipe for pizza',
+      'car engine', 'smartphone', 'video game', 'politics', 'election',
+      'capital of', 'president of', 'who directed', 'who wrote'
+    ];
+
+    const isExplicitOffTopic = offTopicKeywords.some(kw => qLower.includes(kw));
+    if (isExplicitOffTopic) {
+      const offTopicReply = "I'm AgriLink's agricultural assistant. I can help with farming, crops, soil, irrigation, weather, diseases and related questions.";
+      return res.json({
+        success: true,
+        intent: 'off_topic',
+        isOffTopic: true,
+        answer: offTopicReply,
+        reply: offTopicReply,
+        suggestedQuestions
+      });
+    }
+
+    // 5. Agricultural Queries (Crop, Irrigation, Yellow Leaves, Fertilizer, Weather, etc.)
+    let answerText = '';
+
+    if (/what (crop|should I) (can I |grow|plant)|best crop for|recommended crop|what to grow/i.test(cleanQuery)) {
+      answerText = "Based on current seasonal conditions and regional soil characteristics, crops like Tomatoes, Finger Millet (Ragi), Groundnut, and seasonal pulses are well-suited. To provide more specific advice, please let me know your soil type (red loam, alluvial, black soil) and water availability. Ensure your field has adequate drainage before the monsoon, and check your soil moisture level before transplanting seedlings.";
+    } else if (/irrigate|irrigation|water(ing)?/i.test(cleanQuery)) {
+      answerText = "For tomato and vegetable crops, irrigate in the early morning or late afternoon using drip systems to minimize evaporation. Maintain uniform moisture during flowering and fruit setting; avoid alternating between extreme dryness and heavy watering to prevent fruit cracking and blossom end rot. If you'd like guidance for a specific soil type or growth stage, please share more details.";
+    } else if (/rain|weather|monsoon|storm|frost|heatwave/i.test(cleanQuery)) {
+      answerText = "Heavy rainfall can cause waterlogging and rapid fungal spore proliferation. Create drainage furrows every 4–6 rows, clear blocked field trenches, and delay synthetic fertilizer spraying until after heavy showers cease to avoid nutrient leaching. In high wind conditions, reinforce nursery shade nets and provide stakes for tall plants.";
     } else if (/yellow|leaf|leaves|chlorosis|spots/i.test(cleanQuery)) {
-      answerText = "Yellowing leaves (chlorosis) usually point to either Nitrogen deficiency (older lower leaves yellowing first) or poor root aeration due to waterlogged soil. If yellowing accompanies dark spots, inspect for fungal blight. Remove heavily infected leaves and apply 5% neem seed kernel extract (NSKE) or Trichoderma.";
-    } else if (/disease|fungus|blight|pest|rot/i.test(cleanQuery)) {
-      answerText = "For safe initial treatment of leaf spot and mild blights: remove affected foliage, improve airflow by proper spacing, and spray bio-fungicide (Trichoderma viride @ 5g/L water). Avoid synthetic chemicals until severe symptoms exceed 20% of your crop canopy.";
+      answerText = "Yellowing leaves (chlorosis) usually point to either Nitrogen deficiency (older lower leaves yellowing first) or poor root aeration due to waterlogged soil. If yellowing accompanies dark spots, inspect for fungal blight. Remove heavily infected leaves and apply 5% neem seed kernel extract (NSKE) or Trichoderma. Are the yellow leaves primarily at the bottom or top of the plant?";
+    } else if (/fertilizer|nutrient|npk|manure|compost|urea|potash|phosphorus/i.test(cleanQuery)) {
+      answerText = "For safe and balanced fertilization: Always test your soil (N-P-K) before heavy application to avoid nutrient imbalances. As a base practice, incorporate 4-5 tonnes/acre of well-decomposed FYM or vermicompost prior to sowing. Apply chemical nitrogen in split doses rather than all at once to prevent vegetative burning and pathogen susceptibility. What crop and growth stage are you fertilizing?";
+    } else if (/disease|fungus|blight|pest|rot|insect|caterpillar|borer/i.test(cleanQuery)) {
+      answerText = "For safe initial treatment of leaf spot and mild blights: remove affected foliage, improve airflow by proper spacing, and spray bio-fungicide (Trichoderma viride @ 5g/L water). Avoid synthetic chemicals until severe symptoms exceed 20% of your crop canopy. If you can describe the specific lesion patterns or affected plant parts, I can provide more targeted guidance.";
+    } else if (/soil|harvest|seed|cultivat|yield|farm|field/i.test(cleanQuery)) {
+      answerText = "For optimal cultivation, focus on maintaining soil organic carbon with regular compost additions, implement drip irrigation to save up to 40% water, and practice crop rotation with legumes to naturally fix atmospheric nitrogen. If you have a specific crop or soil challenge in mind, please share the details!";
     } else {
-      answerText = `Regarding your inquiry on "${cleanQuery}": As a general sustainable farming practice, focus on soil organic carbon with regular compost additions, implement drip irrigation to save up to 40% water, and practice crop rotation with legumes to naturally fix atmospheric nitrogen. If you notice specific pest or soil symptoms, let me know for targeted advice.`;
+      // Unrecognized or Ambiguous Queries: DO NOT hallucinate agricultural advice!
+      answerText = "I didn't quite catch the agricultural context of your message. Could you please specify which crop, soil condition, irrigation question, or farming practice you would like assistance with?";
     }
 
     return res.json({
       success: true,
+      intent: 'agricultural',
       isOffTopic: false,
       answer: answerText,
       reply: answerText,

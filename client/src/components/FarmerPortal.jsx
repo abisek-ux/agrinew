@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSelector from './LanguageSelector';
-import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI, authAPI } from '../services/api';
+import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI, authAPI, weatherAPI } from '../services/api';
 import usePolling from '../hooks/usePolling';
 import LiveTrackingMap from './LiveTrackingMap';
 import MapPicker from './MapPicker';
@@ -646,14 +646,20 @@ const getWindDirection = (deg) => {
 
 // Dynamically compute authentic agricultural guidance from real meteorological measurements
 const generateAgriGuidance = ({ temp, humidity, rainChance, windSpeed, conditionLabel, city }) => {
+  if (temp === null || temp === undefined || humidity === null || humidity === undefined) {
+    return 'Live weather data unavailable. Microclimate field guidance paused until verified satellite sync is re-established.';
+  }
+
   const parts = [];
 
-  if (rainChance >= 60) {
-    parts.push(`⛈️ Active precipitation alert (${rainChance}% rain probability in ${city}). Suspend all pesticide spraying and foliar top-dressing. Open farm bund drainage trenches to prevent standing water in nurseries.`);
-  } else if (rainChance >= 30) {
-    parts.push(`🌦️ Moderate precipitation window (${rainChance}% chance). Favorable for manual seedling transplanting and bed preparation; hold off deep irrigation.`);
-  } else {
-    parts.push(`☀️ Stable clear weather (${rainChance}% precipitation risk). Ideal window for routine intercultural operations, drip/furrow irrigation, pesticide application, and open yard grain drying.`);
+  if (rainChance !== null && rainChance !== undefined) {
+    if (rainChance >= 60) {
+      parts.push(`⛈️ Active precipitation alert (${rainChance}% rain probability in ${city}). Suspend all pesticide spraying and foliar top-dressing. Open farm bund drainage trenches to prevent standing water in nurseries.`);
+    } else if (rainChance >= 30) {
+      parts.push(`🌦️ Moderate precipitation window (${rainChance}% chance). Favorable for manual seedling transplanting and bed preparation; hold off deep irrigation.`);
+    } else {
+      parts.push(`☀️ Stable clear weather (${rainChance}% precipitation risk). Ideal window for routine intercultural operations, drip/furrow irrigation, pesticide application, and open yard grain drying.`);
+    }
   }
 
   if (windSpeed > 22) {
@@ -1130,25 +1136,30 @@ export default function FarmerPortal({ onLogout }) {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherMode, setWeatherMode] = useState('live'); // 'live' | 'simulated'
   const [weatherData, setWeatherData] = useState({
-    temp: 30,
-    feelsLike: 33,
+    temp: null,
+    feelsLike: null,
     condition: 'cloudy',
-    conditionLabel: 'Overcast Cumulus Clouds',
-    icon: '⛅',
-    humidity: 68,
-    rainChance: 25,
-    wind: '15 km/h S',
-    windSpeed: 15,
-    windDirection: 'S',
-    pressure: 1009,
-    uvIndex: 0,
-    uvMax: 7.2,
-    dewPoint: 23,
-    advisory: 'Partly cloudy sky over Cauvery delta. Favorable for morning transplanting and nursery watering. Moderate humidity.',
+    conditionLabel: 'Connecting Telemetry...',
+    icon: '🛰️',
+    humidity: null,
+    rainChance: null,
+    peakRainChance: null,
+    todayRainMm: null,
+    wind: '--',
+    windSpeed: null,
+    windDirection: '',
+    pressure: null,
+    uvIndex: null,
+    uvMax: null,
+    dewPoint: null,
+    advisory: 'Syncing live microclimate telemetry for your farm coordinates...',
     hourly: [],
     daily: [],
-    lastUpdated: 'Live Active',
-    isLive: true
+    lastUpdated: 'Connecting...',
+    isLive: false,
+    isCached: false,
+    dataSource: 'pending',
+    error: null
   });
 
   const [selectedCity, setSelectedCity] = useState('My Farm Location (GPS)');
@@ -1158,28 +1169,59 @@ export default function FarmerPortal({ onLogout }) {
   const [citySearchResults, setCitySearchResults] = useState([]);
   const [searchingLoading, setSearchingLoading] = useState(false);
 
-  // Fetch real, true meteorological predictions from Open-Meteo API
+  // Fetch real, true meteorological predictions from Open-Meteo API with backend proxy fallback
   const fetchRealForecast = async (cityName = selectedCity, customLat = null, customLon = null) => {
     setWeatherLoading(true);
     try {
       const locInfo = customLocations.find(l => l.name === cityName) || WEATHER_LOCATIONS[cityName] || WEATHER_LOCATIONS['My Farm Location (GPS)'];
-      const lat = customLat !== null ? customLat : locInfo.lat;
-      const lon = customLon !== null ? customLon : locInfo.lon;
+      const lat = customLat !== null ? Number(customLat) : Number(locInfo?.lat || 11.2189);
+      const lon = customLon !== null ? Number(customLon) : Number(locInfo?.lon || 78.1674);
 
-      // Real Open-Meteo API with precipitation_sum (mm) and daily precipitation probability
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure,uv_index&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,uv_index_max&timezone=auto`;
+      if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        throw new Error('Invalid geographical coordinates for weather station');
+      }
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Weather telemetry response status: ${res.status}`);
-      const data = await res.json();
+      let data = null;
+      let isFromBackendCache = false;
+
+      // 1. Attempt direct Open-Meteo API with 8-second timeout
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure,uv_index&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,uv_index_max&timezone=auto`;
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (directErr) {
+        console.warn('Direct Open-Meteo ping unverified, routing through backend satellite proxy:', directErr.message);
+      }
+
+      // 2. Fallback: Query backend server proxy (/api/weather/forecast)
+      if (!data) {
+        try {
+          const proxyRes = await weatherAPI.getForecast({ latitude: lat, longitude: lon, cityName });
+          if (proxyRes.data && proxyRes.data.data) {
+            data = proxyRes.data.data;
+            isFromBackendCache = Boolean(proxyRes.data.isCached);
+          }
+        } catch (proxyErr) {
+          console.warn('Backend weather proxy unavailable:', proxyErr.message);
+        }
+      }
+
+      if (!data || !data.current) {
+        throw new Error('Live weather data unavailable');
+      }
 
       const current = data.current || {};
       const wmo = parseWmoWeather(current.weather_code);
       const windDir = getWindDirection(current.wind_direction_10m ?? 180);
       const windSpeed = Math.round(current.wind_speed_10m ?? 14);
-      const temp = Math.round(current.temperature_2m ?? 28);
+      const temp = Math.round(current.temperature_2m);
       const feelsLike = Math.round(current.apparent_temperature ?? temp);
-      const humidity = Math.round(current.relative_humidity_2m ?? 65);
+      const humidity = Math.round(current.relative_humidity_2m);
       const uvIndex = current.uv_index !== undefined ? Number(current.uv_index.toFixed(1)) : 0;
       const pressure = Math.round(current.surface_pressure ?? 1009);
 
@@ -1273,8 +1315,10 @@ export default function FarmerPortal({ onLogout }) {
         advisory: guidance,
         hourly: hourlyList,
         daily: dailyList,
-        lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isLive: true,
+        lastUpdated: isFromBackendCache ? 'Cached weather data' : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isLive: !isFromBackendCache,
+        isCached: isFromBackendCache,
+        dataSource: isFromBackendCache ? 'cached' : 'live',
         error: null
       };
 
@@ -1283,11 +1327,34 @@ export default function FarmerPortal({ onLogout }) {
       setWeatherMode('live');
     } catch (err) {
       console.warn('Real weather telemetry fetch error:', err);
-      setWeatherData(prev => ({
-        ...prev,
+      // DO NOT fabricate fake 30°C or 68% humidity. Keep values honest.
+      setWeatherData({
+        temp: null,
+        feelsLike: null,
+        condition: 'cloudy',
+        conditionLabel: 'Live weather data unavailable',
+        icon: '⚠️',
+        humidity: null,
+        rainChance: null,
+        peakRainChance: null,
+        todayRainMm: null,
+        wind: '--',
+        windSpeed: null,
+        windDirection: '',
+        pressure: null,
+        uvIndex: null,
+        uvMax: null,
+        dewPoint: null,
+        advisory: 'Live weather data unavailable. Microclimate field guidance paused until verified satellite sync is re-established.',
+        hourly: [],
+        daily: [],
+        lastUpdated: 'Unavailable',
         isLive: false,
-        error: 'Weather data unavailable.'
-      }));
+        isCached: false,
+        dataSource: 'unavailable',
+        error: 'Live weather data unavailable'
+      });
+      setWeatherMode('live');
     } finally {
       setWeatherLoading(false);
     }
@@ -1566,7 +1633,11 @@ export default function FarmerPortal({ onLogout }) {
       humidity: cond === 'rainy' ? 88 : cond === 'stormy' ? 82 : cond === 'mist' ? 90 : 55,
       wind: cond === 'stormy' ? '32 km/h NW' : cond === 'rainy' ? '22 km/h SW' : '12 km/h S',
       advisory: cond === 'rainy' ? '🌧️ High rain chance active! Halt pesticide spraying & open drainage trenches around paddy fields.' : cond === 'stormy' ? '⛈️ Severe squall & thunder warning! Provide bamboo stakes for tall crops and secure polytunnels.' : cond === 'sunny' ? '☀️ Bright sun with low humidity. Ideal day for field tillage, weeding, and drying grains in farm yards.' : '⛅ Moderate cloud cover. Suitable for transplanting, nursery watering, and routine farm scouting.',
-      isLive: false
+      lastUpdated: 'Simulated weather',
+      isLive: false,
+      isCached: false,
+      dataSource: 'simulated',
+      error: null
     }));
   };
 
@@ -2045,10 +2116,6 @@ export default function FarmerPortal({ onLogout }) {
 
   const handleSaveProfile = async (e) => {
     if (e) e.preventDefault();
-    if (user?.isProfileLocked) {
-      showToast(`Profile changes locked. You can edit your profile again in ${user.profileLockRemainingDays || 6} days.`, 'warning');
-      return;
-    }
     setSavingProfile(true);
     try {
       const payload = {
@@ -3715,9 +3782,46 @@ export default function FarmerPortal({ onLogout }) {
                 {/* Live Radar Header & Sync Bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px', position: 'relative', zIndex: 2 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '10.5px', background: 'rgba(0,0,0,0.75)', color: '#34d399', padding: '3px 10px', borderRadius: '10px', fontWeight: '800', letterSpacing: '0.5px', border: '1px solid rgba(52, 211, 153, 0.4)', textShadow: '0 1px 2px rgba(0,0,0,0.8)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
-                      LIVE SATELLITE AGRI-RADAR • OPEN-METEO TELEMETRY
+                    <span style={{
+                      fontSize: '10.5px',
+                      background: 'rgba(0,0,0,0.75)',
+                      color: (weatherMode === 'simulated' || weatherData.dataSource === 'simulated')
+                        ? '#fbbf24'
+                        : weatherData.isCached
+                        ? '#67e8f9'
+                        : weatherData.isLive
+                        ? '#34d399'
+                        : '#f87171',
+                      padding: '3px 10px',
+                      borderRadius: '10px',
+                      fontWeight: '800',
+                      letterSpacing: '0.5px',
+                      border: `1px solid ${(weatherMode === 'simulated' || weatherData.dataSource === 'simulated') ? 'rgba(251, 191, 36, 0.4)' : weatherData.isCached ? 'rgba(103, 232, 249, 0.4)' : weatherData.isLive ? 'rgba(52, 211, 153, 0.4)' : 'rgba(248, 113, 113, 0.4)'}`,
+                      textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      <span style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        background: (weatherMode === 'simulated' || weatherData.dataSource === 'simulated')
+                          ? '#fbbf24'
+                          : weatherData.isCached
+                          ? '#38bdf8'
+                          : weatherData.isLive
+                          ? '#10b981'
+                          : '#ef4444',
+                        boxShadow: `0 0 6px ${(weatherMode === 'simulated' || weatherData.dataSource === 'simulated') ? '#fbbf24' : weatherData.isCached ? '#38bdf8' : weatherData.isLive ? '#10b981' : '#ef4444'}`
+                      }} />
+                      {(weatherMode === 'simulated' || weatherData.dataSource === 'simulated')
+                        ? 'SIMULATED WEATHER • SCENARIO PREVIEW'
+                        : weatherData.isCached
+                        ? 'CACHED WEATHER DATA • RECENT TELEMETRY'
+                        : weatherData.isLive
+                        ? 'LIVE SATELLITE AGRI-RADAR • VERIFIED TELEMETRY'
+                        : 'TELEMETRY OFFLINE • SATELLITE FEED PENDING'}
                     </span>
                     <span style={{ fontSize: '12px', color: '#fde047', fontWeight: '700', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
                       • {selectedCity} Field Sensor
@@ -3726,7 +3830,7 @@ export default function FarmerPortal({ onLogout }) {
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '10.5px', color: '#cbd5e1', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
-                      Telemetry: <strong style={{ color: '#86efac' }}>{weatherData.lastUpdated || 'Live Sync'}</strong>
+                      Telemetry: <strong style={{ color: weatherData.isLive ? '#86efac' : weatherData.isCached ? '#67e8f9' : '#fca5a5' }}>{weatherData.lastUpdated || 'Live Sync'}</strong>
                     </span>
                     <button
                       onClick={() => fetchRealForecast(selectedCity)}
@@ -3757,14 +3861,18 @@ export default function FarmerPortal({ onLogout }) {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
                       <span style={{ fontSize: '38px', fontWeight: '900', letterSpacing: '-1px', color: '#ffffff', textShadow: '0 2px 8px rgba(0,0,0,0.8)', lineHeight: '1' }}>
-                        {weatherData.temp}°C
+                        {weatherData.temp !== null ? `${weatherData.temp}°C` : '--°C'}
                       </span>
                       <div>
                         <div style={{ fontSize: '17px', fontWeight: '800', textTransform: 'capitalize', color: '#ffffff', textShadow: '0 2px 6px rgba(0,0,0,0.85)' }}>
-                          {weatherData.conditionLabel || (weatherCondition === 'rainy' ? 'Heavy Rain Showers' : weatherCondition === 'sunny' ? 'Clear & Sunny Sky' : weatherCondition === 'stormy' ? 'Thunderstorm Warning' : weatherCondition === 'mist' ? 'Morning Dew & Mist' : 'Overcast Cumulus Clouds')}
+                          {weatherData.temp !== null
+                            ? (weatherData.conditionLabel || (weatherCondition === 'rainy' ? 'Heavy Rain Showers' : weatherCondition === 'sunny' ? 'Clear & Sunny Sky' : weatherCondition === 'stormy' ? 'Thunderstorm Warning' : weatherCondition === 'mist' ? 'Morning Dew & Mist' : 'Overcast Cumulus Clouds'))
+                            : 'Live weather data unavailable'}
                         </div>
                         <div style={{ fontSize: '11.5px', color: '#ffffff', fontWeight: '600', textShadow: '0 1px 4px rgba(0,0,0,0.9)', marginTop: '2px' }}>
-                          Feels like {weatherData.feelsLike}°C • Barometer {weatherData.pressure || 1009} hPa • Dew Point {weatherData.dewPoint || 22}°C • Soil moisture receptive
+                          {weatherData.temp !== null
+                            ? `Feels like ${weatherData.feelsLike}°C • Barometer ${weatherData.pressure || 1009} hPa • Dew Point ${weatherData.dewPoint || 22}°C • Soil moisture receptive`
+                            : 'Real meteorological satellite telemetry is currently offline • Default telemetry paused'}
                         </div>
                       </div>
                     </div>
@@ -3773,23 +3881,23 @@ export default function FarmerPortal({ onLogout }) {
                     <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
                         <Droplets size={14} color="#67e8f9" />
-                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Humidity: <strong style={{ color: '#67e8f9', fontWeight: '800' }}>{weatherData.humidity}%</strong></span>
+                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Humidity: <strong style={{ color: '#67e8f9', fontWeight: '800' }}>{weatherData.humidity !== null ? `${weatherData.humidity}%` : '--%'}</strong></span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
                         <CloudRain size={14} color="#93c5fd" />
-                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Rain (Now): <strong style={{ color: '#93c5fd', fontWeight: '800' }}>{weatherData.rainChance}%</strong></span>
+                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Rain (Now): <strong style={{ color: '#93c5fd', fontWeight: '800' }}>{weatherData.rainChance !== null ? `${weatherData.rainChance}%` : '--%'}</strong></span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
                         <CloudRain size={14} color="#60a5fa" />
-                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Peak Today: <strong style={{ color: '#60a5fa', fontWeight: '800' }}>{weatherData.peakRainChance ?? weatherData.rainChance}% ({weatherData.todayRainMm ?? '0.0'} mm)</strong></span>
+                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Peak Today: <strong style={{ color: '#60a5fa', fontWeight: '800' }}>{weatherData.peakRainChance !== null ? `${weatherData.peakRainChance}% (${weatherData.todayRainMm ?? '0.0'} mm)` : '--%'}</strong></span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
                         <Wind size={14} color="#a7f3d0" />
-                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Wind: <strong style={{ color: '#a7f3d0', fontWeight: '800' }}>{weatherData.wind}</strong></span>
+                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>Wind: <strong style={{ color: '#a7f3d0', fontWeight: '800' }}>{weatherData.temp !== null ? weatherData.wind : '--'}</strong></span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
                         <Sun size={14} color="#fbbf24" />
-                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>UV Index: <strong style={{ color: '#fde047', fontWeight: '800' }}>{weatherData.uvIndex !== undefined ? weatherData.uvIndex : 0} {weatherData.uvIndex > 5 ? '(High)' : '(Optimal)'}</strong></span>
+                        <span style={{ fontSize: '11.5px', fontWeight: '600' }}>UV Index: <strong style={{ color: '#fde047', fontWeight: '800' }}>{weatherData.uvIndex !== null ? `${weatherData.uvIndex} ${weatherData.uvIndex > 5 ? '(High)' : '(Optimal)'}` : '--'}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -5617,7 +5725,7 @@ export default function FarmerPortal({ onLogout }) {
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontSize: '11px', color: '#9ca3af' }}>Requested Quantity</div>
                           <span style={{ fontSize: '18px', fontWeight: '800', color: '#effbe7' }}>
-                            {b.quantity} {b.productUnit || 'kg'}
+                            {b.quantity} {b.unit || b.productUnit || 'kg'}
                           </span>
                         </div>
                       </div>
@@ -5626,11 +5734,11 @@ export default function FarmerPortal({ onLogout }) {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', background: 'rgba(0,0,0,0.25)', padding: '12px', borderRadius: '12px', marginBottom: '14px' }}>
                         <div>
                           <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>Catalog Price:</span>
-                          <strong style={{ color: '#effbe7', fontSize: '14px' }}>₹{b.originalPrice} / {b.productUnit || 'kg'}</strong>
+                          <strong style={{ color: '#effbe7', fontSize: '14px' }}>₹{b.originalPrice} / {b.unit || b.productUnit || 'kg'}</strong>
                         </div>
                         <div>
                           <span style={{ fontSize: '11px', color: '#fbbf24', display: 'block' }}>Buyer Proposed Offer:</span>
-                          <strong style={{ color: '#fbbf24', fontSize: '16px' }}>₹{b.proposedPrice} / {b.productUnit || 'kg'}</strong>
+                          <strong style={{ color: '#fbbf24', fontSize: '16px' }}>₹{b.proposedPrice} / {b.unit || b.productUnit || 'kg'}</strong>
                           {discountPct > 0 && (
                             <span style={{ fontSize: '11px', color: '#f87171', marginLeft: '6px' }}>(-{discountPct}%)</span>
                           )}
@@ -5642,7 +5750,7 @@ export default function FarmerPortal({ onLogout }) {
                         {b.counterPrice && (
                           <div>
                             <span style={{ fontSize: '11px', color: '#38bdf8', display: 'block' }}>Your Counter Price:</span>
-                            <strong style={{ color: '#38bdf8', fontSize: '15px' }}>₹{b.counterPrice} / {b.productUnit || 'kg'}</strong>
+                            <strong style={{ color: '#38bdf8', fontSize: '15px' }}>₹{b.counterPrice} / {b.unit || b.productUnit || 'kg'}</strong>
                           </div>
                         )}
                       </div>
@@ -6663,34 +6771,6 @@ export default function FarmerPortal({ onLogout }) {
               </p>
             </div>
 
-            {/* 7-Day Profile Modification Lock Banner */}
-            {user?.isProfileLocked && (
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1.5px solid #ef4444',
-                borderRadius: '16px',
-                padding: '16px 20px',
-                marginBottom: '20px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                boxShadow: '0 4px 18px rgba(239, 68, 68, 0.2)'
-              }}>
-                <Lock size={22} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <div>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '800', color: '#fca5a5' }}>
-                    🔒 Profile changes locked
-                  </h4>
-                  <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#fecaca' }}>
-                    You can edit your profile again in {user?.profileLockRemainingDays || 6} days.
-                  </p>
-                  <span style={{ fontSize: '12px', color: '#fde047', fontWeight: '700' }}>
-                    Available on: {user?.profileModificationLockedUntil ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '7 days from update'}
-                  </span>
-                </div>
-              </div>
-            )}
-
             <div style={{ background: 'rgba(9, 38, 28, 0.85)', border: '1.5px solid rgba(74, 222, 128, 0.3)', borderRadius: '20px', padding: '24px', marginBottom: '24px' }}>
               {/* Profile Card Header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '18px', flexWrap: 'wrap' }}>
@@ -6731,10 +6811,8 @@ export default function FarmerPortal({ onLogout }) {
 
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '12px 14px' }}>
                   <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>Next Modification Date</span>
-                  <div style={{ fontSize: '13px', fontWeight: '800', color: user?.isProfileLocked ? '#fde047' : '#34d399', marginTop: '3px' }}>
-                    {user?.isProfileLocked && user?.profileModificationLockedUntil
-                      ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                      : 'Available Now'}
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#34d399', marginTop: '3px' }}>
+                    Available Now
                   </div>
                 </div>
               </div>
@@ -6748,7 +6826,6 @@ export default function FarmerPortal({ onLogout }) {
                       type="text"
                       value={profileFirstName}
                       onChange={e => setProfileFirstName(e.target.value)}
-                      disabled={user?.isProfileLocked}
                       className="input-field"
                       required
                     />
@@ -6759,7 +6836,6 @@ export default function FarmerPortal({ onLogout }) {
                       type="text"
                       value={profileLastName}
                       onChange={e => setProfileLastName(e.target.value)}
-                      disabled={user?.isProfileLocked}
                       className="input-field"
                     />
                   </div>
@@ -6769,7 +6845,6 @@ export default function FarmerPortal({ onLogout }) {
                       type="text"
                       value={profileFarmName}
                       onChange={e => setProfileFarmName(e.target.value)}
-                      disabled={user?.isProfileLocked}
                       placeholder="e.g. Kaveri Organic Greens Estate"
                       className="input-field"
                     />
@@ -6790,7 +6865,6 @@ export default function FarmerPortal({ onLogout }) {
                       type="text"
                       value={profileNativePlace}
                       onChange={e => setProfileNativePlace(e.target.value)}
-                      disabled={user?.isProfileLocked}
                       placeholder="e.g. Namakkal / Salem"
                       className="input-field"
                     />
@@ -6801,14 +6875,13 @@ export default function FarmerPortal({ onLogout }) {
                       <button
                         type="button"
                         onClick={() => setShowEmailOtpModal(true)}
-                        disabled={user?.isProfileLocked}
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: user?.isProfileLocked ? '#6b7280' : '#34d399',
+                          color: '#34d399',
                           fontSize: '11px',
                           fontWeight: '800',
-                          cursor: user?.isProfileLocked ? 'not-allowed' : 'pointer',
+                          cursor: 'pointer',
                           textDecoration: 'underline'
                         }}
                       >
@@ -6830,7 +6903,6 @@ export default function FarmerPortal({ onLogout }) {
                   <textarea
                     value={profileDescription}
                     onChange={e => setProfileDescription(e.target.value)}
-                    disabled={user?.isProfileLocked}
                     rows="3"
                     placeholder="Describe your soil, crops, organic certifications, and pesticide-free methods..."
                     className="input-field"
@@ -6895,23 +6967,22 @@ export default function FarmerPortal({ onLogout }) {
 
                   <button
                     type="submit"
-                    disabled={savingProfile || user?.isProfileLocked}
+                    disabled={savingProfile}
                     style={{
-                      background: user?.isProfileLocked ? 'rgba(255,255,255,0.1)' : '#10b981',
-                      color: user?.isProfileLocked ? '#9ca3af' : '#ffffff',
+                      background: '#10b981',
+                      color: '#ffffff',
                       border: 'none',
                       padding: '11px 24px',
                       borderRadius: '12px',
                       fontSize: '13.5px',
                       fontWeight: '800',
-                      cursor: (savingProfile || user?.isProfileLocked) ? 'not-allowed' : 'pointer',
+                      cursor: savingProfile ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px'
                     }}
                   >
-                    {user?.isProfileLocked && <Lock size={15} />}
-                    <span>{savingProfile ? 'Saving Profile...' : user?.isProfileLocked ? 'Profile Changes Locked' : 'Save Profile Changes'}</span>
+                    <span>{savingProfile ? 'Saving Profile...' : 'Save Profile Changes'}</span>
                   </button>
                 </div>
               </form>

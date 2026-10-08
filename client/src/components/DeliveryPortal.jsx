@@ -2001,32 +2001,7 @@ export default function DeliveryPortal({ onLogout }) {
               </p>
             </div>
 
-            {/* 7-Day Modification Lock Banner */}
-            {user?.isProfileLocked && (
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1.5px solid #ef4444',
-                borderRadius: '16px',
-                padding: '16px 20px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                boxShadow: '0 4px 18px rgba(239, 68, 68, 0.2)'
-              }}>
-                <Lock size={22} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <div>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '800', color: '#fca5a5' }}>
-                    🔒 Profile changes locked
-                  </h4>
-                  <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#fecaca' }}>
-                    You can edit your profile again in {user?.profileLockRemainingDays || 6} days.
-                  </p>
-                  <span style={{ fontSize: '12px', color: '#fde047', fontWeight: '700' }}>
-                    Available on: {user?.profileModificationLockedUntil ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '7 days from update'}
-                  </span>
-                </div>
-              </div>
-            )}
+
 
             <div style={{
               background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.95), rgba(8, 20, 16, 0.98))',
@@ -2078,10 +2053,6 @@ export default function DeliveryPortal({ onLogout }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (user?.isProfileLocked) {
-                      showToast(`Profile changes locked until ${user.profileModificationLockedUntil ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB') : '7 days'}`, 'warning');
-                      return;
-                    }
                     setProfileFirstName(user?.firstName || '');
                     setProfileLastName(user?.lastName || '');
                     setProfileVehicleType(user?.vehicleType || 'Electric Mini-Van (Chilled)');
@@ -2089,23 +2060,22 @@ export default function DeliveryPortal({ onLogout }) {
                     setProfileServiceArea(user?.serviceArea || 'Mandya - Mysuru - Bengaluru Expressway');
                     setIsEditingProfile(prev => !prev);
                   }}
-                  disabled={user?.isProfileLocked}
                   style={{
-                    background: user?.isProfileLocked ? 'rgba(255, 255, 255, 0.05)' : isEditingProfile ? 'rgba(255, 255, 255, 0.08)' : 'rgba(74, 222, 128, 0.15)',
-                    border: `1px solid ${user?.isProfileLocked ? 'rgba(255, 255, 255, 0.1)' : 'rgba(74, 222, 128, 0.4)'}`,
-                    color: user?.isProfileLocked ? '#6b7280' : '#86efac',
+                    background: isEditingProfile ? 'rgba(255, 255, 255, 0.08)' : 'rgba(74, 222, 128, 0.15)',
+                    border: '1px solid rgba(74, 222, 128, 0.4)',
+                    color: '#86efac',
                     padding: '8px 14px',
                     borderRadius: '10px',
                     fontSize: '12.5px',
                     fontWeight: '700',
-                    cursor: user?.isProfileLocked ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px'
                   }}
                 >
-                  {user?.isProfileLocked ? <Lock size={14} /> : <Edit2 size={14} />}
-                  <span>{user?.isProfileLocked ? 'Profile Locked' : isEditingProfile ? 'Cancel Edit' : 'Edit Profile'}</span>
+                  <Edit2 size={14} />
+                  <span>{isEditingProfile ? 'Cancel Edit' : 'Edit Profile'}</span>
                 </button>
               </div>
 
@@ -2118,11 +2088,9 @@ export default function DeliveryPortal({ onLogout }) {
                   </span>
                 </div>
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-                  <span style={{ fontSize: '10.5px', color: '#a3c2b0', textTransform: 'uppercase', fontWeight: '700', display: 'block' }}>Next Modification Date</span>
-                  <span style={{ fontSize: '12.5px', fontWeight: '800', color: user?.isProfileLocked ? '#fde047' : '#34d399', marginTop: '2px', display: 'block' }}>
-                    {user?.isProfileLocked && user?.profileModificationLockedUntil
-                      ? new Date(user.profileModificationLockedUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                      : 'Available Now'}
+                  <span style={{ fontSize: '10.5px', color: '#a3c2b0', textTransform: 'uppercase', fontWeight: '700', display: 'block' }}>Account Modification</span>
+                  <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#34d399', marginTop: '2px', display: 'block' }}>
+                    Available Anytime
                   </span>
                 </div>
               </div>
@@ -2326,7 +2294,7 @@ export default function DeliveryPortal({ onLogout }) {
                     </button>
                     <button
                       type="submit"
-                      disabled={savingProfile || user?.isProfileLocked}
+                      disabled={savingProfile}
                       style={{
                         padding: '10px 20px',
                         borderRadius: '10px',
@@ -2334,7 +2302,7 @@ export default function DeliveryPortal({ onLogout }) {
                         border: 'none',
                         color: '#ffffff',
                         fontWeight: '800',
-                        cursor: (savingProfile || user?.isProfileLocked) ? 'not-allowed' : 'pointer',
+                        cursor: savingProfile ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px'
@@ -2353,14 +2321,13 @@ export default function DeliveryPortal({ onLogout }) {
                       <button
                         type="button"
                         onClick={() => setShowEmailOtpModal(true)}
-                        disabled={user?.isProfileLocked}
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: user?.isProfileLocked ? '#6b7280' : '#34d399',
+                          color: '#34d399',
                           fontSize: '10.5px',
                           fontWeight: '800',
-                          cursor: user?.isProfileLocked ? 'not-allowed' : 'pointer',
+                          cursor: 'pointer',
                           textDecoration: 'underline'
                         }}
                       >

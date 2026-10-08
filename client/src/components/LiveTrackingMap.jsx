@@ -75,10 +75,7 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
   const fLat = (rawFLat && !isMandyaCoords && !isMandyaText) ? rawFLat : resolvedHub.lat;
   const fLng = (rawFLng && !isMandyaCoords && !isMandyaText) ? rawFLng : resolvedHub.lng;
   const farmerAddr = (!isMandyaText && effectiveFarmer?.address) ? effectiveFarmer.address : resolvedHub.address;
-  const farmerDistrict = resolvedHub.district;
-  const farmerDisplayName = (order?.farmerName && !order.farmerName.toLowerCase().includes('robert') && !order.farmerName.toLowerCase().includes('murugan'))
-    ? order.farmerName
-    : `Gowres (${farmerDistrict} Farmer)`;
+  const farmerDisplayName = order?.farmerName || effectiveFarmer?.name || `Verified Farmer (${farmerDistrict} Hub)`;
 
   const dLat = effectiveDelivery?.lat ? Number(effectiveDelivery.lat) : null;
   const dLng = effectiveDelivery?.lng ? Number(effectiveDelivery.lng) : null;

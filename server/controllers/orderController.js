@@ -305,11 +305,10 @@ const createOrder = async (req, res) => {
       }
 
       const totalAmount = subtotal + deliveryFeePerOrder;
-      const groupLocation = resolveFarmerLocation(group.farmerLocation, group.farmerId, req.user);
-      const isRobert = !group.farmerName || String(group.farmerName).toLowerCase().includes('robert') || String(group.farmerName).toLowerCase().includes('murugan') || group.farmerName === 'Farm Origin';
-      const effectiveFarmerName = (req.user && req.user.role === 'farmer')
-        ? `${req.user.firstName || 'gowres'} ${req.user.lastName || ''}`.trim() || 'gowres'
-        : (isRobert ? (groupLocation.defaultFarmerName || 'gowres (Namakkal Farmer)') : group.farmerName);
+      const groupLocation = resolveFarmerLocation(group.farmerLocation, group.farmerId);
+      const effectiveFarmerName = (group.farmerName && group.farmerName !== 'Farm Origin')
+        ? group.farmerName
+        : (groupLocation.defaultFarmerName || 'Verified Farm Producer');
 
       const fLat = groupLocation.lat;
       const fLng = groupLocation.lng;
@@ -325,8 +324,8 @@ const createOrder = async (req, res) => {
         customerLocation: currentUserLocation,
         farmerId: group.farmerId,
         farmerName: effectiveFarmerName,
-        farmerPhone: group.farmerPhone || (req.user?.role === 'farmer' ? req.user.phone : '+919842100111'),
-        farmerEmail: group.farmerEmail || (req.user?.role === 'farmer' ? req.user.email : 'farmer@agrilink.in'),
+        farmerPhone: group.farmerPhone || '+919842100111',
+        farmerEmail: group.farmerEmail || 'farmer@agrilink.in',
         farmerLocation: groupLocation,
         farmerGpsLink: `https://www.google.com/maps?q=${fLat},${fLng}`,
         gpsTrackingLink: `https://www.google.com/maps/dir/?api=1&origin=${fLat},${fLng}&destination=${cLat},${cLng}`,
