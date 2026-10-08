@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
+const User = require('../models/User');
 const { isConnected } = require('../config/db');
 
 const memoryProducts = [];
@@ -42,7 +43,30 @@ const getProducts = async (req, res) => {
       else if (sortBy === 'rating') sortOptions = { rating: -1, numReviews: -1 };
 
       const products = await Product.find(query).sort(sortOptions);
-      return res.json(products);
+
+      // Resolve authoritative farmer names from registered user records, eliminating stale mock names
+      const farmerIds = [...new Set(products.map(p => String(p.farmerId)).filter(id => mongoose.Types.ObjectId.isValid(id)))];
+      let farmerMap = new Map();
+      if (farmerIds.length > 0) {
+        try {
+          const registeredFarmers = await User.find({ _id: { $in: farmerIds } }).select('firstName lastName name farmName email').lean();
+          registeredFarmers.forEach(u => {
+            const displayName = u.farmName || u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim();
+            if (displayName) farmerMap.set(String(u._id), displayName);
+          });
+        } catch (e) {}
+      }
+
+      const resolved = products.map(p => {
+        const obj = typeof p.toObject === 'function' ? p.toObject() : { ...p };
+        const realFarmerName = farmerMap.get(String(obj.farmerId));
+        if (realFarmerName && (/Robert Greenfield|Murugan Farmer|^gowres$/i.test(obj.farmerName) || !obj.farmerName)) {
+          obj.farmerName = realFarmerName;
+        }
+        return obj;
+      });
+
+      return res.json(resolved);
     } else {
       let filtered = [...memoryProducts];
       if (category && typeof category === 'string' && category !== 'all') {
@@ -187,12 +211,12 @@ const addProduct = async (req, res) => {
       }
     }
 
-    const farmerId = String(req.user.id || req.user._id || 'farmer_1');
-    const computedFarmerName = farmerName || `${req.user.firstName || 'gowres'} ${req.user.lastName || ''}`.trim() || 'gowres';
-    const computedFarmerPhone = farmerPhone || req.user.phone || '9952712633';
-    const computedFarmerEmail = farmerEmail || req.user.email || 'mgowres@gmail.com';
-    const computedFarmerNative = farmerNative || req.user.nativePlace || 'Namakkal, Tamil Nadu';
-    const computedLocation = location || req.user.location || { lat: 11.2189, lng: 78.1674, address: 'AgriLink Agro Farm Gate, Mohanur Road, Namakkal, Tamil Nadu 637001, India' };
+    const farmerId = String(req.user.id || req.user._id);
+    const computedFarmerName = farmerName || req.user.farmName || `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.name || 'Verified Regional Farmer';
+    const computedFarmerPhone = farmerPhone || req.user.phone || '';
+    const computedFarmerEmail = farmerEmail || req.user.email || '';
+    const computedFarmerNative = farmerNative || req.user.nativePlace || req.user.city || 'Tamil Nadu';
+    const computedLocation = location || req.user.location || { lat: 11.2189, lng: 78.1674, address: 'Farm Gate Depot, Tamil Nadu' };
 
     const newProductData = {
       title: title.trim(),

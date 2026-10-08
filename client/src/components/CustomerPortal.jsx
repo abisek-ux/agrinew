@@ -3710,12 +3710,33 @@ export default function CustomerPortal({ onLogout }) {
       await bargainAPI.customerRespond(bargain._id, { action: 'accept' });
       showToast('🎉 Counter offer accepted! Produce added to cart at negotiated price.', 'success');
       if (bargain.productId) {
-        const prod = {
-          ...bargain.productId,
-          price: bargain.counterPrice || bargain.offeredPrice,
-          originalPrice: bargain.originalPrice || bargain.productId?.price,
-          isBargain: true
-        };
+        const prodId = typeof bargain.productId === 'object' && bargain.productId !== null
+          ? (bargain.productId._id || bargain.productId.id)
+          : String(bargain.productId || '');
+        const catalogProd = products.find(p => isSameProduct(p, prodId));
+        const agreedRate = Number(bargain.counterPrice || bargain.proposedPrice || bargain.offeredPrice || catalogProd?.price || 1);
+        const prod = catalogProd
+          ? {
+              ...catalogProd,
+              price: agreedRate,
+              originalPrice: Number(bargain.originalPrice || catalogProd.price || 0),
+              isBargain: true
+            }
+          : {
+              _id: prodId,
+              id: prodId,
+              title: bargain.productTitle || 'Produce Item',
+              price: agreedRate,
+              originalPrice: Number(bargain.originalPrice || 0),
+              unit: bargain.unit || 'kg',
+              stock: Math.max(Number(bargain.quantity || 1), 999),
+              minOrderQty: 1,
+              farmerId: bargain.farmerId,
+              farmerName: bargain.farmerName,
+              farmerEmail: bargain.farmerEmail,
+              farmerPhone: bargain.farmerPhone,
+              isBargain: true
+            };
         addToCart(prod, bargain.quantity || 1);
       }
       fetchCustomerBargains();
@@ -6950,11 +6971,15 @@ export default function CustomerPortal({ onLogout }) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {customerBargains.map((bargain) => {
-                  const unit = bargain.productId?.unit || 'kg';
+                  const unit = bargain.unit || bargain.productId?.unit || 'kg';
                   const origPrice = Number(bargain.originalPrice || bargain.productId?.price || 0);
-                  const offeredPrice = Number(bargain.offeredPrice || 0);
-                  const counterPrice = bargain.counterPrice ? Number(bargain.counterPrice) : null;
-                  const acceptedPrice = counterPrice || offeredPrice;
+                  const offeredPrice = Number(bargain.proposedPrice || bargain.offeredPrice || 0);
+                  const counterPrice = (bargain.counterPrice !== null && bargain.counterPrice !== undefined && !isNaN(Number(bargain.counterPrice)))
+                    ? Number(bargain.counterPrice)
+                    : null;
+                  const acceptedPrice = bargain.status === 'ACCEPTED'
+                    ? Number(counterPrice || offeredPrice || origPrice || 1)
+                    : (counterPrice || offeredPrice);
                   const unitSavings = Math.max(0, origPrice - acceptedPrice);
                   const totalSavings = unitSavings * (bargain.quantity || 1);
 
@@ -7181,12 +7206,34 @@ export default function CustomerPortal({ onLogout }) {
                                   <button
                                     onClick={() => {
                                       if (bargain.productId) {
-                                        addToCart({
-                                          ...bargain.productId,
-                                          price: acceptedPrice,
-                                          originalPrice: origPrice,
-                                          isBargain: true
-                                        }, bargain.quantity || 1);
+                                        const prodId = typeof bargain.productId === 'object' && bargain.productId !== null
+                                          ? (bargain.productId._id || bargain.productId.id)
+                                          : String(bargain.productId || '');
+                                        const catalogProd = products.find(p => isSameProduct(p, prodId));
+                                        const finalPrice = acceptedPrice > 0 ? acceptedPrice : (catalogProd?.price || origPrice || 1);
+                                        const prodToAdd = catalogProd
+                                          ? {
+                                              ...catalogProd,
+                                              price: finalPrice,
+                                              originalPrice: Number(bargain.originalPrice || catalogProd.price || 0),
+                                              isBargain: true
+                                            }
+                                          : {
+                                              _id: prodId,
+                                              id: prodId,
+                                              title: bargain.productTitle || 'Produce Item',
+                                              price: finalPrice,
+                                              originalPrice: Number(bargain.originalPrice || 0),
+                                              unit: bargain.unit || 'kg',
+                                              stock: Math.max(Number(bargain.quantity || 1), 999),
+                                              minOrderQty: 1,
+                                              farmerId: bargain.farmerId,
+                                              farmerName: bargain.farmerName,
+                                              farmerEmail: bargain.farmerEmail,
+                                              farmerPhone: bargain.farmerPhone,
+                                              isBargain: true
+                                            };
+                                        addToCart(prodToAdd, bargain.quantity || 1);
                                       }
                                     }}
                                     style={{

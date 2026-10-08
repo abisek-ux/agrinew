@@ -11,7 +11,7 @@ const TAMIL_NADU_HUBS = [
     address: 'AgriLink Agro Farm Gate, Mohanur Road, Namakkal, Tamil Nadu 637001, India',
     lat: 11.2189,
     lng: 78.1674,
-    defaultFarmerName: 'gowres (Namakkal Farmer)'
+    defaultFarmerName: 'Namakkal Agro Hub'
   },
   {
     placeName: 'Salem, Tamil Nadu',
@@ -19,7 +19,7 @@ const TAMIL_NADU_HUBS = [
     address: 'AgriLink Organic Orchard Depot, Omalur Main Road, Salem, Tamil Nadu 636004, India',
     lat: 11.6643,
     lng: 78.1460,
-    defaultFarmerName: 'Selvam P (Salem Orchard)'
+    defaultFarmerName: 'Salem Orchard Depot'
   },
   {
     placeName: 'Coimbatore, Tamil Nadu',
@@ -27,7 +27,7 @@ const TAMIL_NADU_HUBS = [
     address: 'AgriLink Regional Farm Hub, Pollachi Highway, Coimbatore, Tamil Nadu 641021, India',
     lat: 11.0168,
     lng: 76.9558,
-    defaultFarmerName: 'Kandasamy R (Coimbatore Agro)'
+    defaultFarmerName: 'Coimbatore Regional Hub'
   }
 ];
 

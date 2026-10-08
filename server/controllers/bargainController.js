@@ -164,7 +164,13 @@ const getBargains = async (req, res) => {
       list.reverse();
     }
 
-    return res.json({ success: true, count: list.length, bargains: list });
+    const serialized = list.map(b => {
+      const obj = typeof b.toObject === 'function' ? b.toObject() : { ...b };
+      obj.offeredPrice = obj.proposedPrice;
+      return obj;
+    });
+
+    return res.json({ success: true, count: serialized.length, bargains: serialized });
   } catch (error) {
     console.error('getBargains error:', error);
     return res.status(500).json({ success: false, message: 'Unable to retrieve bargains' });
@@ -215,6 +221,11 @@ const farmerRespond = async (req, res) => {
     let updateQuery = null;
 
     if (act === 'ACCEPT') {
+      const agreedPrice = Number(bargain.proposedPrice);
+      if (!agreedPrice || isNaN(agreedPrice) || agreedPrice <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid proposed bargain price cannot be accepted (must be greater than 0)' });
+      }
+
       const product = await findProduct(bargain.productId);
       if (!product) {
         return res.status(404).json({ success: false, message: 'Marketplace product no longer exists' });
@@ -390,13 +401,19 @@ const customerRespond = async (req, res) => {
 
     let updateQuery = null;
     if (act === 'ACCEPT') {
+      const agreedCounter = Number(bargain.counterPrice);
+      if (!agreedCounter || isNaN(agreedCounter) || agreedCounter <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid counter price cannot be accepted (must be greater than 0)' });
+      }
+
       updateQuery = {
-        $set: { status: 'ACCEPTED', proposedPrice: bargain.counterPrice },
+        $set: { status: 'ACCEPTED', proposedPrice: agreedCounter, counterPrice: agreedCounter },
         $push: {
           responseHistory: {
             senderRole: 'customer',
             action: 'accept_counter',
-            proposedPrice: bargain.counterPrice,
+            proposedPrice: agreedCounter,
+            counterPrice: agreedCounter,
             timestamp: new Date()
           }
         }

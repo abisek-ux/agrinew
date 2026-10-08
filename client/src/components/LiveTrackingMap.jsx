@@ -75,6 +75,7 @@ export default function LiveTrackingMap({ order, customerLoc, farmerLoc, deliver
   const fLat = (rawFLat && !isMandyaCoords && !isMandyaText) ? rawFLat : resolvedHub.lat;
   const fLng = (rawFLng && !isMandyaCoords && !isMandyaText) ? rawFLng : resolvedHub.lng;
   const farmerAddr = (!isMandyaText && effectiveFarmer?.address) ? effectiveFarmer.address : resolvedHub.address;
+  const farmerDistrict = order?.farmerDistrict || order?.farmerLocation?.district || effectiveFarmer?.district || order?.farmerCity || effectiveFarmer?.city || resolvedHub.district || 'Namakkal';
   const farmerDisplayName = order?.farmerName || effectiveFarmer?.name || `Verified Farmer (${farmerDistrict} Hub)`;
 
   const dLat = effectiveDelivery?.lat ? Number(effectiveDelivery.lat) : null;
