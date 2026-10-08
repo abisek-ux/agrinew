@@ -3448,6 +3448,8 @@ export default function CustomerPortal({ onLogout }) {
   const [inspectProduct, setInspectProduct] = useState(null);
   const [detailsProduct, setDetailsProduct] = useState(null);
   const [bargainProduct, setBargainProduct] = useState(null);
+  const [addingBargainId, setAddingBargainId] = useState(null);
+  const [bargainFilterTab, setBargainFilterTab] = useState('active'); // 'active' | 'history' | 'all'
   const [showLiveCam, setShowLiveCam] = useState(false);
   const [favorites, setFavorites] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -3705,43 +3707,131 @@ export default function CustomerPortal({ onLogout }) {
     }
   };
 
+  const handleAddBargainToCart = async (bargain) => {
+    if (!bargain) return;
+    const bId = bargain.bargainId || bargain._id;
+    if (addingBargainId === bId) return; // Prevent double clicking / race condition
+    if (bargain.status === 'ADDED_TO_CART') {
+      showToast('This negotiated produce has already been added to your cart.', 'info');
+      return;
+    }
+    if (bargain.status !== 'ACCEPTED') {
+      showToast('Only accepted bargains can be added to your cart.', 'error');
+      return;
+    }
+
+    setAddingBargainId(bId);
+    try {
+      const prodId = typeof bargain.productId === 'object' && bargain.productId !== null
+        ? (bargain.productId._id || bargain.productId.id)
+        : String(bargain.productId || '');
+      const catalogProd = products.find(p => isSameProduct(p, prodId));
+      const agreedRate = Number(bargain.counterPrice || bargain.proposedPrice || catalogProd?.price || 1);
+      const bargainQty = Number(bargain.quantity || 1);
+
+      // Guard against insufficient catalog stock before consuming
+      if (catalogProd && Number(catalogProd.stock) < bargainQty) {
+        showToast(`Cannot add to cart: Available stock (${catalogProd.stock}) is less than negotiated bulk quantity (${bargainQty}). Bargain remains open.`, 'error');
+        setAddingBargainId(null);
+        return;
+      }
+
+      const prodToAdd = catalogProd
+        ? {
+            ...catalogProd,
+            price: agreedRate,
+            originalPrice: Number(bargain.originalPrice || catalogProd.price || 0),
+            isBargain: true,
+            bargainId: bId
+          }
+        : {
+            _id: prodId,
+            id: prodId,
+            title: bargain.productTitle || 'Produce Item',
+            price: agreedRate,
+            originalPrice: Number(bargain.originalPrice || 0),
+            unit: bargain.unit || 'kg',
+            stock: Math.max(bargainQty, 999),
+            minOrderQty: 1,
+            farmerId: bargain.farmerId,
+            farmerName: bargain.farmerName,
+            farmerEmail: bargain.farmerEmail,
+            farmerPhone: bargain.farmerPhone,
+            isBargain: true,
+            bargainId: bId
+          };
+
+      const success = addToCart(prodToAdd, bargainQty);
+      if (success !== false) {
+        // Transition bargain status in database ONLY AFTER cart operation succeeds
+        await bargainAPI.markAddedToCart(bargain._id || bargain.bargainId);
+        showToast(`🎉 Negotiated produce added to cart at ₹${agreedRate}/${bargain.unit || 'kg'}! Bargain moved to history.`, 'success');
+        await fetchCustomerBargains();
+      }
+    } catch (err) {
+      console.error('Error adding bargain to cart:', err);
+      showToast(err.response?.data?.message || 'Failed to update bargain status', 'error');
+    } finally {
+      setAddingBargainId(null);
+    }
+  };
+
   const handleAcceptCounterBargain = async (bargain) => {
+    const bId = bargain.bargainId || bargain._id;
+    if (addingBargainId === bId) return;
+    setAddingBargainId(bId);
     try {
       await bargainAPI.customerRespond(bargain._id, { action: 'accept' });
-      showToast('🎉 Counter offer accepted! Produce added to cart at negotiated price.', 'success');
-      if (bargain.productId) {
-        const prodId = typeof bargain.productId === 'object' && bargain.productId !== null
-          ? (bargain.productId._id || bargain.productId.id)
-          : String(bargain.productId || '');
-        const catalogProd = products.find(p => isSameProduct(p, prodId));
-        const agreedRate = Number(bargain.counterPrice || bargain.proposedPrice || bargain.offeredPrice || catalogProd?.price || 1);
-        const prod = catalogProd
-          ? {
-              ...catalogProd,
-              price: agreedRate,
-              originalPrice: Number(bargain.originalPrice || catalogProd.price || 0),
-              isBargain: true
-            }
-          : {
-              _id: prodId,
-              id: prodId,
-              title: bargain.productTitle || 'Produce Item',
-              price: agreedRate,
-              originalPrice: Number(bargain.originalPrice || 0),
-              unit: bargain.unit || 'kg',
-              stock: Math.max(Number(bargain.quantity || 1), 999),
-              minOrderQty: 1,
-              farmerId: bargain.farmerId,
-              farmerName: bargain.farmerName,
-              farmerEmail: bargain.farmerEmail,
-              farmerPhone: bargain.farmerPhone,
-              isBargain: true
-            };
-        addToCart(prod, bargain.quantity || 1);
+      showToast('🎉 Counter offer accepted!', 'success');
+
+      const prodId = typeof bargain.productId === 'object' && bargain.productId !== null
+        ? (bargain.productId._id || bargain.productId.id)
+        : String(bargain.productId || '');
+      const catalogProd = products.find(p => isSameProduct(p, prodId));
+      const agreedRate = Number(bargain.counterPrice || bargain.proposedPrice || catalogProd?.price || 1);
+      const bargainQty = Number(bargain.quantity || 1);
+
+      if (catalogProd && Number(catalogProd.stock) < bargainQty) {
+        showToast(`Produce counter accepted! However current stock (${catalogProd.stock}) is below ${bargainQty}. Bargain remains open.`, 'info');
+        await fetchCustomerBargains();
+        return;
       }
-      fetchCustomerBargains();
+
+      const prod = catalogProd
+        ? {
+            ...catalogProd,
+            price: agreedRate,
+            originalPrice: Number(bargain.originalPrice || catalogProd.price || 0),
+            isBargain: true,
+            bargainId: bId
+          }
+        : {
+            _id: prodId,
+            id: prodId,
+            title: bargain.productTitle || 'Produce Item',
+            price: agreedRate,
+            originalPrice: Number(bargain.originalPrice || 0),
+            unit: bargain.unit || 'kg',
+            stock: Math.max(bargainQty, 999),
+            minOrderQty: 1,
+            farmerId: bargain.farmerId,
+            farmerName: bargain.farmerName,
+            farmerEmail: bargain.farmerEmail,
+            farmerPhone: bargain.farmerPhone,
+            isBargain: true,
+            bargainId: bId
+          };
+
+      const cartOk = addToCart(prod, bargainQty);
+      if (cartOk !== false) {
+        await bargainAPI.markAddedToCart(bargain._id || bargain.bargainId);
+        showToast('🎉 Negotiated produce added to cart and moved to bargain history!', 'success');
+      }
+      await fetchCustomerBargains();
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to accept counter offer', 'error');
+    } finally {
+      setAddingBargainId(null);
     }
   };
 
@@ -3842,35 +3932,43 @@ export default function CustomerPortal({ onLogout }) {
     const prodId = getProductId(product);
     if (!prodId) {
       showToast('Invalid produce item identifier', 'error');
-      return;
+      return false;
     }
 
     if (Number(product.stock) <= 0) {
       showToast(`${product.title} is currently out of stock.`, 'error');
-      return;
+      return false;
     }
 
     const minQty = Math.max(1, Number(product.minOrderQty) || 1);
     const qtyToAdd = customQty !== null ? customQty : minQty;
     if (qtyToAdd < minQty) {
       showToast(`Minimum order quantity for ${product.title} is ${minQty} ${product.unit || 'kg'}`, 'error');
-      return;
+      return false;
     }
 
+    let insertSuccess = true;
     setCart(currentCart => {
       const existing = currentCart.find(item => isSameProduct(item, prodId));
       if (existing) {
         if (existing.quantity + qtyToAdd > Number(product.stock)) {
           showToast(`Maximum available stock (${product.stock}) reached for ${product.title}.`, 'error');
+          insertSuccess = false;
           return currentCart;
         }
+        // Negotiated price is strictly authoritative and cannot be overwritten by regular price
+        const finalPrice = product.isBargain
+          ? product.price
+          : (existing.isBargain ? existing.price : (product.price || existing.price));
         return currentCart.map(item =>
           isSameProduct(item, prodId)
             ? {
                 ...item,
                 quantity: item.quantity + qtyToAdd,
-                price: product.price || item.price,
+                price: finalPrice,
                 originalPrice: product.originalPrice || item.originalPrice,
+                isBargain: Boolean(item.isBargain || product.isBargain),
+                bargainId: product.bargainId || item.bargainId,
                 minOrderQty: minQty,
                 unit: product.unit || item.unit || 'kg',
                 farmerName: product.farmerName || item.farmerName,
@@ -3889,11 +3987,18 @@ export default function CustomerPortal({ onLogout }) {
           unit: product.unit || 'kg',
           farmerName: product.farmerName || 'Local Direct Farmer',
           farmerId: product.farmerId,
-          originalPrice: product.originalPrice || null
+          originalPrice: product.originalPrice || null,
+          isBargain: Boolean(product.isBargain),
+          bargainId: product.bargainId || null
         }
       ];
     });
-    showToast(`Added ${qtyToAdd}x ${product.title} to cart!`, 'success');
+
+    if (insertSuccess) {
+      showToast(`Added ${qtyToAdd}x ${product.title} to cart!`, 'success');
+      return true;
+    }
+    return false;
   };
 
   const updateQuantity = (productId, delta) => {
@@ -6934,6 +7039,63 @@ export default function CustomerPortal({ onLogout }) {
               </button>
             </div>
 
+            {/* Active vs History Bargains Tab Filter */}
+            {customerBargains.length > 0 && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setBargainFilterTab('active')}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '12px',
+                    border: `1px solid ${bargainFilterTab === 'active' ? '#37bd78' : 'rgba(255,255,255,0.15)'}`,
+                    background: bargainFilterTab === 'active' ? 'rgba(55, 189, 120, 0.25)' : 'rgba(0,0,0,0.3)',
+                    color: bargainFilterTab === 'active' ? '#8be28b' : '#a3c2b0',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    minHeight: '44px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Active Proposals ({customerBargains.filter(b => ['PENDING', 'COUNTERED', 'ACCEPTED'].includes(b.status)).length})
+                </button>
+                <button
+                  onClick={() => setBargainFilterTab('history')}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '12px',
+                    border: `1px solid ${bargainFilterTab === 'history' ? '#38bdf8' : 'rgba(255,255,255,0.15)'}`,
+                    background: bargainFilterTab === 'history' ? 'rgba(56, 189, 248, 0.25)' : 'rgba(0,0,0,0.3)',
+                    color: bargainFilterTab === 'history' ? '#7dd3fc' : '#a3c2b0',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    minHeight: '44px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Bargain History ({customerBargains.filter(b => ['ADDED_TO_CART', 'REJECTED', 'CANCELLED'].includes(b.status)).length})
+                </button>
+                <button
+                  onClick={() => setBargainFilterTab('all')}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '12px',
+                    border: `1px solid ${bargainFilterTab === 'all' ? '#6edbd0' : 'rgba(255,255,255,0.15)'}`,
+                    background: bargainFilterTab === 'all' ? 'rgba(110, 219, 208, 0.2)' : 'rgba(0,0,0,0.3)',
+                    color: bargainFilterTab === 'all' ? '#6edbd0' : '#a3c2b0',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    minHeight: '44px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  All ({customerBargains.length})
+                </button>
+              </div>
+            )}
+
             {/* Loading / Empty / Content states */}
             {loadingBargains && customerBargains.length === 0 ? (
               <SkeletonBargainList />
@@ -6968,135 +7130,149 @@ export default function CustomerPortal({ onLogout }) {
                   Browse Marketplace
                 </button>
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {customerBargains.map((bargain) => {
-                  const unit = bargain.unit || bargain.productId?.unit || 'kg';
-                  const origPrice = Number(bargain.originalPrice || bargain.productId?.price || 0);
-                  const offeredPrice = Number(bargain.proposedPrice || bargain.offeredPrice || 0);
-                  const counterPrice = (bargain.counterPrice !== null && bargain.counterPrice !== undefined && !isNaN(Number(bargain.counterPrice)))
-                    ? Number(bargain.counterPrice)
-                    : null;
-                  const acceptedPrice = bargain.status === 'ACCEPTED'
-                    ? Number(counterPrice || offeredPrice || origPrice || 1)
-                    : (counterPrice || offeredPrice);
-                  const unitSavings = Math.max(0, origPrice - acceptedPrice);
-                  const totalSavings = unitSavings * (bargain.quantity || 1);
+            ) : (() => {
+              const activeList = customerBargains.filter(b => ['PENDING', 'COUNTERED', 'ACCEPTED'].includes(b.status));
+              const historyList = customerBargains.filter(b => ['ADDED_TO_CART', 'REJECTED', 'CANCELLED'].includes(b.status));
+              const displayList = bargainFilterTab === 'history'
+                ? historyList
+                : (bargainFilterTab === 'all' ? customerBargains : activeList);
 
-                  const statusColors = {
-                    PENDING: { bg: 'rgba(244, 201, 93, 0.2)', border: '#f4c95d', color: '#f4c95d' },
-                    ACCEPTED: { bg: 'rgba(52, 211, 153, 0.2)', border: '#34d399', color: '#34d399' },
-                    COUNTERED: { bg: 'rgba(96, 165, 250, 0.2)', border: '#60a5fa', color: '#93c5fd' },
-                    REJECTED: { bg: 'rgba(239, 68, 68, 0.2)', border: '#ef4444', color: '#fca5a5' }
-                  };
-                  const currentStyle = statusColors[bargain.status] || statusColors.PENDING;
-
-                  return (
-                    <div
-                      key={bargain._id}
-                      style={{
-                        background: 'rgba(9, 43, 39, 0.75)',
-                        backdropFilter: 'blur(16px)',
-                        border: '1.5px solid rgba(110, 219, 208, 0.25)',
-                        borderRadius: '20px',
-                        padding: '22px',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.35)'
-                      }}
-                    >
-                      {/* Top Header */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          {bargain.productId?.image && (
-                            <img
-                              src={bargain.productId.image}
-                              alt={bargain.productId.title}
-                              style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover' }}
-                            />
-                          )}
-                          <div>
-                            <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
-                              {bargain.productTitle || bargain.productId?.title || 'Produce Item'}
-                            </div>
-                            <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
-                              🧑‍🌾 Farmer: <strong style={{ color: '#effbe7' }}>{bargain.farmerName || bargain.farmerId?.name || bargain.farmerId?.firstName || 'Direct Grower'}</strong> • {new Date(bargain.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </div>
-                          </div>
-                        </div>
-
-                        <span style={{
-                          background: currentStyle.bg,
-                          border: `1px solid ${currentStyle.border}`,
-                          color: currentStyle.color,
-                          padding: '6px 14px',
-                          borderRadius: '20px',
-                          fontSize: '12px',
-                          fontWeight: '800',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px'
-                        }}>
-                          {bargain.status}
-                        </span>
-                      </div>
-
-                      {/* Vertical Negotiation Timeline (Requirement 10) */}
-                      <div
+              if (displayList.length === 0) {
+                return (
+                  <div style={{
+                    background: 'rgba(9, 43, 39, 0.5)',
+                    border: '1px dashed rgba(110, 219, 208, 0.3)',
+                    borderRadius: '20px',
+                    padding: '50px 20px',
+                    textAlign: 'center',
+                    color: '#a3c2b0'
+                  }}>
+                    <CheckCircle size={44} color="#34d399" style={{ margin: '0 auto 14px' }} />
+                    <h3 style={{ color: '#effbe7', margin: '0 0 8px' }}>
+                      {bargainFilterTab === 'active' ? 'No Active Bargain Proposals' : 'No Bargain History Found'}
+                    </h3>
+                    <p style={{ margin: '0 0 16px', fontSize: '13.5px' }}>
+                      {bargainFilterTab === 'active'
+                        ? 'All accepted bargains have been added to your cart and moved to Bargain History.'
+                        : 'Completed bargain negotiations and consumed orders will appear here.'}
+                    </p>
+                    {bargainFilterTab === 'active' && historyList.length > 0 && (
+                      <button
+                        onClick={() => setBargainFilterTab('history')}
                         style={{
-                          background: 'rgba(0, 0, 0, 0.25)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: '16px',
-                          padding: '18px',
-                          marginBottom: '16px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '14px'
+                          background: 'rgba(56, 189, 248, 0.2)',
+                          border: '1px solid #38bdf8',
+                          color: '#7dd3fc',
+                          padding: '10px 20px',
+                          borderRadius: '10px',
+                          fontWeight: '700',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          minHeight: '44px'
                         }}
                       >
-                        {/* Step 1: Your Initial Offer */}
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                          <div style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '50%',
-                            background: 'rgba(244, 201, 93, 0.2)',
-                            border: '1.5px solid #f4c95d',
-                            color: '#f4c95d',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '11px',
-                            fontWeight: '800',
-                            flexShrink: 0
-                          }}>
-                            1
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ color: '#a3c2b0', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: '700' }}>
-                              Your Offer
-                            </div>
-                            <div style={{ color: '#f4c95d', fontSize: '16px', fontWeight: '900', marginTop: '2px' }}>
-                              ₹{offeredPrice}/{unit} × {bargain.quantity} {unit}
-                              <span style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginLeft: '8px' }}>
-                                (Total: ₹{offeredPrice * (bargain.quantity || 1)})
-                              </span>
-                            </div>
-                            {origPrice > 0 && (
-                              <div style={{ color: '#9db5aa', fontSize: '12px', marginTop: '2px' }}>
-                                Original catalog price: ₹{origPrice}/{unit}
-                              </div>
+                        View Bargain History ({historyList.length})
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {displayList.map((bargain) => {
+                    const bId = bargain.bargainId || bargain._id;
+                    const unit = bargain.unit || bargain.productId?.unit || 'kg';
+                    const origPrice = Number(bargain.originalPrice || bargain.productId?.price || 0);
+                    const offeredPrice = Number(bargain.proposedPrice || bargain.offeredPrice || 0);
+                    const counterPrice = (bargain.counterPrice !== null && bargain.counterPrice !== undefined && !isNaN(Number(bargain.counterPrice)))
+                      ? Number(bargain.counterPrice)
+                      : null;
+                    const acceptedPrice = ['ACCEPTED', 'ADDED_TO_CART'].includes(bargain.status)
+                      ? Number(counterPrice || offeredPrice || origPrice || 1)
+                      : (counterPrice || offeredPrice);
+                    const unitSavings = Math.max(0, origPrice - acceptedPrice);
+                    const totalSavings = unitSavings * (bargain.quantity || 1);
+
+                    const statusColors = {
+                      PENDING: { bg: 'rgba(244, 201, 93, 0.2)', border: '#f4c95d', color: '#f4c95d' },
+                      ACCEPTED: { bg: 'rgba(52, 211, 153, 0.2)', border: '#34d399', color: '#34d399' },
+                      COUNTERED: { bg: 'rgba(96, 165, 250, 0.2)', border: '#60a5fa', color: '#93c5fd' },
+                      REJECTED: { bg: 'rgba(239, 68, 68, 0.2)', border: '#ef4444', color: '#fca5a5' },
+                      ADDED_TO_CART: { bg: 'rgba(56, 189, 248, 0.2)', border: '#38bdf8', color: '#7dd3fc' },
+                      CANCELLED: { bg: 'rgba(156, 163, 175, 0.2)', border: '#9ca3af', color: '#d1d5db' }
+                    };
+                    const currentStyle = statusColors[bargain.status] || statusColors.PENDING;
+
+                    return (
+                      <div
+                        key={bargain._id}
+                        style={{
+                          background: 'rgba(9, 43, 39, 0.75)',
+                          backdropFilter: 'blur(16px)',
+                          border: '1.5px solid rgba(110, 219, 208, 0.25)',
+                          borderRadius: '20px',
+                          padding: '22px',
+                          boxShadow: '0 10px 30px rgba(0,0,0,0.35)'
+                        }}
+                      >
+                        {/* Top Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            {bargain.productId?.image && (
+                              <img
+                                src={bargain.productId.image}
+                                alt={bargain.productId.title}
+                                style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover' }}
+                              />
                             )}
+                            <div>
+                              <div style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                                {bargain.productTitle || bargain.productId?.title || 'Produce Item'}
+                              </div>
+                              <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
+                                🧑‍🌾 Farmer: <strong style={{ color: '#effbe7' }}>{bargain.farmerName || bargain.farmerId?.name || bargain.farmerId?.firstName || 'Direct Grower'}</strong> • {new Date(bargain.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </div>
+                            </div>
                           </div>
+
+                          <span style={{
+                            background: currentStyle.bg,
+                            border: `1px solid ${currentStyle.border}`,
+                            color: currentStyle.color,
+                            padding: '6px 14px',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            fontWeight: '800',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {bargain.status === 'ADDED_TO_CART' ? '✓ IN CART' : bargain.status}
+                          </span>
                         </div>
 
-                        {/* Step 2: Farmer Counter Offer (if countered or counterPrice exists) */}
-                        {(counterPrice !== null || bargain.status === 'COUNTERED') && (
-                          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', borderTop: '1px dashed rgba(255, 255, 255, 0.08)', paddingTop: '12px' }}>
+                        {/* Vertical Negotiation Timeline */}
+                        <div
+                          style={{
+                            background: 'rgba(0, 0, 0, 0.25)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '16px',
+                            padding: '18px',
+                            marginBottom: '16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '14px'
+                          }}
+                        >
+                          {/* Step 1: Your Initial Offer */}
+                          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                             <div style={{
                               width: '24px',
                               height: '24px',
                               borderRadius: '50%',
-                              background: 'rgba(96, 165, 250, 0.2)',
-                              border: '1.5px solid #60a5fa',
-                              color: '#60a5fa',
+                              background: 'rgba(244, 201, 93, 0.2)',
+                              border: '1.5px solid #f4c95d',
+                              color: '#f4c95d',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -7104,138 +7280,93 @@ export default function CustomerPortal({ onLogout }) {
                               fontWeight: '800',
                               flexShrink: 0
                             }}>
-                              2
+                              1
                             </div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ color: '#93c5fd', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: '700' }}>
-                                Farmer Counter Offer
+                              <div style={{ color: '#a3c2b0', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: '700' }}>
+                                Your Offer
                               </div>
-                              <div style={{ color: '#60a5fa', fontSize: '16px', fontWeight: '900', marginTop: '2px' }}>
-                                ₹{counterPrice}/{unit} × {bargain.quantity} {unit}
+                              <div style={{ color: '#f4c95d', fontSize: '16px', fontWeight: '900', marginTop: '2px' }}>
+                                ₹{offeredPrice}/{unit} × {bargain.quantity} {unit}
                                 <span style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginLeft: '8px' }}>
-                                  (Total: ₹{counterPrice * (bargain.quantity || 1)})
+                                  (Total: ₹{offeredPrice * (bargain.quantity || 1)})
                                 </span>
                               </div>
-                              {bargain.farmerNote && (
-                                <div style={{ color: '#effbe7', fontSize: '12px', marginTop: '3px', fontStyle: 'italic' }}>
-                                  Farmer Note: "{bargain.farmerNote}"
+                              {origPrice > 0 && (
+                                <div style={{ color: '#9db5aa', fontSize: '12px', marginTop: '2px' }}>
+                                  Original catalog price: ₹{origPrice}/{unit}
                                 </div>
                               )}
                             </div>
                           </div>
-                        )}
 
-                        {/* Step 3: Current Status and Decision */}
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', borderTop: '1px dashed rgba(255, 255, 255, 0.08)', paddingTop: '12px' }}>
-                          <div style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '50%',
-                            background: currentStyle.bg,
-                            border: `1.5px solid ${currentStyle.border}`,
-                            color: currentStyle.color,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '11px',
-                            fontWeight: '800',
-                            flexShrink: 0
-                          }}>
-                            3
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ color: '#a3c2b0', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: '700' }}>
-                              Current Status: <span style={{ color: currentStyle.color }}>{bargain.status}</span>
-                            </div>
-
-                            {/* Countered Actions */}
-                            {bargain.status === 'COUNTERED' && (
-                              <div style={{ marginTop: '10px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                <button
-                                  onClick={() => handleAcceptCounterBargain(bargain)}
-                                  style={{
-                                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                                    border: 'none',
-                                    color: '#ffffff',
-                                    padding: '10px 18px',
-                                    borderRadius: '10px',
-                                    fontSize: '13px',
-                                    fontWeight: '800',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    minHeight: '44px'
-                                  }}
-                                >
-                                  <Check size={15} />
-                                  <span>Accept ₹{counterPrice}/{unit} & Add to Cart</span>
-                                </button>
-
-                                <button
-                                  onClick={() => handleRejectCounterBargain(bargain)}
-                                  style={{
-                                    background: 'rgba(239, 68, 68, 0.15)',
-                                    border: '1px solid rgba(239, 68, 68, 0.35)',
-                                    color: '#fca5a5',
-                                    padding: '10px 16px',
-                                    borderRadius: '10px',
-                                    fontSize: '13px',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    minHeight: '44px'
-                                  }}
-                                >
-                                  Decline
-                                </button>
+                          {/* Step 2: Farmer Counter Offer */}
+                          {(counterPrice !== null || bargain.status === 'COUNTERED') && (
+                            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', borderTop: '1px dashed rgba(255, 255, 255, 0.08)', paddingTop: '12px' }}>
+                              <div style={{
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '50%',
+                                background: 'rgba(96, 165, 250, 0.2)',
+                                border: '1.5px solid #60a5fa',
+                                color: '#60a5fa',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '11px',
+                                fontWeight: '800',
+                                flexShrink: 0
+                              }}>
+                                2
                               </div>
-                            )}
-
-                            {/* Accepted Price & Savings Display */}
-                            {bargain.status === 'ACCEPTED' && (
-                              <div style={{ marginTop: '8px' }}>
-                                <div style={{ color: '#8be28b', fontSize: '14px', fontWeight: '800' }}>
-                                  Accepted Price: ₹{acceptedPrice}/{unit}
+                              <div style={{ flex: 1 }}>
+                                <div style={{ color: '#93c5fd', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: '700' }}>
+                                  Farmer Counter Offer
                                 </div>
-                                {unitSavings > 0 && (
-                                  <div style={{ color: '#f4c95d', fontSize: '13px', fontWeight: '700', marginTop: '3px' }}>
-                                    🎉 Savings compared with original price: ₹{unitSavings}/{unit} (₹{totalSavings} total savings!)
+                                <div style={{ color: '#60a5fa', fontSize: '16px', fontWeight: '900', marginTop: '2px' }}>
+                                  ₹{counterPrice}/{unit} × {bargain.quantity} {unit}
+                                  <span style={{ color: '#effbe7', fontSize: '13px', fontWeight: '600', marginLeft: '8px' }}>
+                                    (Total: ₹{counterPrice * (bargain.quantity || 1)})
+                                  </span>
+                                </div>
+                                {bargain.farmerNote && (
+                                  <div style={{ color: '#effbe7', fontSize: '12px', marginTop: '3px', fontStyle: 'italic' }}>
+                                    Farmer Note: "{bargain.farmerNote}"
                                   </div>
                                 )}
-                                <div style={{ marginTop: '10px' }}>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Step 3: Current Status and Decision */}
+                          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', borderTop: '1px dashed rgba(255, 255, 255, 0.08)', paddingTop: '12px' }}>
+                            <div style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '50%',
+                              background: currentStyle.bg,
+                              border: `1.5px solid ${currentStyle.border}`,
+                              color: currentStyle.color,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              flexShrink: 0
+                            }}>
+                              3
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ color: '#a3c2b0', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: '700' }}>
+                                Current Status: <span style={{ color: currentStyle.color }}>{bargain.status === 'ADDED_TO_CART' ? 'ADDED TO CART (CONSUMED)' : bargain.status}</span>
+                              </div>
+
+                              {/* Countered Actions */}
+                              {bargain.status === 'COUNTERED' && (
+                                <div style={{ marginTop: '10px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                   <button
-                                    onClick={() => {
-                                      if (bargain.productId) {
-                                        const prodId = typeof bargain.productId === 'object' && bargain.productId !== null
-                                          ? (bargain.productId._id || bargain.productId.id)
-                                          : String(bargain.productId || '');
-                                        const catalogProd = products.find(p => isSameProduct(p, prodId));
-                                        const finalPrice = acceptedPrice > 0 ? acceptedPrice : (catalogProd?.price || origPrice || 1);
-                                        const prodToAdd = catalogProd
-                                          ? {
-                                              ...catalogProd,
-                                              price: finalPrice,
-                                              originalPrice: Number(bargain.originalPrice || catalogProd.price || 0),
-                                              isBargain: true
-                                            }
-                                          : {
-                                              _id: prodId,
-                                              id: prodId,
-                                              title: bargain.productTitle || 'Produce Item',
-                                              price: finalPrice,
-                                              originalPrice: Number(bargain.originalPrice || 0),
-                                              unit: bargain.unit || 'kg',
-                                              stock: Math.max(Number(bargain.quantity || 1), 999),
-                                              minOrderQty: 1,
-                                              farmerId: bargain.farmerId,
-                                              farmerName: bargain.farmerName,
-                                              farmerEmail: bargain.farmerEmail,
-                                              farmerPhone: bargain.farmerPhone,
-                                              isBargain: true
-                                            };
-                                        addToCart(prodToAdd, bargain.quantity || 1);
-                                      }
-                                    }}
+                                    onClick={() => handleAcceptCounterBargain(bargain)}
+                                    disabled={addingBargainId === bId}
                                     style={{
                                       background: 'linear-gradient(135deg, #10b981, #059669)',
                                       border: 'none',
@@ -7244,39 +7375,116 @@ export default function CustomerPortal({ onLogout }) {
                                       borderRadius: '10px',
                                       fontSize: '13px',
                                       fontWeight: '800',
-                                      cursor: 'pointer',
+                                      cursor: addingBargainId === bId ? 'not-allowed' : 'pointer',
                                       display: 'flex',
                                       alignItems: 'center',
                                       gap: '6px',
+                                      minHeight: '44px',
+                                      opacity: addingBargainId === bId ? 0.7 : 1
+                                    }}
+                                  >
+                                    <Check size={15} />
+                                    <span>{addingBargainId === bId ? 'Adding to Cart...' : `Accept ₹${counterPrice}/${unit} & Add to Cart`}</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleRejectCounterBargain(bargain)}
+                                    disabled={addingBargainId === bId}
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.15)',
+                                      border: '1px solid rgba(239, 68, 68, 0.35)',
+                                      color: '#fca5a5',
+                                      padding: '10px 16px',
+                                      borderRadius: '10px',
+                                      fontSize: '13px',
+                                      fontWeight: '700',
+                                      cursor: 'pointer',
                                       minHeight: '44px'
                                     }}
                                   >
-                                    <ShoppingCart size={15} />
-                                    <span>Add to Cart at Negotiated Price</span>
+                                    Decline
                                   </button>
                                 </div>
-                              </div>
-                            )}
+                              )}
 
-                            {bargain.status === 'PENDING' && (
-                              <div style={{ color: '#effbe7', fontSize: '12.5px', marginTop: '4px' }}>
-                                ⏳ Submitted to farmer depot. You will receive an alert once the farmer reviews, counters, or accepts.
-                              </div>
-                            )}
+                              {/* Accepted Price & Actions */}
+                              {bargain.status === 'ACCEPTED' && (
+                                <div style={{ marginTop: '8px' }}>
+                                  <div style={{ color: '#8be28b', fontSize: '14px', fontWeight: '800' }}>
+                                    Accepted Price: ₹{acceptedPrice}/{unit}
+                                  </div>
+                                  {unitSavings > 0 && (
+                                    <div style={{ color: '#f4c95d', fontSize: '13px', fontWeight: '700', marginTop: '3px' }}>
+                                      🎉 Savings compared with original price: ₹{unitSavings}/{unit} (₹{totalSavings} total savings!)
+                                    </div>
+                                  )}
+                                  <div style={{ marginTop: '10px' }}>
+                                    <button
+                                      onClick={() => handleAddBargainToCart(bargain)}
+                                      disabled={addingBargainId === bId}
+                                      style={{
+                                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                                        border: 'none',
+                                        color: '#ffffff',
+                                        padding: '10px 18px',
+                                        borderRadius: '10px',
+                                        fontSize: '13px',
+                                        fontWeight: '800',
+                                        cursor: addingBargainId === bId ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        minHeight: '44px',
+                                        opacity: addingBargainId === bId ? 0.7 : 1
+                                      }}
+                                    >
+                                      <ShoppingCart size={15} />
+                                      <span>{addingBargainId === bId ? 'Adding to Cart...' : 'Add to Cart at Negotiated Price'}</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
 
-                            {bargain.status === 'REJECTED' && (
-                              <div style={{ color: '#fca5a5', fontSize: '12.5px', marginTop: '4px' }}>
-                                ✕ Bargain declined by farmer. You can place an order at catalog price or submit another reasonable offer.
-                              </div>
-                            )}
+                              {/* Added To Cart Status Note */}
+                              {bargain.status === 'ADDED_TO_CART' && (
+                                <div style={{
+                                  marginTop: '10px',
+                                  padding: '12px 16px',
+                                  borderRadius: '12px',
+                                  background: 'rgba(56, 189, 248, 0.12)',
+                                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                                  color: '#7dd3fc',
+                                  fontSize: '13px',
+                                  fontWeight: '700',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}>
+                                  <Check size={16} color="#38bdf8" />
+                                  <span>Added to Cart at negotiated ₹{acceptedPrice}/{unit}. Bargain consumed and preserved in history.</span>
+                                </div>
+                              )}
+
+                              {bargain.status === 'PENDING' && (
+                                <div style={{ color: '#effbe7', fontSize: '12.5px', marginTop: '4px' }}>
+                                  ⏳ Submitted to farmer depot. You will receive an alert once the farmer reviews, counters, or accepts.
+                                </div>
+                              )}
+
+                              {bargain.status === 'REJECTED' && (
+                                <div style={{ color: '#fca5a5', fontSize: '12.5px', marginTop: '4px' }}>
+                                  ✕ Bargain declined by farmer. You can place an order at catalog price or submit another reasonable offer.
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -7371,7 +7579,7 @@ export default function CustomerPortal({ onLogout }) {
                             </div>
                             <div style={{ color: '#37bd78', fontSize: '12px', fontWeight: '700', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <CheckCircle size={13} />
-                              <span>Verified Producer • Mandya Cluster</span>
+                              <span>Verified Producer • {farmer.nativePlace || farmer.location?.placeName || 'Tamil Nadu Farm Gate'}</span>
                             </div>
                           </div>
                         </div>
@@ -7379,11 +7587,11 @@ export default function CustomerPortal({ onLogout }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12.5px', color: '#a3c2b0', marginBottom: '16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <MapPin size={14} color="#6edbd0" />
-                            <span>{farmer.location?.address || farmer.address || 'Mandya Organic Farmland, Karnataka'}</span>
+                            <span>{farmer.location?.address || farmer.address || farmer.nativePlace || 'Tamil Nadu, India'}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Sprout size={14} color="#37bd78" />
-                            <span>Specialty: Heritage Vegetables, Cold-Chain Greens & Grains</span>
+                            <span>Specialty: {farmer.crops?.length > 0 ? farmer.crops.join(', ') : 'Heritage Farm Produce, Fresh Harvest'}</span>
                           </div>
                         </div>
                       </div>

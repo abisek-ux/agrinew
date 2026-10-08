@@ -20,7 +20,7 @@ const bargainSchema = new mongoose.Schema(
     counterPrice: { type: Number, default: null },
     status: {
       type: String,
-      enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'COUNTERED', 'CANCELLED'],
+      enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'COUNTERED', 'CANCELLED', 'ADDED_TO_CART'],
       default: 'PENDING'
     },
     farmerNote: { type: String, default: '' },

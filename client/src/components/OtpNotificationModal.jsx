@@ -56,8 +56,8 @@ export default function OtpNotificationModal({
       } catch (e) {}
 
       // Fallback defaults if not in localStorage
-      phoneVal = phoneVal || '9952712633';
-      emailVal = emailVal || 'mgowres@gmail.com';
+      phoneVal = phoneVal || '';
+      emailVal = emailVal || '';
 
       setMobileNumber(phoneVal);
       setEmailAddress(emailVal);

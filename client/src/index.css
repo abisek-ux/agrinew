@@ -3321,3 +3321,162 @@ html, body {
   box-shadow: 0 12px 32px rgba(99, 102, 241, 0.55);
 }
 
+/* =========================================================================
+   📱 PHASE 10 MOBILE UX OPTIMIZATION SUITE (320px - 414px)
+   ========================================================================= */
+
+/* Universal mobile viewport overflow containment */
+@media (max-width: 600px) {
+  html, body, #root {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    width: 100% !important;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box !important;
+  }
+
+  /* Single-column produce and directory grids on mobile */
+  .customer-produce-grid-wrapper,
+  .customer-produce-grid-wrapper > div,
+  .farmer-directory-grid {
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  /* Ensure card widths do not exceed screen width */
+  .portal-3d-mobile-card,
+  .produce-card,
+  .order-card,
+  .bargain-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Minimum 44px-48px touch targets for interactive mobile buttons */
+  button,
+  .touch-target,
+  input[type="button"],
+  input[type="submit"],
+  select {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  /* Text overflow & address wrapping */
+  .address-text,
+  .farmer-bio,
+  .order-address {
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+  }
+
+  /* Responsive Modals & Bottom Sheets */
+  .modal-dialog,
+  .modal-container,
+  [role="dialog"] {
+    max-width: 95vw !important;
+    max-height: 92vh !important;
+    margin: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Content clearance for bottom navigation dock */
+  .customer-portal-main,
+  .farmer-portal-container,
+  .delivery-portal-container {
+    padding-bottom: calc(85px + env(safe-area-inset-bottom, 16px)) !important;
+  }
+}
+
+/* Specific 414px (iPhone Plus/Max / Pixel XL) optimizations */
+@media (max-width: 414px) {
+  .customer-produce-grid-wrapper {
+    gap: 16px !important;
+  }
+  
+  .desktop-only-cart-pane {
+    display: none !important;
+  }
+}
+
+/* Specific 390px (iPhone 12/13/14/15) optimizations */
+@media (max-width: 390px) {
+  .portal-header-title {
+    font-size: 20px !important;
+  }
+
+  .bargain-timeline-step {
+    padding: 12px 10px !important;
+  }
+}
+
+/* Specific 375px (iPhone SE / iPhone X/11 Pro) optimizations */
+@media (max-width: 375px) {
+  .hero-badge-pill {
+    font-size: 11px !important;
+    padding: 4px 10px !important;
+  }
+
+  .la-form-wrap {
+    padding: 18px 12px !important;
+  }
+
+  /* Quantity buttons easy to tap */
+  .cart-qty-btn {
+    min-width: 38px !important;
+    min-height: 38px !important;
+  }
+}
+
+/* Specific 360px (Standard Android / Galaxy S) optimizations */
+@media (max-width: 360px) {
+  .customer-portal-header {
+    padding: 12px 10px !important;
+  }
+
+  .produce-action-btn-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .produce-action-btn-row > button {
+    width: 100% !important;
+    min-height: 44px !important;
+  }
+}
+
+/* Specific 320px (Compact Mobile / iPhone 5/SE1) optimizations */
+@media (max-width: 320px) {
+  body {
+    font-size: 13px !important;
+  }
+
+  .portal-3d-mobile-card,
+  .produce-card,
+  .bargain-card {
+    padding: 14px !important;
+    border-radius: 14px !important;
+  }
+
+  .order-card-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+
+  .modal-dialog,
+  [role="dialog"] {
+    padding: 12px !important;
+    max-width: 98vw !important;
+    border-radius: 14px !important;
+  }
+
+  .touch-target-btn {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+}
+

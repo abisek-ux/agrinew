@@ -482,6 +482,99 @@ const customerRespond = async (req, res) => {
   }
 };
 
+/**
+ * PUT /api/bargains/:id/add-to-cart
+ * Marks an ACCEPTED bargain as ADDED_TO_CART after cart insertion succeeds.
+ * Moves bargain from active bargains into bargain history and prevents duplicate additions.
+ */
+const markBargainAddedToCart = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const customerId = String(req.user.id || req.user._id);
+    const { id } = req.params;
+
+    let bargain;
+    if (isConnected()) {
+      const orConditions = [{ bargainId: id }];
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        orConditions.push({ _id: id });
+      }
+      bargain = await Bargain.findOne({ $or: orConditions });
+    } else {
+      bargain = memoryBargains.find(b => String(b.bargainId) === id || String(b.id || b._id) === id);
+    }
+
+    if (!bargain) {
+      return res.status(404).json({ success: false, message: 'Bargain not found' });
+    }
+
+    if (String(bargain.customerId) !== customerId && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You are not authorized to update this bargain' });
+    }
+
+    if (bargain.status === 'ADDED_TO_CART') {
+      return res.status(400).json({
+        success: false,
+        message: 'This bargain produce has already been added to your cart',
+        alreadyConsumed: true,
+        bargain
+      });
+    }
+
+    if (bargain.status !== 'ACCEPTED') {
+      return res.status(400).json({
+        success: false,
+        message: `Only accepted bargains can be added to cart (current status: ${bargain.status})`
+      });
+    }
+
+    const updateQuery = {
+      $set: { status: 'ADDED_TO_CART' },
+      $push: {
+        responseHistory: {
+          senderRole: 'customer',
+          action: 'added_to_cart',
+          timestamp: new Date()
+        }
+      }
+    };
+
+    if (isConnected()) {
+      const updated = await Bargain.findOneAndUpdate(
+        { _id: bargain._id, status: 'ACCEPTED' },
+        updateQuery,
+        { new: true }
+      );
+      if (!updated) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bargain was already transitioned or is no longer accepted'
+        });
+      }
+      bargain = updated;
+    } else {
+      bargain.status = 'ADDED_TO_CART';
+      bargain.responseHistory.push({
+        senderRole: 'customer',
+        action: 'added_to_cart',
+        timestamp: new Date()
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Negotiated produce successfully added to cart and moved to history',
+      bargain
+    });
+  } catch (error) {
+    console.error('markBargainAddedToCart error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Unable to update bargain status' });
+  }
+};
+
 const getMemoryBargains = () => memoryBargains;
 
 module.exports = {
@@ -489,5 +582,6 @@ module.exports = {
   getBargains,
   farmerRespond,
   customerRespond,
+  markBargainAddedToCart,
   getMemoryBargains
 };

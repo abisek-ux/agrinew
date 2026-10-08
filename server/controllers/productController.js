@@ -60,7 +60,7 @@ const getProducts = async (req, res) => {
       const resolved = products.map(p => {
         const obj = typeof p.toObject === 'function' ? p.toObject() : { ...p };
         const realFarmerName = farmerMap.get(String(obj.farmerId));
-        if (realFarmerName && (/Robert Greenfield|Murugan Farmer|^gowres$/i.test(obj.farmerName) || !obj.farmerName)) {
+        if (realFarmerName) {
           obj.farmerName = realFarmerName;
         }
         return obj;
@@ -212,9 +212,9 @@ const addProduct = async (req, res) => {
     }
 
     const farmerId = String(req.user.id || req.user._id);
-    const computedFarmerName = farmerName || req.user.farmName || `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.name || 'Verified Regional Farmer';
-    const computedFarmerPhone = farmerPhone || req.user.phone || '';
-    const computedFarmerEmail = farmerEmail || req.user.email || '';
+    const computedFarmerName = req.user.farmName || req.user.name || `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || farmerName || 'Verified Regional Farmer';
+    const computedFarmerPhone = req.user.phone || farmerPhone || '';
+    const computedFarmerEmail = req.user.email || farmerEmail || '';
     const computedFarmerNative = farmerNative || req.user.nativePlace || req.user.city || 'Tamil Nadu';
     const computedLocation = location || req.user.location || { lat: 11.2189, lng: 78.1674, address: 'Farm Gate Depot, Tamil Nadu' };
 

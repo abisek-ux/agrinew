@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const User = require('../models/User');
@@ -232,6 +233,22 @@ const createOrder = async (req, res) => {
         }
       }
 
+      // Authoritatively resolve registered farmer user if farmerId exists
+      let authoritativeFarmerName = product.farmerName || 'Farm Origin';
+      let authoritativeFarmerEmail = product.farmerEmail || '';
+      let authoritativeFarmerPhone = product.farmerPhone || '';
+
+      if (product.farmerId && isConnected() && mongoose.Types.ObjectId.isValid(product.farmerId)) {
+        try {
+          const farmerUser = await User.findById(product.farmerId).select('name firstName lastName farmName email phone').lean();
+          if (farmerUser) {
+            authoritativeFarmerName = farmerUser.farmName || farmerUser.name || `${farmerUser.firstName || ''} ${farmerUser.lastName || ''}`.trim() || authoritativeFarmerName;
+            authoritativeFarmerEmail = farmerUser.email || authoritativeFarmerEmail;
+            authoritativeFarmerPhone = farmerUser.phone || authoritativeFarmerPhone;
+          }
+        } catch (e) {}
+      }
+
       resolvedItems.push({
         productDoc: product,
         productId: String(product._id || product.id),
@@ -241,9 +258,9 @@ const createOrder = async (req, res) => {
         unit: product.unit || 'kg',
         image: product.image || item.image || '',
         farmerId: String(product.farmerId || 'farmer_1'),
-        farmerName: product.farmerName || 'Farm Origin',
-        farmerPhone: product.farmerPhone || '',
-        farmerEmail: product.farmerEmail || '',
+        farmerName: authoritativeFarmerName,
+        farmerPhone: authoritativeFarmerPhone,
+        farmerEmail: authoritativeFarmerEmail,
         farmerLocation: resolveFarmerLocation(product.location, product.farmerId, req.user)
       });
     }
@@ -308,7 +325,7 @@ const createOrder = async (req, res) => {
       const groupLocation = resolveFarmerLocation(group.farmerLocation, group.farmerId);
       const effectiveFarmerName = (group.farmerName && group.farmerName !== 'Farm Origin')
         ? group.farmerName
-        : (groupLocation.defaultFarmerName || 'Verified Farm Producer');
+        : 'Verified Farm Producer';
 
       const fLat = groupLocation.lat;
       const fLng = groupLocation.lng;
@@ -468,7 +485,33 @@ const getOrders = async (req, res) => {
       }
 
       const orders = await Order.find(query).sort({ createdAt: -1 });
-      return res.json(orders.map(o => sanitizeOrderFarmerDetails(o, req.user)));
+
+      // Dynamically resolve authoritative registered farmer names
+      const farmerIds = [...new Set(orders.map(o => String(o.farmerId)).filter(id => mongoose.Types.ObjectId.isValid(id)))];
+      const farmerMap = new Map();
+      if (farmerIds.length > 0) {
+        try {
+          const registeredFarmers = await User.find({ _id: { $in: farmerIds } }).select('firstName lastName name farmName email phone').lean();
+          registeredFarmers.forEach(f => {
+            const displayName = f.farmName || f.name || `${f.firstName || ''} ${f.lastName || ''}`.trim();
+            if (displayName) {
+              farmerMap.set(String(f._id), { name: displayName, email: f.email, phone: f.phone });
+            }
+          });
+        } catch (e) {}
+      }
+
+      const resolvedOrders = orders.map(o => {
+        const ord = typeof o.toObject === 'function' ? o.toObject() : { ...o };
+        const authFarmer = farmerMap.get(String(ord.farmerId));
+        if (authFarmer) {
+          ord.farmerName = authFarmer.name;
+          if (authFarmer.email) ord.farmerEmail = authFarmer.email;
+          if (authFarmer.phone) ord.farmerPhone = authFarmer.phone;
+        }
+        return sanitizeOrderFarmerDetails(ord, req.user);
+      });
+      return res.json(resolvedOrders);
     } else {
       let filtered = [];
       if (userRole === 'customer') {

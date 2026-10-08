@@ -1577,7 +1577,7 @@ export default function FarmerPortal({ onLogout }) {
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Profile Edit State
-  const [profileFirstName, setProfileFirstName] = useState(user?.firstName || 'gowres');
+  const [profileFirstName, setProfileFirstName] = useState(user?.firstName || '');
   const [profileLastName, setProfileLastName] = useState(user?.lastName || 'ms');
   const [profileFarmName, setProfileFarmName] = useState(user?.farmName || '');
   const [profilePhone, setProfilePhone] = useState(user?.phone || '9952712633');
@@ -1938,10 +1938,10 @@ export default function FarmerPortal({ onLogout }) {
         description: description.trim(),
         image: image || PRESET_IMAGES[category]?.[0]?.url || PRESET_IMAGES.vegetable[0].url,
         harvestDate: harvestDate ? new Date(harvestDate) : new Date(),
-        farmerName: user?.name || `${user?.firstName || 'gowres'} ${user?.lastName || ''}`.trim() || 'gowres',
-        farmerPhone: user?.phone || '9952712633',
-        farmerEmail: user?.email || 'mgowres@gmail.com',
-        farmerNative: user?.nativePlace || selectedCity || 'Namakkal, Tamil Nadu',
+        farmerName: user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Verified Regional Farmer',
+        farmerPhone: user?.phone || '',
+        farmerEmail: user?.email || '',
+        farmerNative: user?.nativePlace || selectedCity || 'Tamil Nadu',
         location: farmLocation,
         // Agricultural fields (Phase 1 & 2)
         variety: variety.trim(),
@@ -2177,8 +2177,8 @@ export default function FarmerPortal({ onLogout }) {
   const outOfStockProducts = farmerProducts.filter(p => Number(p.stock) <= 0);
   const recentOrdersList = [...incomingOrders].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
 
-  const farmerDisplayName = user?.name || user?.firstName || 'gowres';
-  const farmerCityName = user?.nativePlace || selectedCity || 'Namakkal';
+  const farmerDisplayName = user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Farmer';
+  const farmerCityName = user?.nativePlace || selectedCity || 'Tamil Nadu';
 
   // Filtered products for search
   const displayedProducts = farmerProducts.filter(p =>

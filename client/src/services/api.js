@@ -46,7 +46,8 @@ export const bargainAPI = {
   getFarmerBargains: () => axios.get(`${API_BASE}/bargains`, { headers: getAuthHeaders() }),
   farmerRespond: (id, data) => axios.put(`${API_BASE}/bargains/${id}/farmer-respond`, data, { headers: getAuthHeaders() }),
   updateBargainStatus: (id, data) => axios.put(`${API_BASE}/bargains/${id}/farmer-respond`, data, { headers: getAuthHeaders() }),
-  customerRespond: (id, data) => axios.put(`${API_BASE}/bargains/${id}/customer-respond`, data, { headers: getAuthHeaders() })
+  customerRespond: (id, data) => axios.put(`${API_BASE}/bargains/${id}/customer-respond`, data, { headers: getAuthHeaders() }),
+  markAddedToCart: (id) => axios.put(`${API_BASE}/bargains/${id}/add-to-cart`, {}, { headers: getAuthHeaders() })
 };
 
 export const weatherAPI = {

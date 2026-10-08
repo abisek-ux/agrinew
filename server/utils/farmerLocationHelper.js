@@ -10,24 +10,21 @@ const TAMIL_NADU_HUBS = [
     district: 'Namakkal',
     address: 'AgriLink Agro Farm Gate, Mohanur Road, Namakkal, Tamil Nadu 637001, India',
     lat: 11.2189,
-    lng: 78.1674,
-    defaultFarmerName: 'Namakkal Agro Hub'
+    lng: 78.1674
   },
   {
     placeName: 'Salem, Tamil Nadu',
     district: 'Salem',
     address: 'AgriLink Organic Orchard Depot, Omalur Main Road, Salem, Tamil Nadu 636004, India',
     lat: 11.6643,
-    lng: 78.1460,
-    defaultFarmerName: 'Salem Orchard Depot'
+    lng: 78.1460
   },
   {
     placeName: 'Coimbatore, Tamil Nadu',
     district: 'Coimbatore',
     address: 'AgriLink Regional Farm Hub, Pollachi Highway, Coimbatore, Tamil Nadu 641021, India',
     lat: 11.0168,
-    lng: 76.9558,
-    defaultFarmerName: 'Coimbatore Regional Hub'
+    lng: 76.9558
   }
 ];
 
@@ -102,7 +99,7 @@ function sanitizeOrderFarmerDetails(order, currentUser) {
 
   // Authoritative identity preservation: NEVER overwrite legitimate farmer names
   if (!ord.farmerName || ord.farmerName === 'Farm Origin') {
-    ord.farmerName = hub.defaultFarmerName || 'Farm Producer';
+    ord.farmerName = 'Farm Producer';
   }
 
   ord.farmerLocation = hub;
