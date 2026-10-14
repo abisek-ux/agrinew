@@ -87,6 +87,15 @@ app.use('/api/bargains', bargainRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/weather', weatherRoutes);
 
+// Persistent uploaded product images static serving
+const uploadsDir = path.join(__dirname, 'uploads');
+const productUploadsDir = path.join(uploadsDir, 'products');
+if (!fs.existsSync(productUploadsDir)) {
+  fs.mkdirSync(productUploadsDir, { recursive: true });
+}
+app.use('/api/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static(uploadsDir));
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',

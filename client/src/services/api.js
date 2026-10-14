@@ -57,7 +57,8 @@ export const weatherAPI = {
 export const productAPI = {
   getProducts: (params) => axios.get(`${API_BASE}/products`, { params }),
   getProductById: (id) => axios.get(`${API_BASE}/products/${id}`),
-  addProduct: (data) => axios.post(`${API_BASE}/products`, data, { headers: getAuthHeaders() }),
+  addProduct: (data, customHeaders = {}) => axios.post(`${API_BASE}/products`, data, { headers: { ...getAuthHeaders(), ...customHeaders } }),
+  uploadImage: (data) => axios.post(`${API_BASE}/products/upload-image`, data, { headers: getAuthHeaders() }),
   updateProduct: (id, data) => axios.put(`${API_BASE}/products/${id}`, data, { headers: getAuthHeaders() }),
   deleteProduct: (id) => axios.delete(`${API_BASE}/products/${id}`, { headers: getAuthHeaders() })
 };

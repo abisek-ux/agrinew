@@ -1263,6 +1263,10 @@ function ProductDetailsModal({
                 <img
                   src={product.image || 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b'}
                   alt={product.title}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b';
+                  }}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
                 {freshness.hasDate && (
@@ -1627,6 +1631,10 @@ function ProductDetailsModal({
                       <img
                         src={fp.image || 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b'}
                         alt={fp.title}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b';
+                        }}
                         style={{ width: '38px', height: '38px', borderRadius: '8px', objectFit: 'cover' }}
                       />
                       <div style={{ overflow: 'hidden' }}>

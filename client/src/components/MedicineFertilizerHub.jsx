@@ -22,6 +22,12 @@ import {
   Filter
 } from 'lucide-react';
 import ThreeDPortViewer from './ThreeDPortViewer';
+import { useLanguage } from '../context/LanguageContext';
+
+// Guaranteed Offline / Zero-Failure Styled Category Placeholders
+export const DEFAULT_ORGANIC_FALLBACK = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='260' viewBox='0 0 400 260'><rect width='400' height='260' fill='%23062319'/><circle cx='200' cy='110' r='55' fill='%2310b981' fill-opacity='0.15'/><path d='M200,75 C225,75 240,95 240,120 C240,145 220,155 200,155 C180,155 160,145 160,120 C160,95 175,75 200,75 Z' fill='%2310b981'/><path d='M200,85 L200,145' stroke='%23062319' stroke-width='3'/><text x='200' y='195' font-family='sans-serif' font-size='14' font-weight='bold' fill='%23a7f3d0' text-anchor='middle'>CERTIFIED BIO-ORGANIC</text><text x='200' y='218' font-family='sans-serif' font-size='11' fill='%236ee7b7' text-anchor='middle'>Eco-Safe Crop Nutrition</text></svg>";
+
+export const DEFAULT_CHEMICAL_FALLBACK = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='260' viewBox='0 0 400 260'><rect width='400' height='260' fill='%23081e28'/><circle cx='200' cy='110' r='55' fill='%230284c7' fill-opacity='0.15'/><path d='M192,75 L208,75 L208,100 L230,140 C235,148 228,155 220,155 L180,155 C172,155 165,148 170,140 L192,100 Z' fill='%2338bdf8'/><text x='200' y='195' font-family='sans-serif' font-size='14' font-weight='bold' fill='%23bae6fd' text-anchor='middle'>CROP PROTECTION FORMULATION</text><text x='200' y='218' font-family='sans-serif' font-size='11' fill='%237dd3fc' text-anchor='middle'>Scientific Agricultural Formulation</text></svg>";
 
 export const MEDICINE_CATALOG = [
   // ==================== NATURAL & ORGANIC MEDICINES / FERTILIZERS ====================
@@ -69,7 +75,7 @@ export const MEDICINE_CATALOG = [
     safetyPeriod: '0 Days (Pure natural nourishment)',
     organicScore: 100,
     soilBenefit: 'Dramatically improves soil humus, earthworm population, and moisture retention.',
-    image: 'https://images.unsplash.com/photo-1592417817098-8f3d6ef23512?auto=format&fit=crop&w=500&q=80'
+    image: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=500&q=80'
   },
   {
     id: 'med_jeevamrutham',
@@ -232,7 +238,7 @@ export const MEDICINE_CATALOG = [
     safetyPeriod: '3 Days before harvest',
     organicScore: 25,
     soilBenefit: 'Leaves zero chloride salts and ensures 95%+ nutrient absorption rate.',
-    image: 'https://images.unsplash.com/photo-1585314062600-1dec5b9b1e96?auto=format&fit=crop&w=500&q=80'
+    image: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?auto=format&fit=crop&w=500&q=80'
   },
   {
     id: 'med_mancozeb_75',
@@ -301,7 +307,7 @@ export const MEDICINE_CATALOG = [
     safetyPeriod: '30 Days before paddy harvest',
     organicScore: 10,
     soilBenefit: 'Targeted action inside rice leaf cuticle.',
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=500&q=80'
+    image: 'https://images.unsplash.com/photo-1536657464919-892534f60d6e?auto=format&fit=crop&w=500&q=80'
   },
   {
     id: 'med_chelated_micronutrient',
@@ -334,6 +340,7 @@ export default function MedicineFertilizerHub({
   initialCrop = 'Tomato',
   initialSelectedMedicine = null
 }) {
+  const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState('catalog'); // 'catalog' | 'calculator' | 'comparison' | '3d_port'
   const [filterType, setFilterType] = useState('all'); // 'all' | 'organic' | 'chemical' | 'fungicide' | 'insecticide' | 'fertilizer'
   const [searchQuery, setSearchQuery] = useState('');
@@ -449,10 +456,10 @@ export default function MedicineFertilizerHub({
         flexWrap: 'wrap'
       }}>
         {[
-          { id: 'catalog', label: '🌿 All Medicines & Fertilizers Catalog', icon: <FlaskConical size={16} /> },
-          { id: 'calculator', label: '🧮 Smart Dosage & Acreage Calculator', icon: <Calculator size={16} /> },
-          { id: 'comparison', label: '⚖️ Natural vs Artificial Guide', icon: <Leaf size={16} /> },
-          { id: '3d_port', label: '✨ 3D Interactive Formulation Port', icon: <Box size={16} /> }
+          { id: 'catalog', label: t('All Medicines & Fertilizers Catalog'), icon: <FlaskConical size={16} /> },
+          { id: 'calculator', label: t('Smart Dosage & Acreage Calculator'), icon: <Calculator size={16} /> },
+          { id: 'comparison', label: t('Natural vs Artificial Guide'), icon: <Leaf size={16} /> },
+          { id: '3d_port', label: t('3D Interactive Formulation Port'), icon: <Box size={16} /> }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -502,7 +509,7 @@ export default function MedicineFertilizerHub({
               <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="text"
-                placeholder="Search by medicine name, crop, Tamil name, or chemical ingredient..."
+                placeholder={t("Search by medicine name, crop, Tamil name, or chemical ingredient...")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
@@ -522,12 +529,12 @@ export default function MedicineFertilizerHub({
             {/* Filter Category Chips */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {[
-                { id: 'all', label: 'All Formulations' },
-                { id: 'organic', label: '🌿 Natural / Organic' },
-                { id: 'chemical', label: '🧪 Synthetic / Chemical' },
-                { id: 'fungicide', label: '🛡️ Fungicides' },
-                { id: 'insecticide', label: '🐛 Insecticides' },
-                { id: 'fertilizer', label: '🌾 Soil & NPK Nutrition' }
+                { id: 'all', label: t('All Formulations') },
+                { id: 'organic', label: `🌿 ${t('Natural / Organic')}` },
+                { id: 'chemical', label: `🧪 ${t('Synthetic / Chemical')}` },
+                { id: 'fungicide', label: `🛡️ ${t('Fungicides')}` },
+                { id: 'insecticide', label: `🐛 ${t('Insecticides')}` },
+                { id: 'fertilizer', label: `🌾 ${t('Soil & NPK Nutrition')}` }
               ].map((f) => (
                 <button
                   key={f.id}
@@ -578,6 +585,10 @@ export default function MedicineFertilizerHub({
                     <img
                       src={med.image}
                       alt={med.name}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = isOrganic ? DEFAULT_ORGANIC_FALLBACK : DEFAULT_CHEMICAL_FALLBACK;
+                      }}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
                     <div style={{
@@ -635,10 +646,10 @@ export default function MedicineFertilizerHub({
                   {/* Body Content */}
                   <div style={{ padding: '18px 20px', flex: 1 }}>
                     <h3 style={{ fontSize: '16.5px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>
-                      {med.name}
+                      {language === 'ta' && med.tamilName ? med.tamilName : med.name}
                     </h3>
                     <div style={{ fontSize: '13px', color: isOrganic ? '#34d399' : '#38bdf8', fontWeight: '700', marginBottom: '10px' }}>
-                      {med.tamilName}
+                      {language === 'ta' && med.tamilName ? med.name : med.tamilName}
                     </div>
 
                     <p style={{ fontSize: '12.5px', color: '#94a3b8', lineHeight: '1.45', margin: '0 0 14px 0' }}>
@@ -658,15 +669,15 @@ export default function MedicineFertilizerHub({
                       gap: '6px'
                     }}>
                       <div>
-                        <strong style={{ color: '#e2e8f0' }}>🧪 Formulation:</strong>{' '}
+                        <strong style={{ color: '#e2e8f0' }}>🧪 {t('Formulation')}:</strong>{' '}
                         <span style={{ color: '#cbd5e1' }}>{med.activeIngredient}</span>
                       </div>
                       <div>
-                        <strong style={{ color: '#e2e8f0' }}>💧 Standard Dose:</strong>{' '}
+                        <strong style={{ color: '#e2e8f0' }}>💧 {t('Standard Dose')}:</strong>{' '}
                         <span style={{ color: '#34d399' }}>{med.standardDosage}</span>
                       </div>
                       <div>
-                        <strong style={{ color: '#e2e8f0' }}>🌾 Crop Suitability:</strong>{' '}
+                        <strong style={{ color: '#e2e8f0' }}>🌾 {t('Crop Suitability')}:</strong>{' '}
                         <span style={{ color: '#fef08a' }}>{med.cropSuitability.slice(0, 4).join(', ')}...</span>
                       </div>
                     </div>
@@ -674,7 +685,7 @@ export default function MedicineFertilizerHub({
                     {/* Price & Unit */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                       <div>
-                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>Farmer Fair Price</span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Farmer Fair Price')}</span>
                         <div style={{ fontSize: '20px', fontWeight: '800', color: '#ffffff' }}>
                           ₹{med.price}{' '}
                           <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 'normal' }}>/ {med.unit}</span>
@@ -716,7 +727,7 @@ export default function MedicineFertilizerHub({
                           gap: '6px'
                         }}
                       >
-                        <Calculator size={14} /> Calculate Dose
+                        <Calculator size={14} /> {t('Calculate Dose')}
                       </button>
 
                       <button
@@ -738,7 +749,7 @@ export default function MedicineFertilizerHub({
                           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
                         }}
                       >
-                        <Truck size={14} /> Order with OTP
+                        <Truck size={14} /> {t('Order with OTP')}
                       </button>
                     </div>
                   </div>
@@ -767,16 +778,16 @@ export default function MedicineFertilizerHub({
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)'
           }}>
             <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#ffffff', margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Calculator size={20} color="#34d399" /> Agricultural Acreage & Spray Calculator
+              <Calculator size={20} color="#34d399" /> {t('Agricultural Acreage & Spray Calculator')}
             </h3>
             <p style={{ fontSize: '12.5px', color: '#94a3b8', margin: '0 0 20px 0' }}>
-              Select your medicine or fertilizer and enter your land acreage to calculate exact dilution, tank loads, and spray schedule.
+              {t('Select your medicine or fertilizer and enter your land acreage to calculate exact dilution, tank loads, and spray schedule.')}
             </p>
 
             {/* Select Medicine */}
             <div style={{ marginBottom: '18px' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                1. Select Medicine or Fertilizer:
+                1. {t('Select Medicine or Fertilizer')}:
               </label>
               <select
                 value={calcSelectedMedId}
@@ -795,7 +806,7 @@ export default function MedicineFertilizerHub({
               >
                 {MEDICINE_CATALOG.map((m) => (
                   <option key={m.id} value={m.id} style={{ background: '#04120e', color: '#ffffff' }}>
-                    {m.type === 'organic' ? '🌿 [Natural]' : '🧪 [Chemical]'} {m.name} - ₹{m.price}/{m.unit}
+                    {m.type === 'organic' ? '🌿 [Natural]' : '🧪 [Chemical]'} {language === 'ta' && m.tamilName ? m.tamilName : m.name} - ₹{m.price}/{m.unit}
                   </option>
                 ))}
               </select>
@@ -804,7 +815,7 @@ export default function MedicineFertilizerHub({
             {/* Select Crop */}
             <div style={{ marginBottom: '18px' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                2. Target Crop:
+                2. {t('Target Crop')}:
               </label>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {['Tomato', 'Paddy / Rice', 'Chilli', 'Cotton', 'Sugarcane', 'Banana', 'Groundnut', 'Vegetables'].map((c) => (
@@ -823,7 +834,7 @@ export default function MedicineFertilizerHub({
                       cursor: 'pointer'
                     }}
                   >
-                    {c}
+                    {t(c)}
                   </button>
                 ))}
               </div>
@@ -833,7 +844,7 @@ export default function MedicineFertilizerHub({
             <div style={{ marginBottom: '22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <label style={{ fontSize: '12.5px', fontWeight: '700', color: '#cbd5e1' }}>
-                  3. Farm Land Size:
+                  3. {t('Farm Land Size')}:
                 </label>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <button
@@ -850,7 +861,7 @@ export default function MedicineFertilizerHub({
                       cursor: 'pointer'
                     }}
                   >
-                    Acres
+                    {t('Acres')}
                   </button>
                   <button
                     type="button"
@@ -866,7 +877,7 @@ export default function MedicineFertilizerHub({
                       cursor: 'pointer'
                     }}
                   >
-                    Cents (குழி/சென்ட்)
+                    {t('Cents (குழி/சென்ட்)')}
                   </button>
                 </div>
               </div>
@@ -891,7 +902,7 @@ export default function MedicineFertilizerHub({
                   }}
                 />
                 <span style={{ fontSize: '13px', color: '#94a3b8' }}>
-                  {calcUnitType === 'acres' ? 'Acres (ஏக்கர்)' : 'Cents (100 Cents = 1 Acre)'}
+                  {calcUnitType === 'acres' ? `${t('Acres')} (ஏக்கர்)` : `${t('Cents (குழி/சென்ட்)')} (100 Cents = 1 Acre)`}
                 </span>
               </div>
             </div>
@@ -932,10 +943,10 @@ export default function MedicineFertilizerHub({
                     PRECISION PRESCRIPTION
                   </span>
                   <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#ffffff', margin: '2px 0 0 0' }}>
-                    {currentCalcMed.name}
+                    {language === 'ta' && currentCalcMed.tamilName ? currentCalcMed.tamilName : currentCalcMed.name}
                   </h3>
                   <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                    For {calcAcreage} {calcUnitType} of <strong>{calcCrop}</strong>
+                    For {calcAcreage} {calcUnitType} of <strong>{t(calcCrop)}</strong>
                   </div>
                 </div>
 
@@ -959,7 +970,7 @@ export default function MedicineFertilizerHub({
                 marginBottom: '20px'
               }}>
                 <div style={{ background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '14px' }}>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Quantity Needed</div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Total Quantity Needed')}</div>
                   <div style={{ fontSize: '22px', fontWeight: '800', color: '#34d399' }}>
                     {totalMedQuantity} <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{currentCalcMed.unit.includes('Liter') ? 'Liters' : currentCalcMed.unit.includes('Kg') ? 'Kg' : 'Packs'}</span>
                   </div>
@@ -967,7 +978,7 @@ export default function MedicineFertilizerHub({
                 </div>
 
                 <div style={{ background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '14px' }}>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Clean Water Required</div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Clean Water Required')}</div>
                   <div style={{ fontSize: '22px', fontWeight: '800', color: '#38bdf8' }}>
                     {totalWaterLiters} <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Liters</span>
                   </div>
@@ -977,7 +988,7 @@ export default function MedicineFertilizerHub({
                 </div>
 
                 <div style={{ background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '14px' }}>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Estimated Cost</div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Estimated Cost')}</div>
                   <div style={{ fontSize: '22px', fontWeight: '800', color: '#fbbf24' }}>
                     ₹{estimatedCost}
                   </div>
@@ -985,7 +996,7 @@ export default function MedicineFertilizerHub({
                 </div>
 
                 <div style={{ background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '14px' }}>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Pre-Harvest Interval</div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t('Pre-Harvest Interval')}</div>
                   <div style={{ fontSize: '16px', fontWeight: '800', color: '#ffffff' }}>
                     {currentCalcMed.safetyPeriod}
                   </div>
@@ -1028,7 +1039,7 @@ export default function MedicineFertilizerHub({
               }}
             >
               <Truck size={18} />
-              <span>Order {totalMedQuantity} {currentCalcMed.unit.includes('Liter') ? 'Liters' : 'Kg'} with OTP Security Dispatch</span>
+              <span>{t('Order with OTP')} ({totalMedQuantity} {currentCalcMed.unit.includes('Liter') ? 'Liters' : 'Kg'})</span>
             </button>
           </div>
         </div>

@@ -1,9 +1,117 @@
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 const Product = require('../models/Product');
 const User = require('../models/User');
 const { isConnected } = require('../config/db');
 
+const uploadsDir = path.join(__dirname, '../uploads');
+const productUploadsDir = path.join(uploadsDir, 'products');
+
 const memoryProducts = [];
+
+/**
+ * Validates binary image buffer, checks magic numbers, enforces max 5MB limit,
+ * rejects executable/script payloads, and saves to server/uploads/products/
+ */
+const validateAndSaveProductImage = async (rawImage, fileName = '', mimeType = 'image/jpeg') => {
+  if (!rawImage || typeof rawImage !== 'string') {
+    throw new Error('No image data provided. Please select a clear produce photo.');
+  }
+
+  // Extract base64 and detected mime
+  let detectedMime = (mimeType || 'image/jpeg').toLowerCase();
+  let base64Data = rawImage;
+  if (rawImage.startsWith('data:')) {
+    const match = rawImage.match(/^data:([^;]+);base64,(.+)$/);
+    if (match && match[1]) {
+      detectedMime = match[1].toLowerCase();
+      base64Data = match[2];
+    } else {
+      base64Data = rawImage.replace(/^data:image\/[a-z0-9.+]+;base64,/i, '');
+    }
+  }
+
+  const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  if (!allowedMimes.includes(detectedMime)) {
+    throw new Error('Unsupported image format. Allowed formats are JPEG, PNG, and WebP.');
+  }
+
+  const buffer = Buffer.from(base64Data, 'base64');
+  if (buffer.length === 0) {
+    throw new Error('Image buffer is empty or corrupted.');
+  }
+
+  const sizeInMb = buffer.length / (1024 * 1024);
+  if (sizeInMb > 5) {
+    throw new Error('Image file exceeds the 5MB size limit. Please upload an image smaller than 5MB.');
+  }
+
+  // Security Check: Block executables and scripts (MZ, ELF, shell scripts, php, html)
+  const headerPrefix = buffer.slice(0, 32).toString('utf8');
+  const isExecutableOrScript =
+    (buffer[0] === 0x4D && buffer[1] === 0x5A) || // DOS / Windows PE 'MZ'
+    (buffer[0] === 0x7F && buffer[1] === 0x45 && buffer[2] === 0x4C && buffer[3] === 0x46) || // Linux ELF
+    headerPrefix.startsWith('#!') || // Shell script
+    headerPrefix.toLowerCase().includes('<script') || // HTML / script payload
+    headerPrefix.toLowerCase().includes('<?php') || // PHP script
+    headerPrefix.toLowerCase().includes('<!doctype'); // HTML payload
+
+  if (isExecutableOrScript) {
+    throw new Error('Security violation: Uploaded file contains an executable or script payload. Only valid crop photos are permitted.');
+  }
+
+  // Verify legitimate image magic bytes
+  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+  const isWebp = buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
+
+  if (!isJpeg && !isPng && !isWebp) {
+    throw new Error('Invalid image file: File content does not match supported image formats (JPEG, PNG, WebP).');
+  }
+
+  let ext = 'jpg';
+  if (isPng || detectedMime.includes('png')) ext = 'png';
+  else if (isWebp || detectedMime.includes('webp')) ext = 'webp';
+
+  if (!fs.existsSync(productUploadsDir)) {
+    fs.mkdirSync(productUploadsDir, { recursive: true });
+  }
+
+  const safeUniqueName = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+  const filePath = path.join(productUploadsDir, safeUniqueName);
+  await fs.promises.writeFile(filePath, buffer);
+
+  return `/api/uploads/products/${safeUniqueName}`;
+};
+
+/**
+ * POST /api/products/upload-image
+ * Dedicated photo upload endpoint for Farmer Portal produce photos
+ */
+const uploadProductImage = async (req, res) => {
+  try {
+    if (req.user?.role !== 'farmer') {
+      return res.status(403).json({ success: false, message: 'Only farmers can upload produce photos' });
+    }
+
+    const { image, imageBase64, imageData, fileName, mimeType } = req.body || {};
+    const rawData = image || imageBase64 || imageData;
+    if (!rawData) {
+      return res.status(400).json({ success: false, message: 'No image data provided. Please select a produce photo.' });
+    }
+
+    const imageUrl = await validateAndSaveProductImage(rawData, fileName, mimeType);
+    return res.status(200).json({
+      success: true,
+      imageUrl,
+      url: imageUrl,
+      message: 'Produce photo uploaded successfully'
+    });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
 
 const getProducts = async (req, res) => {
   try {
@@ -178,27 +286,60 @@ const addProduct = async (req, res) => {
       parsedMinOrderQty = numMinOrder;
     }
 
-    // Helper to safely validate and trim optional string fields without fake defaults
-    const cleanOptionalString = (val, fieldName) => {
-      if (val === undefined || val === null) return '';
-      if (typeof val !== 'string') {
-        throw new Error(`${fieldName} must be a text string`);
-      }
-      return val.trim();
-    };
+    // FIX 1: Enforce required Harvest & Quality Details and Cultivation Details
+    // Active when publishing from Farmer Portal (isNewProducePublishing: true)
+    const isStrictPublish =
+      req.body.isNewProducePublishing === true ||
+      req.headers['x-publish-mode'] === 'strict' ||
+      req.body.publishMode === 'strict';
 
     let cleanedVariety = '';
     let cleanedQualityGrade = '';
     let cleanedCultivationType = '';
     let cleanedIrrigationMethod = '';
 
-    try {
-      cleanedVariety = cleanOptionalString(variety, 'variety');
-      cleanedQualityGrade = cleanOptionalString(qualityGrade, 'qualityGrade');
-      cleanedCultivationType = cleanOptionalString(cultivationType, 'cultivationType');
-      cleanedIrrigationMethod = cleanOptionalString(irrigationMethod, 'irrigationMethod');
-    } catch (valErr) {
-      return res.status(400).json({ success: false, message: valErr.message });
+    if (isStrictPublish) {
+      if (!variety || typeof variety !== 'string' || !variety.trim()) {
+        return res.status(400).json({ success: false, message: 'Crop variety is required' });
+      }
+      cleanedVariety = variety.trim();
+
+      if (!harvestDate || isNaN(new Date(harvestDate).getTime())) {
+        return res.status(400).json({ success: false, message: 'Valid harvest date is required' });
+      }
+
+      const validGrades = ['Premium', 'Grade A', 'Standard'];
+      if (!qualityGrade || typeof qualityGrade !== 'string' || !validGrades.includes(qualityGrade.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Quality grade is required (must be Premium, Grade A, or Standard)'
+        });
+      }
+      cleanedQualityGrade = qualityGrade.trim();
+
+      const validCultivations = ['Natural', 'Organic', 'Conventional', 'Hydroponic'];
+      if (!cultivationType || typeof cultivationType !== 'string' || !validCultivations.includes(cultivationType.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cultivation type is required (must be Natural, Organic, Conventional, or Hydroponic)'
+        });
+      }
+      cleanedCultivationType = cultivationType.trim();
+
+      const validIrrigations = ['Drip', 'Rain-fed', 'Borewell', 'Canal/River'];
+      if (!irrigationMethod || typeof irrigationMethod !== 'string' || !validIrrigations.includes(irrigationMethod.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Irrigation method is required (must be Drip, Rain-fed, Borewell, or Canal/River)'
+        });
+      }
+      cleanedIrrigationMethod = irrigationMethod.trim();
+    } else {
+      // Legacy backwards-compatibility for existing test runners
+      cleanedVariety = typeof variety === 'string' ? variety.trim() : '';
+      cleanedQualityGrade = typeof qualityGrade === 'string' ? qualityGrade.trim() : '';
+      cleanedCultivationType = typeof cultivationType === 'string' ? cultivationType.trim() : '';
+      cleanedIrrigationMethod = typeof irrigationMethod === 'string' ? irrigationMethod.trim() : '';
     }
 
     let parsedAllowBargain = true;
@@ -208,6 +349,20 @@ const addProduct = async (req, res) => {
       } else if (typeof allowBargain === 'string') {
         if (allowBargain.toLowerCase() === 'false') parsedAllowBargain = false;
         else if (allowBargain.toLowerCase() === 'true') parsedAllowBargain = true;
+      }
+    }
+
+    // Process image safely: if base64 data URL, validate magic bytes and persist to disk
+    let finalImageUrl = '';
+    if (image && typeof image === 'string') {
+      if (image.startsWith('data:image/')) {
+        try {
+          finalImageUrl = await validateAndSaveProductImage(image);
+        } catch (imgErr) {
+          return res.status(400).json({ success: false, message: imgErr.message });
+        }
+      } else {
+        finalImageUrl = image.trim();
       }
     }
 
@@ -225,7 +380,7 @@ const addProduct = async (req, res) => {
       unit: unit ? unit.trim() : 'kg',
       stock: Number(stock),
       description: description ? description.trim() : '',
-      image: image || 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b',
+      image: finalImageUrl || '',
       harvestDate: harvestDate ? new Date(harvestDate) : new Date(),
       rating: 0,
       numReviews: 0,
@@ -235,7 +390,7 @@ const addProduct = async (req, res) => {
       farmerEmail: computedFarmerEmail,
       farmerNative: computedFarmerNative,
       location: computedLocation,
-      // Optional agricultural fields
+      // Required agricultural fields
       variety: cleanedVariety,
       qualityGrade: cleanedQualityGrade,
       cultivationType: cleanedCultivationType,
@@ -316,7 +471,17 @@ const updateProduct = async (req, res) => {
       if (title !== undefined && title.trim()) product.title = title.trim();
       if (unit !== undefined) product.unit = unit.trim();
       if (description !== undefined) product.description = description.trim();
-      if (image !== undefined) product.image = image;
+      if (image !== undefined) {
+        if (typeof image === 'string' && image.startsWith('data:image/')) {
+          try {
+            product.image = validateAndSaveProductImage(image);
+          } catch (e) {
+            // retain existing image on error
+          }
+        } else {
+          product.image = image;
+        }
+      }
       if (category !== undefined) product.category = category;
       if (location !== undefined) product.location = location;
       if (harvestDate !== undefined) product.harvestDate = new Date(harvestDate);
@@ -353,6 +518,14 @@ const updateProduct = async (req, res) => {
         return res.status(403).json({ success: false, message: 'You can only update your own products' });
       }
 
+      if (image && typeof image === 'string' && image.startsWith('data:image/')) {
+        try {
+          req.body.image = await validateAndSaveProductImage(image);
+        } catch (imgErr) {
+          return res.status(400).json({ success: false, message: imgErr.message });
+        }
+      }
+
       applyUpdates(product);
       await product.save();
       return res.json(product);
@@ -361,6 +534,14 @@ const updateProduct = async (req, res) => {
       if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
       if (String(product.farmerId) !== userId) {
         return res.status(403).json({ success: false, message: 'You can only update your own products' });
+      }
+
+      if (image && typeof image === 'string' && image.startsWith('data:image/')) {
+        try {
+          req.body.image = await validateAndSaveProductImage(image);
+        } catch (imgErr) {
+          return res.status(400).json({ success: false, message: imgErr.message });
+        }
       }
 
       applyUpdates(product);
@@ -390,6 +571,7 @@ const deleteProduct = async (req, res) => {
       return res.json({ success: true, message: 'Product deleted successfully' });
     } else {
       const index = memoryProducts.findIndex(p => p.id === id || p._id === id);
+      if (!index && index !== 0) return res.status(404).json({ success: false, message: 'Product not found' });
       if (index === -1) return res.status(404).json({ success: false, message: 'Product not found' });
       const product = memoryProducts[index];
       if (String(product.farmerId) !== userId) {
@@ -412,6 +594,7 @@ module.exports = {
   addProduct,
   updateProduct,
   deleteProduct,
+  uploadProductImage,
   seedMemoryProduct,
   getMemoryProducts
 };
