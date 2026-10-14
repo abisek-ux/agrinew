@@ -142,6 +142,7 @@ const getHarvestFreshness = (harvestDate) => {
    3D Produce Quality & Hologram Inspector Component
 ───────────────────────────────────────────────────────────── */
 function Produce3DInspector({ product, onClose, onAddToCart }) {
+  const { t } = useLanguage();
   const canvasRef = useRef(null);
   const [rotX, setRotX] = useState(15);
   const [rotY, setRotY] = useState(30);
@@ -624,7 +625,7 @@ function Produce3DInspector({ product, onClose, onAddToCart }) {
                 }}
               >
                 <ShoppingCart size={16} />
-                <span>Add to Cart</span>
+                <span>{t('Add to Cart')}</span>
               </button>
             </div>
           </div>
@@ -638,6 +639,7 @@ function Produce3DInspector({ product, onClose, onAddToCart }) {
    Direct Farmer Price Negotiation / Bargain Modal
 ───────────────────────────────────────────────────────────── */
 function BargainOfferModal({ product, onClose, onBargainSubmitted }) {
+  const { t } = useLanguage();
   const minQty = Math.max(1, Number(product.minOrderQty) || 1);
   const maxStock = Math.max(minQty, Number(product.stock) || 500);
   const [proposedPrice, setProposedPrice] = useState(Math.max(1, Math.round(Number(product.price) * 0.9)));
@@ -711,10 +713,10 @@ function BargainOfferModal({ product, onClose, onBargainSubmitted }) {
             </div>
             <div>
               <h3 style={{ margin: 0, color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
-                Request a Bulk Bargain
+                {t('Bargain Price with Farmer')}
               </h3>
               <p style={{ margin: 0, color: '#a3c2b0', fontSize: '12px' }}>
-                You can submit a price offer for bulk purchases.
+                {t('Propose Fair Bulk Price')}
               </p>
             </div>
           </div>
@@ -723,15 +725,15 @@ function BargainOfferModal({ product, onClose, onBargainSubmitted }) {
 
         <div style={{ background: 'rgba(255, 255, 255, 0.05)', borderRadius: '14px', padding: '16px', marginBottom: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ color: '#a3c2b0', fontSize: '13px' }}>Item:</span>
+            <span style={{ color: '#a3c2b0', fontSize: '13px' }}>{t('Produce Name')}:</span>
             <span style={{ color: '#effbe7', fontWeight: '700', fontSize: '13px' }}>{product.title}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ color: '#a3c2b0', fontSize: '13px' }}>Original Price:</span>
+            <span style={{ color: '#a3c2b0', fontSize: '13px' }}>{t('Current Price')}:</span>
             <span style={{ color: '#f4c95d', fontWeight: '800', fontSize: '14px' }}>₹{product.price} / {product.unit || 'kg'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#a3c2b0', fontSize: '13px' }}>Farmer:</span>
+            <span style={{ color: '#a3c2b0', fontSize: '13px' }}>{t('farmer_label')}:</span>
             <span style={{ color: '#37bd78', fontWeight: '700', fontSize: '13px' }}>{product.farmerName || 'Verified Producer'}</span>
           </div>
         </div>
@@ -849,7 +851,7 @@ function BargainOfferModal({ product, onClose, onBargainSubmitted }) {
               }}
             >
               <Send size={18} />
-              <span>{submitting ? 'Transmitting Offer...' : 'Transmit Bulk Offer to Farmer'}</span>
+              <span>{submitting ? t('Submitting...') : t('Submit Bargain Offer')}</span>
             </button>
           </div>
         ) : (
@@ -879,16 +881,14 @@ function BargainOfferModal({ product, onClose, onBargainSubmitted }) {
               fontWeight: '800',
               marginBottom: '10px'
             }}>
-              STATUS: PENDING
+              {t('Pending Farmer Review')}
             </div>
 
             <h4 style={{ color: '#effbe7', fontSize: '18px', margin: '0 0 8px' }}>
-              Bulk Bargain Proposal Dispatched!
+              {t('Bargain Submitted Successfully!')}
             </h4>
             <p style={{ color: '#a3c2b0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 20px' }}>
-              Your wholesale offer of <strong>₹{proposedPrice}/{product.unit || 'kg'}</strong> for <strong>{quantity} {product.unit || 'kg'}</strong> (Total: ₹{proposedPrice * quantity}) has been delivered to <strong>{product.farmerName || 'the producer'}</strong>.
-              <br /><br />
-              The farmer partner will review your proposal and choose to <strong>Accept</strong>, <strong>Counter</strong>, or <strong>Reject</strong>. You can monitor and respond to negotiations anytime in your Bargains dashboard.
+              {t('Farmer will review your proposal shortly.')}
             </p>
 
             <button
@@ -905,7 +905,7 @@ function BargainOfferModal({ product, onClose, onBargainSubmitted }) {
                 cursor: 'pointer'
               }}
             >
-              Done
+              {t('Close')}
             </button>
           </div>
         )}
@@ -1115,6 +1115,7 @@ function ProductDetailsModal({
   onToggleFavorite,
   onViewFarmer
 }) {
+  const { t } = useLanguage();
   const minQty = Math.max(1, Number(product?.minOrderQty) || 1);
   const maxStock = Math.max(0, Number(product?.stock) || 0);
   const [selectedQty, setSelectedQty] = useState(minQty);
@@ -1783,6 +1784,7 @@ function ProductDetailsModal({
    Customer Notifications Drawer / Modal
 ───────────────────────────────────────────────────────────── */
 function NotificationDrawer({ isOpen, onClose, notifications, onRefresh }) {
+  const { t } = useLanguage();
   if (!isOpen) return null;
   return (
     <div style={{
@@ -1817,13 +1819,13 @@ function NotificationDrawer({ isOpen, onClose, notifications, onRefresh }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Bell size={20} color="#6edbd0" />
             <h3 style={{ color: '#effbe7', fontSize: '17px', fontWeight: '800', margin: 0 }}>
-              Order & Marketplace Alerts
+              {t('Order & Marketplace Alerts')}
             </h3>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={onRefresh}
-              title="Refresh alerts"
+              title={t('Refresh alerts') || 'Refresh alerts'}
               style={{
                 background: 'rgba(255,255,255,0.05)',
                 border: '1px solid rgba(255,255,255,0.1)',
@@ -1863,8 +1865,8 @@ function NotificationDrawer({ isOpen, onClose, notifications, onRefresh }) {
           {notifications.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '50px 20px', color: '#a3c2b0' }}>
               <Bell size={36} color="#6edbd0" style={{ margin: '0 auto 12px', opacity: 0.6 }} />
-              <div style={{ color: '#effbe7', fontWeight: '700' }}>All Caught Up</div>
-              <div style={{ fontSize: '12.5px', marginTop: '4px' }}>Marketplace and order status updates will appear here in real time.</div>
+              <div style={{ color: '#effbe7', fontWeight: '700' }}>{t('All Caught Up')}</div>
+              <div style={{ fontSize: '12.5px', marginTop: '4px' }}>{t('Marketplace and order status updates will appear here in real time.')}</div>
             </div>
           ) : (
             notifications.map((notif, idx) => (
@@ -1978,6 +1980,7 @@ function CheckoutModal({
   placingOrder,
   checkoutError
 }) {
+  const { t } = useLanguage();
   if (!isOpen) return null;
 
   const baseTotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
@@ -2039,10 +2042,10 @@ function CheckoutModal({
             <ShoppingCart size={22} color="#37bd78" />
             <div>
               <h2 style={{ margin: 0, color: '#effbe7', fontSize: '19px', fontWeight: '800' }}>
-                Direct Farm Checkout
+                {t('Direct Farm Checkout')}
               </h2>
               <span style={{ color: '#a3c2b0', fontSize: '12px' }}>
-                Review farmer packages & doorstep fulfillment
+                {t('Review farmer packages & doorstep fulfillment')}
               </span>
             </div>
           </div>
@@ -2092,10 +2095,10 @@ function CheckoutModal({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
               <div style={{ fontSize: '13px', fontWeight: '800', color: '#6edbd0', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Sprout size={16} />
-                <span>Farmer Packages ({cartGroupedByFarmer.length})</span>
+                <span>{t('Farmer Packages')} ({cartGroupedByFarmer.length})</span>
               </div>
               <span style={{ fontSize: '11.5px', color: '#a3c2b0' }}>
-                {cart.length} item{cart.length > 1 ? 's' : ''} in cart
+                {cart.length} {t('items in cart')}
               </span>
             </div>
 
@@ -2114,7 +2117,7 @@ function CheckoutModal({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ background: 'rgba(55, 189, 120, 0.2)', color: '#8be28b', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '6px' }}>
-                        Farmer #{gIdx + 1}
+                        {t('Farmer')} #{gIdx + 1}
                       </span>
                       <strong style={{ color: '#effbe7', fontSize: '14.5px' }}>{group.farmerName}</strong>
                     </div>
@@ -2165,7 +2168,7 @@ function CheckoutModal({
                               </div>
                               {hasSavings && (
                                 <div style={{ fontSize: '11px', color: '#f4c95d', fontWeight: '700', marginTop: '2px' }}>
-                                  Negotiated Bargain (Saved ₹{unitSavings * item.quantity})
+                                  {t('Negotiated Bargain')} ({t('Saved')} ₹{unitSavings * item.quantity})
                                 </div>
                               )}
                             </div>
@@ -2193,7 +2196,7 @@ function CheckoutModal({
                       fontSize: '13px'
                     }}
                   >
-                    <span style={{ color: '#a3c2b0', fontWeight: '600' }}>Farmer Subtotal:</span>
+                    <span style={{ color: '#a3c2b0', fontWeight: '600' }}>{t('Farmer Subtotal:')}</span>
                     <span style={{ color: '#8be28b', fontSize: '15px', fontWeight: '900' }}>
                       ₹{group.subtotal}
                     </span>
@@ -2216,7 +2219,7 @@ function CheckoutModal({
                   lineHeight: '1.5'
                 }}
               >
-                ℹ️ <strong>Multi-Farm Direct Dispatch:</strong> Products from different farms are packed directly at source to guarantee harvest freshness and may arrive in separate dispatches.
+                ℹ️ <strong>{t('Multi-Farm Direct Dispatch:')}</strong> {t('Products from different farms are packed directly at source to guarantee harvest freshness and may arrive in separate dispatches.')}
               </div>
             )}
           </div>
@@ -2233,7 +2236,7 @@ function CheckoutModal({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div style={{ fontSize: '13px', fontWeight: '800', color: '#6edbd0', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <MapPin size={16} />
-                <span>Delivery Doorstep Address</span>
+                <span>{t('Delivery Doorstep Address')}</span>
               </div>
               <button
                 type="button"
@@ -2254,14 +2257,14 @@ function CheckoutModal({
                 }}
               >
                 <Edit2 size={13} />
-                <span>{isEditingAddress ? 'Done Editing' : 'Edit Address'}</span>
+                <span>{isEditingAddress ? t('Done Editing') : t('Edit Address')}</span>
               </button>
             </div>
 
             {isEditingAddress ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Customer Name</label>
+                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>{t('Customer Name')}</label>
                   <input
                     type="text"
                     value={checkoutAddress.name || ''}
@@ -2278,7 +2281,7 @@ function CheckoutModal({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Phone Number</label>
+                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>{t('Phone Number')}</label>
                   <input
                     type="tel"
                     value={checkoutAddress.phone || ''}
@@ -2295,7 +2298,7 @@ function CheckoutModal({
                   />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Street / Doorstep Address</label>
+                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>{t('Street / Doorstep Address')}</label>
                   <input
                     type="text"
                     value={checkoutAddress.addressLine || ''}
@@ -2313,7 +2316,7 @@ function CheckoutModal({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>City</label>
+                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>{t('City')}</label>
                   <input
                     type="text"
                     value={checkoutAddress.city || ''}
@@ -2330,7 +2333,7 @@ function CheckoutModal({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>State</label>
+                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>{t('State')}</label>
                   <input
                     type="text"
                     value={checkoutAddress.state || ''}
@@ -2347,7 +2350,7 @@ function CheckoutModal({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>Pincode</label>
+                  <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>{t('Pincode')}</label>
                   <input
                     type="text"
                     value={checkoutAddress.pincode || ''}
@@ -2390,7 +2393,7 @@ function CheckoutModal({
           >
             <div style={{ fontSize: '13px', fontWeight: '800', color: '#6edbd0', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <CreditCard size={16} />
-              <span>Select Payment Method</span>
+              <span>{t('Select Payment Method')}</span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -2423,15 +2426,15 @@ function CheckoutModal({
                   </div>
                   <div>
                     <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '800' }}>
-                      Cash on Delivery (Standard Farm-to-Doorstep)
+                      {t('Cash on Delivery (Standard Farm-to-Doorstep)')}
                     </div>
                     <div style={{ color: '#a3c2b0', fontSize: '12px' }}>
-                      Pay with cash upon inspecting harvest quality at handover.
+                      {t('Pay with cash upon inspecting harvest quality at handover.')}
                     </div>
                   </div>
                 </div>
                 <span style={{ background: 'rgba(55, 189, 120, 0.2)', color: '#8be28b', fontSize: '11px', fontWeight: '800', padding: '3px 8px', borderRadius: '6px' }}>
-                  Active
+                  {t('Active')}
                 </span>
               </div>
 
@@ -2464,15 +2467,15 @@ function CheckoutModal({
                   </div>
                   <div>
                     <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '800' }}>
-                      UPI on Delivery (GPay / PhonePe / Paytm QR)
+                      {t('UPI on Delivery (GPay / PhonePe / Paytm QR)')}
                     </div>
                     <div style={{ color: '#a3c2b0', fontSize: '12px' }}>
-                      Scan delivery partner's verified UPI QR code at your doorstep.
+                      {t('Scan delivery partner\'s verified UPI QR code at your doorstep.')}
                     </div>
                   </div>
                 </div>
                 <span style={{ background: 'rgba(55, 189, 120, 0.2)', color: '#8be28b', fontSize: '11px', fontWeight: '800', padding: '3px 8px', borderRadius: '6px' }}>
-                  Active
+                  {t('Active')}
                 </span>
               </div>
 
@@ -2495,21 +2498,21 @@ function CheckoutModal({
                   <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)' }} />
                   <div>
                     <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700' }}>
-                      Credit / Debit Card & NetBanking
+                      {t('Credit / Debit Card & NetBanking')}
                     </div>
                     <div style={{ color: '#a3c2b0', fontSize: '11.5px' }}>
-                      Online payment gateway integration currently under review.
+                      {t('Online payment gateway integration currently under review.')}
                     </div>
                   </div>
                 </div>
                 <span style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#d9c7a0', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' }}>
-                  Coming Soon
+                  {t('Coming Soon')}
                 </span>
               </div>
             </div>
 
             <div style={{ marginTop: '10px', fontSize: '11.5px', color: '#a3c2b0' }}>
-              🛡️ <strong>Zero Prepayment Risk:</strong> Payment is strictly collected upon inspecting produce freshness and verifying your delivery OTP.
+              🛡️ <strong>{t('Zero Prepayment Risk:')}</strong> {t('Payment is strictly collected upon inspecting produce freshness and verifying your delivery OTP.')}
             </div>
           </div>
 
@@ -2532,10 +2535,10 @@ function CheckoutModal({
               <Zap size={18} color={expressDelivery ? '#37bd78' : '#a3c2b0'} />
               <div>
                 <div style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
-                  Green Express Courier (2-Hour Chilled Dispatch)
+                  {t('Green Express Courier (2-Hour Chilled Dispatch)')}
                 </div>
                 <div style={{ fontSize: '11px', color: '#a3c2b0' }}>
-                  Temperature-monitored refrigerated EV fleet direct from Mandya
+                  {t('Temperature-monitored refrigerated EV fleet direct from Mandya')}
                 </div>
               </div>
             </div>
@@ -2554,26 +2557,26 @@ function CheckoutModal({
             }}
           >
             <div style={{ fontSize: '13px', fontWeight: '800', color: '#6edbd0', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '10px' }}>
-              Payment Breakdown
+              {t('Payment Breakdown')}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13.5px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a3c2b0' }}>
-                <span>Produce Items Subtotal:</span>
+                <span>{t('Produce Items Subtotal:')}</span>
                 <span style={{ color: '#effbe7', fontWeight: '700' }}>₹{baseTotal}</span>
               </div>
 
               {totalBargainSavings > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#37bd78' }}>
-                  <span>Negotiated Bargain Savings:</span>
+                  <span>{t('Negotiated Bargain Savings:')}</span>
                   <span style={{ fontWeight: '800' }}>-₹{totalBargainSavings}</span>
                 </div>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a3c2b0' }}>
-                <span>Direct Farm Dispatch:</span>
+                <span>{t('Direct Farm Dispatch:')}</span>
                 <span style={{ color: expressDelivery ? '#f4c95d' : '#8be28b', fontWeight: '700' }}>
-                  {expressDelivery ? '₹49 (Express Chilled EV)' : 'FREE (Direct from Farm)'}
+                  {expressDelivery ? `₹49 (${t('Express Chilled EV') || 'Express Chilled EV'})` : (t('FREE (Direct from Farm)') || 'FREE (Direct from Farm)')}
                 </span>
               </div>
 
@@ -2588,7 +2591,7 @@ function CheckoutModal({
                   fontSize: '16px'
                 }}
               >
-                <span style={{ color: '#effbe7', fontWeight: '800' }}>Final Payable Amount:</span>
+                <span style={{ color: '#effbe7', fontWeight: '800' }}>{t('Final Payable Amount:')}</span>
                 <span style={{ color: '#37bd78', fontSize: '24px', fontWeight: '900' }}>
                   ₹{totalAmount}
                 </span>
@@ -2613,7 +2616,7 @@ function CheckoutModal({
         >
           <div>
             <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>
-              Total Payable (INR)
+              {t('Total Payable (INR)')}
             </div>
             <div style={{ color: '#37bd78', fontSize: '22px', fontWeight: '900' }}>
               ₹{totalAmount}
@@ -2635,7 +2638,7 @@ function CheckoutModal({
                 minHeight: '48px'
               }}
             >
-              Back to Cart
+              {t('Back to Cart')}
             </button>
             <button
               type="button"
@@ -2660,11 +2663,15 @@ function CheckoutModal({
               {placingOrder ? (
                 <>
                   <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                  <span>Placing Farm Order...</span>
+                  <span>{t('Placing Farm Order...')}</span>
                 </>
               ) : (
                 <>
-                  <span>Place Multi-Farm Order (₹{totalAmount})</span>
+                  <span>
+                    {selectedPaymentMethod === 'cod'
+                      ? `${t('Place Order — Pay on Delivery')} (₹${totalAmount})`
+                      : `${t('Place Multi-Farm Order')} (₹${totalAmount})`}
+                  </span>
                   <ArrowRight size={18} />
                 </>
               )}
@@ -2686,6 +2693,7 @@ function OrderConfirmationModal({
   onViewOrders,
   onContinueShopping
 }) {
+  const { t } = useLanguage();
   if (!isOpen || !orderResult) return null;
 
   const orders = Array.isArray(orderResult.orders) ? orderResult.orders : [orderResult.orders];
@@ -2742,10 +2750,10 @@ function OrderConfirmationModal({
             <CheckCircle2 size={36} color="#37bd78" />
           </div>
           <h2 style={{ color: '#effbe7', fontSize: '22px', fontWeight: '900', margin: '0 0 6px' }}>
-            ✓ Order Placed Successfully!
+            {t('✓ Order Placed Successfully!')}
           </h2>
           <p style={{ color: '#a3c2b0', fontSize: '13.5px', margin: 0 }}>
-            Your direct harvest request has been sent to farm packing depots.
+            {t('Your direct harvest request has been sent to farm packing depots.')}
           </p>
         </div>
 
@@ -2761,7 +2769,7 @@ function OrderConfirmationModal({
             }}
           >
             <div style={{ color: '#6edbd0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '800', marginBottom: '8px' }}>
-              Dispatched Farm Packages ({orders.length})
+              {t('Dispatched Farm Packages')} ({orders.length})
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -2782,7 +2790,7 @@ function OrderConfirmationModal({
                       #{String(ord.orderId || ord._id || ord.id).slice(-8).toUpperCase()}
                     </div>
                     <div style={{ color: '#a3c2b0', fontSize: '11.5px' }}>
-                      🧑‍🌾 {ord.farmerName || 'Direct Farm Producer'} • {ord.items?.length || 1} item(s)
+                      🧑‍🌾 {ord.farmerName || t('Direct Farm Producer')} • {ord.items?.length || 1} {t('items in cart')}
                     </div>
                   </div>
                   <span style={{ color: '#8be28b', fontSize: '14px', fontWeight: '800' }}>
@@ -2802,15 +2810,15 @@ function OrderConfirmationModal({
             }}
           >
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Total Amount</div>
+              <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>{t('Total Amount')}</div>
               <div style={{ color: '#37bd78', fontSize: '18px', fontWeight: '900', marginTop: '2px' }}>₹{totalAmount}</div>
             </div>
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>Payment Mode</div>
+              <div style={{ color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700' }}>{t('Payment Mode')}</div>
               <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '700', marginTop: '2px' }}>
-                {paymentMethod || 'Cash on Delivery'}
+                {paymentMethod || t('Cash on Delivery')}
               </div>
-              <div style={{ color: '#f4c95d', fontSize: '11px', fontWeight: '600' }}>Payable at Handover</div>
+              <div style={{ color: '#f4c95d', fontSize: '11px', fontWeight: '600' }}>{t('Payable at Handover')}</div>
             </div>
           </div>
 
@@ -2827,7 +2835,7 @@ function OrderConfirmationModal({
               }}
             >
               <div style={{ color: '#6edbd0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '800', marginBottom: '4px' }}>
-                Deliver To
+                {t('Deliver To')}
               </div>
               <div style={{ fontWeight: '700' }}>{address.name} • {address.phone}</div>
               <div style={{ color: '#a3c2b0', marginTop: '2px' }}>
@@ -2852,7 +2860,7 @@ function OrderConfirmationModal({
           >
             <ShieldCheck size={18} color="#f4c95d" style={{ flexShrink: 0 }} />
             <span>
-              <strong>Secure Handover:</strong> Your delivery courier will verify package handover via an SMS/Email OTP upon arrival at your doorstep.
+              <strong>{t('Secure Handover:')}</strong> {t('Your delivery courier will verify package handover via an SMS/Email OTP upon arrival at your doorstep.')}
             </span>
           </div>
         </div>
@@ -2881,7 +2889,7 @@ function OrderConfirmationModal({
             }}
           >
             <Truck size={17} />
-            <span>Track in Live GPS Radar</span>
+            <span>{t('Track in Live GPS Radar')}</span>
           </button>
 
           <button
@@ -2903,7 +2911,7 @@ function OrderConfirmationModal({
               minHeight: '48px'
             }}
           >
-            Continue Shopping
+            {t('Continue Shopping')}
           </button>
         </div>
       </div>
@@ -2920,6 +2928,7 @@ function OrderDetailsModal({
   onCancelOrder,
   onReviewItem
 }) {
+  const { t } = useLanguage();
   if (!order) return null;
 
   const orderId = String(order.orderId || order._id || order.id || '').toUpperCase();
@@ -2931,7 +2940,7 @@ function OrderDetailsModal({
         hour: '2-digit',
         minute: '2-digit'
       })
-    : 'Recent Order';
+    : t('Recent Order') || 'Recent Order';
 
   const isCancellable = ['pending', 'confirmed', 'accepted'].includes(order.status);
   const isDelivered = order.status === 'delivered';
@@ -2939,12 +2948,12 @@ function OrderDetailsModal({
 
   // Milestone mapping strictly from backend enum
   const stages = [
-    { key: 'placed', label: 'Order Placed', match: ['pending', 'confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'], time: order.createdAt },
-    { key: 'confirmed', label: 'Farmer Confirmed', match: ['confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'] },
-    { key: 'packed', label: 'Produce Packed at Farm', match: ['packed', 'assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'] },
-    { key: 'assigned', label: 'Courier Assigned', match: ['assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'], note: order.deliveryName && order.deliveryName !== 'Unassigned' ? `Courier: ${order.deliveryName}` : null },
-    { key: 'transit', label: 'Dispatched & Out for Delivery', match: ['picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'], time: order.dispatchSignaledAt },
-    { key: 'delivered', label: 'Delivered to Doorstep', match: ['delivered'], time: order.deliveryOtpVerifiedAt }
+    { key: 'placed', label: t('Order Placed'), match: ['pending', 'confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'], time: order.createdAt },
+    { key: 'confirmed', label: t('Farmer Confirmed'), match: ['confirmed', 'accepted', 'packed', 'assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'] },
+    { key: 'packed', label: t('Produce Packed at Farm'), match: ['packed', 'assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'] },
+    { key: 'assigned', label: t('Courier Assigned'), match: ['assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'], note: order.deliveryName && order.deliveryName !== 'Unassigned' ? `${t('Courier Assigned')}: ${order.deliveryName}` : null },
+    { key: 'transit', label: t('Dispatched & Out for Delivery'), match: ['picked_up', 'in_transit', 'out_for_delivery', 'arrived', 'delivered'], time: order.dispatchSignaledAt },
+    { key: 'delivered', label: t('Delivered to Doorstep'), match: ['delivered'], time: order.deliveryOtpVerifiedAt }
   ];
 
   return (
@@ -2991,10 +3000,10 @@ function OrderDetailsModal({
         >
           <div>
             <span style={{ color: '#6edbd0', fontSize: '11.5px', fontWeight: '800' }}>
-              ORDER #{orderId.slice(-8)}
+              {t('Order Placed')} #{orderId.slice(-8)}
             </span>
             <div style={{ color: '#effbe7', fontSize: '17px', fontWeight: '800', marginTop: '2px' }}>
-              Total: ₹{order.totalAmount} • {formattedDate}
+              {t('Total Amount')}: ₹{order.totalAmount} • {formattedDate}
             </div>
           </div>
 
@@ -3046,7 +3055,7 @@ function OrderDetailsModal({
           >
             <div style={{ fontSize: '13px', fontWeight: '800', color: '#6edbd0', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Clock size={16} />
-              <span>Live Order Milestones & Tracking</span>
+              <span>{t('Live Order Milestones & Tracking')}</span>
             </div>
 
             {isCancelled ? (
@@ -3061,10 +3070,10 @@ function OrderDetailsModal({
               >
                 <div style={{ fontWeight: '800', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <AlertCircle size={16} color="#ef4444" />
-                  <span>Order Cancelled</span>
+                  <span>{t('Order Cancelled')}</span>
                 </div>
                 <div style={{ fontSize: '12.5px', marginTop: '4px', color: '#effbe7' }}>
-                  {order.cancellationReason || 'Order cancelled by customer request. Reserved farm stock has been restored to catalog.'}
+                  {order.cancellationReason || t('Order cancelled by customer request. Reserved farm stock has been restored to catalog.')}
                 </div>
               </div>
             ) : (
@@ -3143,10 +3152,10 @@ function OrderDetailsModal({
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '14px', padding: '14px' }}>
               <div style={{ color: '#37bd78', fontSize: '11px', textTransform: 'uppercase', fontWeight: '800', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <Sprout size={13} />
-                <span>Producer Farm</span>
+                <span>{t('Producer Farm')}</span>
               </div>
               <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700' }}>
-                {order.farmerName || 'Tamil Nadu Farm Partner'}
+                {order.farmerName || t('Tamil Nadu Farm Partner')}
               </div>
               <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
                 📍 {order.farmerLocation?.address || 'AgriLink Harvest Depot, Namakkal / Salem / Coimbatore, Tamil Nadu'}
@@ -3166,20 +3175,20 @@ function OrderDetailsModal({
                   textDecoration: 'none'
                 }}
               >
-                <span>📍 Open Farm GPS in Maps ↗</span>
+                <span>📍 {t('Open Farm GPS in Maps ↗')}</span>
               </a>
             </div>
 
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '14px', padding: '14px' }}>
               <div style={{ color: '#f4c95d', fontSize: '11px', textTransform: 'uppercase', fontWeight: '800', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <Truck size={13} />
-                <span>Delivery Partner</span>
+                <span>{t('Delivery Partner')}</span>
               </div>
               <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700' }}>
-                {order.deliveryName || 'Awaiting Courier Assignment'}
+                {order.deliveryName || t('Awaiting Courier Assignment')}
               </div>
               <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
-                📞 {order.deliveryPhone || 'Contact will be enabled upon driver claim'}
+                📞 {order.deliveryPhone || t('Contact will be enabled upon driver claim')}
               </div>
             </div>
           </div>
@@ -3194,7 +3203,7 @@ function OrderDetailsModal({
             }}
           >
             <div style={{ fontSize: '13px', fontWeight: '800', color: '#6edbd0', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '12px' }}>
-              Ordered Farm Produce ({order.items?.length || 0})
+              {t('Ordered Farm Produce')} ({order.items?.length || 0})
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -3250,7 +3259,7 @@ function OrderDetailsModal({
                           cursor: 'pointer'
                         }}
                       >
-                        Rate Produce
+                        {t('Rate Produce')}
                       </button>
                     )}
                   </div>
@@ -3269,7 +3278,7 @@ function OrderDetailsModal({
                 fontSize: '14px'
               }}
             >
-              <span style={{ color: '#a3c2b0', fontWeight: '600' }}>Total Order Value:</span>
+              <span style={{ color: '#a3c2b0', fontWeight: '600' }}>{t('Total Order Value:')}</span>
               <span style={{ color: '#37bd78', fontSize: '18px', fontWeight: '900' }}>
                 ₹{order.totalAmount}
               </span>
@@ -3286,10 +3295,10 @@ function OrderDetailsModal({
           >
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '14px', padding: '14px' }}>
               <div style={{ color: '#6edbd0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '800', marginBottom: '4px' }}>
-                Delivery Address
+                {t('Delivery Address')}
               </div>
               <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '700' }}>
-                {order.customerName || 'Customer'} • {order.customerPhone || 'Phone verified'}
+                {order.customerName || t('Customer')} • {order.customerPhone || t('Phone verified')}
               </div>
               <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
                 {order.customerLocation?.address || 'Doorstep Delivery, Mandya/Bengaluru Cluster'}
@@ -3298,13 +3307,13 @@ function OrderDetailsModal({
 
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '14px', padding: '14px' }}>
               <div style={{ color: '#6edbd0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '800', marginBottom: '4px' }}>
-                Payment Status
+                {t('Payment Status')}
               </div>
               <div style={{ color: isDelivered ? '#8be28b' : isCancelled ? '#fca5a5' : '#f4c95d', fontSize: '13.5px', fontWeight: '800' }}>
-                {isDelivered ? 'Paid on Handover (Verified)' : isCancelled ? 'Cancelled • No Payment Due' : 'Cash on Delivery • Payable at Doorstep'}
+                {isDelivered ? t('Paid on Handover (Verified)') : isCancelled ? t('Cancelled • No Payment Due') : t('Cash on Delivery • Payable at Doorstep')}
               </div>
               <div style={{ color: '#a3c2b0', fontSize: '11.5px', marginTop: '2px' }}>
-                {isDelivered ? 'OTP handover confirmed delivery' : 'Pay via cash or UPI scan when courier arrives'}
+                {isDelivered ? t('OTP handover confirmed delivery') : t('Pay via cash or UPI scan when courier arrives')}
               </div>
             </div>
           </div>
@@ -3326,7 +3335,7 @@ function OrderDetailsModal({
             >
               <ShieldCheck size={18} color="#f4c95d" style={{ flexShrink: 0 }} />
               <span>
-                <strong>Verification Handover:</strong> Check your registered SMS/Email for your secure OTP when your courier reaches your doorstep.
+                <strong>{t('Verification Handover:')}</strong> {t('Check your registered SMS/Email for your secure OTP when your courier reaches your doorstep.')}
               </span>
             </div>
           )}
@@ -3367,7 +3376,7 @@ function OrderDetailsModal({
               }}
             >
               <Trash2 size={15} />
-              <span>Cancel Order</span>
+              <span>{t('Cancel Order')}</span>
             </button>
           ) : (
             <div />
@@ -3387,7 +3396,7 @@ function OrderDetailsModal({
               minHeight: '44px'
             }}
           >
-            Close Details
+            {t('Close Details')}
           </button>
         </div>
       </div>
@@ -3925,7 +3934,8 @@ export default function CustomerPortal({ onLogout }) {
         history: updatedMessages.slice(-6),
         conversationHistory: updatedMessages.slice(-6),
         userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || undefined,
-        cartItems: cartItemsPayload
+        cartItems: cartItemsPayload,
+        language: language || 'en'
       });
       const replyText = res.data?.reply || res.data?.answer;
       if (replyText) {

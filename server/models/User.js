@@ -67,6 +67,13 @@ const userSchema = new mongoose.Schema(
     serviceArea: { type: String, default: '', trim: true },
     isVerified: { type: Boolean, default: false },
 
+    // Farmer-Specific UPI Payment QR & Configuration
+    upiQrCode: { type: String, default: '', trim: true },
+    upiId: { type: String, default: '', trim: true },
+    upiPayeeName: { type: String, default: '', trim: true },
+    isUpiConfigured: { type: Boolean, default: false },
+    upiUpdatedAt: { type: Date, default: null },
+
     // Phase 6: 7-day Profile Modification Lock
     lastProfileModifiedAt: { type: Date, default: null },
     profileModificationLockedUntil: { type: Date, default: null },

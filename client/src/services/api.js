@@ -37,7 +37,10 @@ export const authAPI = {
   getWishlist: () => axios.get(`${API_BASE}/auth/wishlist`, { headers: getAuthHeaders() }),
   toggleWishlist: (data) => axios.put(`${API_BASE}/auth/wishlist/toggle`, data, { headers: getAuthHeaders() }),
   getFarmers: () => axios.get(`${API_BASE}/auth/farmers`),
-  getStatus: () => axios.get(`${API_BASE}/auth/status`)
+  getStatus: () => axios.get(`${API_BASE}/auth/status`),
+  uploadFarmerUpiQr: (data) => axios.post(`${API_BASE}/auth/farmer/upi-qr`, data, { headers: getAuthHeaders() }),
+  removeFarmerUpiQr: () => axios.delete(`${API_BASE}/auth/farmer/upi-qr`, { headers: getAuthHeaders() }),
+  getFarmerUpiDetails: (farmerId) => axios.get(`${API_BASE}/auth/farmer/${farmerId}/upi`)
 };
 
 export const bargainAPI = {

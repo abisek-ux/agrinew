@@ -237,16 +237,44 @@ const createOrder = async (req, res) => {
       let authoritativeFarmerName = product.farmerName || 'Farm Origin';
       let authoritativeFarmerEmail = product.farmerEmail || '';
       let authoritativeFarmerPhone = product.farmerPhone || '';
+      let farmerUpiQrCode = '';
+      let farmerUpiId = '';
+      let farmerUpiPayeeName = '';
 
-      if (product.farmerId && isConnected() && mongoose.Types.ObjectId.isValid(product.farmerId)) {
-        try {
-          const farmerUser = await User.findById(product.farmerId).select('name firstName lastName farmName email phone').lean();
-          if (farmerUser) {
-            authoritativeFarmerName = farmerUser.farmName || farmerUser.name || `${farmerUser.firstName || ''} ${farmerUser.lastName || ''}`.trim() || authoritativeFarmerName;
-            authoritativeFarmerEmail = farmerUser.email || authoritativeFarmerEmail;
-            authoritativeFarmerPhone = farmerUser.phone || authoritativeFarmerPhone;
-          }
-        } catch (e) {}
+      if (product.farmerId) {
+        if (isConnected()) {
+          try {
+            const query = mongoose.Types.ObjectId.isValid(product.farmerId)
+              ? { _id: product.farmerId }
+              : { $or: [{ id: String(product.farmerId) }, { _id: String(product.farmerId) }] };
+            const farmerUser = await User.findOne(query).select('name firstName lastName farmName email phone upiQrCode upiId upiPayeeName isUpiConfigured').lean();
+            if (farmerUser) {
+              authoritativeFarmerName = farmerUser.farmName || farmerUser.name || `${farmerUser.firstName || ''} ${farmerUser.lastName || ''}`.trim() || authoritativeFarmerName;
+              authoritativeFarmerEmail = farmerUser.email || authoritativeFarmerEmail;
+              authoritativeFarmerPhone = farmerUser.phone || authoritativeFarmerPhone;
+              if (farmerUser.isUpiConfigured && farmerUser.upiQrCode) {
+                farmerUpiQrCode = farmerUser.upiQrCode;
+                farmerUpiId = farmerUser.upiId || '';
+                farmerUpiPayeeName = farmerUser.upiPayeeName || farmerUser.farmName || farmerUser.name || '';
+              }
+            }
+          } catch (e) {}
+        } else {
+          try {
+            const { findMemoryUserById } = require('./authController');
+            const farmerUser = findMemoryUserById(product.farmerId);
+            if (farmerUser) {
+              authoritativeFarmerName = farmerUser.farmName || farmerUser.name || `${farmerUser.firstName || ''} ${farmerUser.lastName || ''}`.trim() || authoritativeFarmerName;
+              authoritativeFarmerEmail = farmerUser.email || authoritativeFarmerEmail;
+              authoritativeFarmerPhone = farmerUser.phone || authoritativeFarmerPhone;
+              if (farmerUser.isUpiConfigured && farmerUser.upiQrCode) {
+                farmerUpiQrCode = farmerUser.upiQrCode;
+                farmerUpiId = farmerUser.upiId || '';
+                farmerUpiPayeeName = farmerUser.upiPayeeName || farmerUser.farmName || farmerUser.name || '';
+              }
+            }
+          } catch (e) {}
+        }
       }
 
       resolvedItems.push({
@@ -261,7 +289,10 @@ const createOrder = async (req, res) => {
         farmerName: authoritativeFarmerName,
         farmerPhone: authoritativeFarmerPhone,
         farmerEmail: authoritativeFarmerEmail,
-        farmerLocation: resolveFarmerLocation(product.location, product.farmerId, req.user)
+        farmerLocation: resolveFarmerLocation(product.location, product.farmerId, req.user),
+        farmerUpiQrCode,
+        farmerUpiId,
+        farmerUpiPayeeName
       });
     }
 
@@ -293,6 +324,9 @@ const createOrder = async (req, res) => {
           farmerPhone: item.farmerPhone,
           farmerEmail: item.farmerEmail,
           farmerLocation: item.farmerLocation,
+          farmerUpiQrCode: item.farmerUpiQrCode || '',
+          farmerUpiId: item.farmerUpiId || '',
+          farmerUpiPayeeName: item.farmerUpiPayeeName || '',
           items: []
         };
       }
@@ -362,7 +396,10 @@ const createOrder = async (req, res) => {
         checkoutId,
         stockRestored: false,
         paymentMethod: cleanPaymentMethod,
-        paymentStatus: 'pending'
+        paymentStatus: 'pending',
+        farmerUpiQrCode: group.farmerUpiQrCode || '',
+        farmerUpiId: group.farmerUpiId || '',
+        farmerUpiPayeeName: group.farmerUpiPayeeName || ''
       };
 
       if (isConnected()) {

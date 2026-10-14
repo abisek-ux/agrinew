@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Tag
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function ProductDetailsModal({
   product,
@@ -23,6 +24,7 @@ export default function ProductDetailsModal({
   onEdit,
   onDelete
 }) {
+  const { t } = useLanguage();
   if (!isOpen || !product) return null;
 
   const prodId = product._id || product.id;
@@ -131,9 +133,9 @@ export default function ProductDetailsModal({
               borderRadius: '12px',
               padding: '10px 14px'
             }}>
-              <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>Available Stock</span>
+              <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>{t('Available Stock')}</span>
               <div style={{ fontSize: '15px', fontWeight: '800', color: isOutOfStock ? '#ef4444' : isLowStock ? '#fbbf24' : '#34d399', marginTop: '2px' }}>
-                {isOutOfStock ? '0 (Out of stock)' : `${product.stock} ${product.unit || 'kg'}`}
+                {isOutOfStock ? `0 (${t('Out of Stock') || 'Out of stock'})` : `${product.stock} ${product.unit || 'kg'}`}
               </div>
             </div>
 
@@ -143,7 +145,7 @@ export default function ProductDetailsModal({
               borderRadius: '12px',
               padding: '10px 14px'
             }}>
-              <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>Minimum Order</span>
+              <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>{t('Minimum Order')}</span>
               <div style={{ fontSize: '15px', fontWeight: '800', color: '#effbe7', marginTop: '2px' }}>
                 {product.minOrderQty || 1} {product.unit || 'kg'}
               </div>
@@ -155,9 +157,9 @@ export default function ProductDetailsModal({
               borderRadius: '12px',
               padding: '10px 14px'
             }}>
-              <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>Bargain Policy</span>
+              <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>{t('Bargain Policy')}</span>
               <div style={{ fontSize: '14px', fontWeight: '800', color: product.allowBargain !== false ? '#34d399' : '#9ca3af', marginTop: '2px' }}>
-                {product.allowBargain !== false ? '🤝 Enabled' : '🔒 Fixed Price'}
+                {product.allowBargain !== false ? `🤝 ${t('Enabled')}` : `🔒 ${t('Fixed Price')}`}
               </div>
             </div>
           </div>
@@ -171,39 +173,39 @@ export default function ProductDetailsModal({
             marginBottom: '18px'
           }}>
             <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '800', color: '#86efac', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-              🌾 Complete Agricultural Information
+              🌾 {t('Complete Agricultural Information')}
             </h4>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12.5px' }}>
               <div>
-                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>Variety / Strain</span>
-                <span style={{ fontWeight: '700', color: '#effbe7' }}>{product.variety || 'Standard Farm Grade'}</span>
+                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>{t('Variety / Strain')}</span>
+                <span style={{ fontWeight: '700', color: '#effbe7' }}>{product.variety || t('Standard Farm Grade')}</span>
               </div>
 
               <div>
-                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>Quality Grade</span>
-                <span style={{ fontWeight: '700', color: '#fcd34d' }}>{product.qualityGrade || 'Grade A Premium'}</span>
+                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>{t('Quality Grade')}</span>
+                <span style={{ fontWeight: '700', color: '#fcd34d' }}>{product.qualityGrade || t('Grade A Premium')}</span>
               </div>
 
               <div>
-                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>Cultivation Method</span>
-                <span style={{ fontWeight: '700', color: '#7dd3fc' }}>{product.cultivationType || 'Certified Organic / Natural'}</span>
+                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>{t('Cultivation Method')}</span>
+                <span style={{ fontWeight: '700', color: '#7dd3fc' }}>{product.cultivationType || t('Certified Organic / Natural')}</span>
               </div>
 
               <div>
-                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>Irrigation Technique</span>
-                <span style={{ fontWeight: '700', color: '#a7f3d0' }}>{product.irrigationMethod || 'Micro-Drip Irrigation'}</span>
+                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>{t('Irrigation Technique')}</span>
+                <span style={{ fontWeight: '700', color: '#a7f3d0' }}>{product.irrigationMethod || t('Micro-Drip Irrigation')}</span>
               </div>
 
               <div>
-                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>Harvest Date</span>
+                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>{t('Harvest Date')}</span>
                 <span style={{ fontWeight: '700', color: '#effbe7' }}>
-                  {product.harvestDate ? new Date(product.harvestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Farm Fresh (Today)'}
+                  {product.harvestDate ? new Date(product.harvestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : t('Farm Fresh (Today)')}
                 </span>
               </div>
 
               <div>
-                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>Farm Location</span>
+                <span style={{ color: '#9db5aa', display: 'block', fontSize: '11px' }}>{t('Farm Location')}</span>
                 <span style={{ fontWeight: '700', color: '#effbe7' }}>
                   {product.location?.address || product.farmerNative || 'Mandya Cluster, Karnataka'}
                 </span>
@@ -214,7 +216,7 @@ export default function ProductDetailsModal({
           {/* Description */}
           <div style={{ marginBottom: '22px' }}>
             <span style={{ fontSize: '12px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700', display: 'block', marginBottom: '6px' }}>
-              Produce Description & Harvest Notes
+              {t('Produce Description & Harvest Notes')}
             </span>
             <p style={{
               margin: 0,
@@ -255,7 +257,7 @@ export default function ProductDetailsModal({
               }}
             >
               <Edit2 size={16} />
-              <span>Edit Listing</span>
+              <span>{t('Edit Listing')}</span>
             </button>
 
             <button
@@ -280,7 +282,7 @@ export default function ProductDetailsModal({
               }}
             >
               <Trash2 size={16} />
-              <span>Delete Produce</span>
+              <span>{t('Delete Produce')}</span>
             </button>
           </div>
         </div>

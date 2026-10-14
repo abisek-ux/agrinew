@@ -428,33 +428,50 @@ const recipeAssistant = async (req, res) => {
       cartItems = [],
       conversationHistory = [],
       lastRecipeName = null,
-      userName = null
+      userName = null,
+      language = 'en'
     } = req.body || {};
 
-    const cleanQuery = String(query || message || prompt || '').trim();
+    const cleanQuery = String(
+      query ||
+      message ||
+      prompt ||
+      (Array.isArray(req.body.userIngredients) ? req.body.userIngredients.join(', ') : '') ||
+      ''
+    ).trim();
 
     if (!cleanQuery) {
-      return res.status(400).json({ success: false, message: 'Please ask a cooking or recipe question' });
+      return res.status(400).json({
+        success: false,
+        message: language === 'ta' ? 'தயவுசெய்து ஒரு சமையல் கேள்வியைக் கேட்கவும்' : 'Please ask a cooking or recipe question'
+      });
     }
 
     const qLower = cleanQuery.toLowerCase();
+    const isTamil = language === 'ta';
 
     // 1. Personal Identity Guardrail ("What's my name?")
-    if (/what('s| is) my name|who am i/i.test(cleanQuery)) {
+    if (/what('s| is) my name|who am i|என் பெயர் என்ன/i.test(cleanQuery)) {
       if (userName && String(userName).trim() && !/customer|user/i.test(userName)) {
+        const nameReply = isTamil
+          ? `உங்கள் பெயர் ${userName}. இன்று ரெசிபி ஸ்டுடியோவில் நான் உங்களுக்கு எவ்வாறு உதவ முடியும்?`
+          : `Your name is ${userName}. How can I assist you in Recipe Studio today?`;
         return res.json({
           success: true,
           intent: 'personal_query',
-          answer: `Your name is ${userName}. How can I assist you in Recipe Studio today?`,
-          reply: `Your name is ${userName}. How can I assist you in Recipe Studio today?`,
+          answer: nameReply,
+          reply: nameReply,
           recipe: null
         });
       }
+      const noNameReply = isTamil
+        ? "இந்த உரையாடலில் உங்கள் பெயர் கிடைக்கவில்லை."
+        : "I don't have your name available in this conversation.";
       return res.json({
         success: true,
         intent: 'personal_query',
-        answer: "I don't have your name available in this conversation.",
-        reply: "I don't have your name available in this conversation.",
+        answer: noNameReply,
+        reply: noNameReply,
         recipe: null
       });
     }
@@ -462,22 +479,27 @@ const recipeAssistant = async (req, res) => {
     // 2. Off-topic Guardrail
     const isOffTopic = /weather forecast|stock price|cricket score|movie showtime|write code|crypto|bitcoin/i.test(cleanQuery);
     if (isOffTopic) {
+      const offTopicReply = isTamil
+        ? "நான் அக்ரிலின்க் சமையல் உதவியாளர். புதிய பண்ணை விளைபொருட்களுக்கான சமையல் குறிப்புகள், தேவையான பொருட்கள் மற்றும் சமையல் முறைகள் பற்றி மட்டுமே நான் உதவ முடியும்."
+        : "I'm AgriLink's Recipe Studio assistant. I can help with cooking steps, ingredients, meal adaptations, and farm-fresh produce recipes.";
       return res.json({
         success: true,
         intent: 'off_topic',
-        answer: "I'm AgriLink's Recipe Studio assistant. I can help with cooking steps, ingredients, meal adaptations, and farm-fresh produce recipes.",
-        reply: "I'm AgriLink's Recipe Studio assistant. I can help with cooking steps, ingredients, meal adaptations, and farm-fresh produce recipes.",
+        answer: offTopicReply,
+        reply: offTopicReply,
         recipe: null
       });
     }
 
     // 3. Strict Intent: Greetings ("Hi", "Hello", "Hey", "Namaste", etc.)
     const isGreeting =
-      /^(hi|hii|hiii|hello|hey|heyy|namaste|vanakkam|good\s*(morning|afternoon|evening)|howdy|greetings)[!.,\s]*$/i.test(cleanQuery) ||
-      (/^(hi|hello|hey|namaste|vanakkam)\b/i.test(cleanQuery) && cleanQuery.split(/\s+/).length <= 2 && !/juice|soup|curry|recipe|cook|make|smoothie|salad|dish|cart/i.test(cleanQuery));
+      /^(hi|hii|hiii|hello|hey|heyy|namaste|vanakkam|வணக்கம்|good\s*(morning|afternoon|evening)|howdy|greetings)[!.,\s]*$/i.test(cleanQuery) ||
+      (/^(hi|hello|hey|namaste|vanakkam|வணக்கம்)\b/i.test(cleanQuery) && cleanQuery.split(/\s+/).length <= 2 && !/juice|soup|curry|recipe|cook|make|smoothie|salad|dish|cart/i.test(cleanQuery));
 
     if (isGreeting) {
-      const greetingReply = "Hello! I am your AgriLink Farm-to-Table Culinary Assistant. You can ask me what to cook with the fresh produce in your cart, request step-by-step preparation for juices, soups, curries, or smoothies, or ask for ingredient substitutions. What fresh dish would you like to prepare today?";
+      const greetingReply = isTamil
+        ? "வணக்கம்! நான் உங்கள் அக்ரிலின்க் பண்ணை சமையல் உதவியாளர். உங்கள் கூடையில் உள்ள காய்கறிகளை வைத்து என்ன சமைக்கலாம், சாறு, சூப், குழம்பு தயாரிக்கும் முறைகள் அல்லது மாற்றுப் பொருட்கள் பற்றி நீங்கள் கேட்கலாம். இன்று நீங்கள் என்ன சமைக்க விரும்புகிறீர்கள்?"
+        : "Hello! I am your AgriLink Farm-to-Table Culinary Assistant. You can ask me what to cook with the fresh produce in your cart, request step-by-step preparation for juices, soups, curries, or smoothies, or ask for ingredient substitutions. What fresh dish would you like to prepare today?";
       return res.json({
         success: true,
         intent: 'greeting',
@@ -516,35 +538,35 @@ const recipeAssistant = async (req, res) => {
     }
 
     // Detect Dish Category Intent
-    const isJuice = /juice|cold\s*press|sharbat|extract|drink/i.test(qLower);
+    const isJuice = /juice|cold\s*press|sharbat|extract|drink|சாறு|ஜூஸ்/i.test(qLower);
     const isSmoothie = /smoothie|shake|thick\s*shake|frappe/i.test(qLower);
-    const isSoup = /soup|broth|rasam|shorba|chowder/i.test(qLower);
-    const isCurry = /curry|poriyal|sabzi|gravy|sambar|korma|masala|saute/i.test(qLower);
-    const isSalad = /salad|bowl|slaw|medley/i.test(qLower);
-    const isRice = /rice|pulao|biryani|khichdi/i.test(qLower);
-    const isPreservation = /preserve|preservation|store|shelf\s*life|spoilage|keep fresh|pickling|canning/i.test(qLower);
-    const isCartBased = /cart|my cart|in my cart|items in cart|cook with my/i.test(qLower);
-    const isSubstitution = /substitute|substitution|replace|alternative|instead of/i.test(qLower);
+    const isSoup = /soup|broth|rasam|shorba|chowder|சூப்|ரசம்/i.test(qLower);
+    const isCurry = /curry|poriyal|sabzi|gravy|sambar|korma|masala|saute|பொரியல்|கூட்டு|குழம்பு|சாம்பார்/i.test(qLower);
+    const isSalad = /salad|bowl|slaw|medley|சாலட்/i.test(qLower);
+    const isRice = /rice|pulao|biryani|khichdi|சாதம்|பிரியாணி/i.test(qLower);
+    const isPreservation = /preserve|preservation|store|shelf\s*life|spoilage|keep fresh|pickling|canning|பாதுகாக்க|சேமிக்க/i.test(qLower);
+    const isCartBased = /cart|my cart|in my cart|items in cart|cook with my|கூடை/i.test(qLower);
+    const isSubstitution = /substitute|substitution|replace|alternative|instead of|மாற்றாக/i.test(qLower);
 
     // Detect Target Ingredient
     let detectedIngredient = '';
-    if (/grape|grapes/i.test(qLower)) detectedIngredient = 'grapes';
-    else if (/carrot|carrots/i.test(qLower)) detectedIngredient = 'carrot';
-    else if (/tomato|tomatoes/i.test(qLower)) detectedIngredient = 'tomato';
-    else if (/banana|bananas/i.test(qLower)) detectedIngredient = 'banana';
-    else if (/cabbage/i.test(qLower)) detectedIngredient = 'cabbage';
-    else if (/bean|beans/i.test(qLower)) detectedIngredient = 'beans';
-    else if (/spinach|palak/i.test(qLower)) detectedIngredient = 'spinach';
-    else if (/cucumber/i.test(qLower)) detectedIngredient = 'cucumber';
-    else if (/apple|apples/i.test(qLower)) detectedIngredient = 'apple';
-    else if (/potato|potatoes/i.test(qLower)) detectedIngredient = 'potato';
-    else if (/mango|mangoes/i.test(qLower)) detectedIngredient = 'mango';
-    else if (/orange|oranges/i.test(qLower)) detectedIngredient = 'orange';
-    else if (/beetroot|beets/i.test(qLower)) detectedIngredient = 'beetroot';
-    else if (/pumpkin/i.test(qLower)) detectedIngredient = 'pumpkin';
-    else if (/corn|maize/i.test(qLower)) detectedIngredient = 'corn';
-    else if (/onion|onions/i.test(qLower)) detectedIngredient = 'onion';
-    else if (/ginger/i.test(qLower)) detectedIngredient = 'ginger';
+    if (/grape|grapes|திராட்சை/i.test(qLower)) detectedIngredient = 'grapes';
+    else if (/carrot|carrots|கேரட்/i.test(qLower)) detectedIngredient = 'carrot';
+    else if (/tomato|tomatoes|தக்காளி/i.test(qLower)) detectedIngredient = 'tomato';
+    else if (/banana|bananas|வாழை/i.test(qLower)) detectedIngredient = 'banana';
+    else if (/cabbage|முட்டைக்கோஸ்/i.test(qLower)) detectedIngredient = 'cabbage';
+    else if (/bean|beans|பீன்ஸ்/i.test(qLower)) detectedIngredient = 'beans';
+    else if (/spinach|palak|கீரை/i.test(qLower)) detectedIngredient = 'spinach';
+    else if (/cucumber|வெள்ளரி/i.test(qLower)) detectedIngredient = 'cucumber';
+    else if (/apple|apples|ஆப்பிள்/i.test(qLower)) detectedIngredient = 'apple';
+    else if (/potato|potatoes|உருளைக்கிழங்கு/i.test(qLower)) detectedIngredient = 'potato';
+    else if (/mango|mangoes|மாம்பழம்/i.test(qLower)) detectedIngredient = 'mango';
+    else if (/orange|oranges|ஆரஞ்சு/i.test(qLower)) detectedIngredient = 'orange';
+    else if (/beetroot|beets|பீட்ரூட்/i.test(qLower)) detectedIngredient = 'beetroot';
+    else if (/pumpkin|பூசணி/i.test(qLower)) detectedIngredient = 'pumpkin';
+    else if (/corn|maize|சோளம்/i.test(qLower)) detectedIngredient = 'corn';
+    else if (/onion|onions|வெங்காயம்/i.test(qLower)) detectedIngredient = 'onion';
+    else if (/ginger|இஞ்சி/i.test(qLower)) detectedIngredient = 'ginger';
 
     // Map specific target if explicit
     if (!activeRecipeTarget) {
@@ -841,7 +863,9 @@ const recipeAssistant = async (req, res) => {
 
     // Unrecognized or non-recipe query resolution (Never default to carrot juice!)
     if (!activeRecipeTarget || !recipes[activeRecipeTarget]) {
-      const guidanceMsg = "I am your Farm-to-Table Culinary Assistant. Please specify a dish or fresh ingredient you would like to prepare (for example: fresh grapes juice, tomato soup, banana smoothie, cabbage curry, or items from your cart), and I will provide the ingredients and step-by-step cooking procedure!";
+      const guidanceMsg = isTamil
+        ? "நான் உங்கள் பண்ணை சமையல் உதவியாளர். நீங்கள் செய்ய விரும்பும் உணவு அல்லது புதிய காய்கறியைக் குறிப்பிடவும் (எ.கா: புதிய திராட்சை சாறு, தக்காளி சூப், வாழை ஸ்மூத்தி, முட்டைக்கோஸ் பொரியல் அல்லது உங்கள் கூடையில் உள்ள பொருட்கள்). தேவையான பொருட்கள் மற்றும் செய்முறையை நான் உடனடியாக வழங்குகிறேன்!"
+        : "I am your Farm-to-Table Culinary Assistant. Please specify a dish or fresh ingredient you would like to prepare (for example: fresh grapes juice, tomato soup, banana smoothie, cabbage curry, or items from your cart), and I will provide the ingredients and step-by-step cooking procedure!";
       return res.json({
         success: true,
         intent: 'general_guidance',
@@ -855,28 +879,53 @@ const recipeAssistant = async (req, res) => {
 
     // 6. Intelligent Follow-Up Answers
     let answerText = '';
-    if (qLower.includes('without sugar') || qLower.includes('no sugar')) {
-      answerText = `Yes! **${targetRecipe.recipeName}** is naturally flavorful and best enjoyed without sugar.\n\n` +
-        `• Farm-fresh ingredients contain natural sweet notes and minerals.\n` +
-        `• Lemon juice or natural spices balance the flavor without needing any refined sweetener.\n` +
-        `• Preparation time remains **${targetRecipe.prepTime}**.`;
-    } else if (qLower.includes('add ginger') || qLower.includes('ginger')) {
-      answerText = `Yes, you can definitely add fresh ginger to **${targetRecipe.recipeName}**!\n\n` +
-        `• Add a 1/2-inch piece of peeled fresh ginger into the preparation.\n` +
-        `• It adds a warm, zesty kick and promotes healthy digestion.`;
-    } else if (qLower.includes('without lemon') || qLower.includes('no lemon') || qLower.includes("don't have lemon")) {
-      answerText = `You can easily prepare **${targetRecipe.recipeName}** without lemon!\n\n` +
-        `• Substitute lemon with a dash of fresh orange juice, amla (Indian gooseberry), or enjoy pure natural flavor.`;
+    if (qLower.includes('without sugar') || qLower.includes('no sugar') || qLower.includes('சர்க்கரை இல்லாமல்')) {
+      answerText = isTamil
+        ? `ஆம்! **${targetRecipe.recipeName}** இயற்கையாகவே சுவையானது மற்றும் சர்க்கரை சேர்க்காமல் அருந்துவதே உடலுக்கு சிறந்தது.\n\n` +
+          `• புதிய பண்ணை விளைபொருட்களில் இயற்கையான இனிப்புச் சுவையும் தாதுக்களும் உள்ளன.\n` +
+          `• சுத்திகரிக்கப்பட்ட சர்க்கரை தேவையின்றி எலுமிச்சை சாறு அல்லது மசாலாக்கள் சமநிலையான சுவையைத் தரும்.\n` +
+          `• தயாரிப்பு நேரம்: **${targetRecipe.prepTime}**.`
+        : `Yes! **${targetRecipe.recipeName}** is naturally flavorful and best enjoyed without sugar.\n\n` +
+          `• Farm-fresh ingredients contain natural sweet notes and minerals.\n` +
+          `• Lemon juice or natural spices balance the flavor without needing any refined sweetener.\n` +
+          `• Preparation time remains **${targetRecipe.prepTime}**.`;
+    } else if (qLower.includes('add ginger') || qLower.includes('ginger') || qLower.includes('இஞ்சி')) {
+      answerText = isTamil
+        ? `ஆம், நீங்கள் **${targetRecipe.recipeName}** தயாரிப்பில் புதிய இஞ்சியை தாராளமாக சேர்க்கலாம்!\n\n` +
+          `• 1/2 அங்குல தோல் நீக்கிய புதிய இஞ்சியை தயாரிப்பில் சேர்க்கவும்.\n` +
+          `• இது கூடுதல் நறுமணத்தையும் சிறந்த செரிமான நன்மையையும் தரும்.`
+        : `Yes, you can definitely add fresh ginger to **${targetRecipe.recipeName}**!\n\n` +
+          `• Add a 1/2-inch piece of peeled fresh ginger into the preparation.\n` +
+          `• It adds a warm, zesty kick and promotes healthy digestion.`;
+    } else if (qLower.includes('without lemon') || qLower.includes('no lemon') || qLower.includes("don't have lemon") || qLower.includes('எலுமிச்சை இல்லாமல்')) {
+      answerText = isTamil
+        ? `நீங்கள் எலுமிச்சை இல்லாமலேயே **${targetRecipe.recipeName}** எளிதாக தயாரிக்கலாம்!\n\n` +
+          `• எலுமிச்சைக்கு மாற்றாக சிறிதளவு நெல்லிக்காய் சாறு, ஆரஞ்சு சாறு சேர்க்கலாம் அல்லது அதன் தூய இயற்கை சுவையை அனுபவிக்கலாம்.`
+        : `You can easily prepare **${targetRecipe.recipeName}** without lemon!\n\n` +
+          `• Substitute lemon with a dash of fresh orange juice, amla (Indian gooseberry), or enjoy pure natural flavor.`;
     } else {
-      answerText = `🍳 **${targetRecipe.title}**\n\n` +
-        `**Ingredients**\n` +
-        targetRecipe.ingredients.map(i => `• ${i}`).join('\n') +
-        `\n\n**Procedure**\n` +
-        targetRecipe.steps.map((s, idx) => `${idx + 1}. ${s}`).join('\n') +
-        `\n\n**Time:** ${targetRecipe.prepTime} | **Serves:** ${targetRecipe.servings}`;
+      if (isTamil) {
+        answerText = `🍳 **${targetRecipe.title}**\n\n` +
+          `**தேவையான பொருட்கள்**\n` +
+          targetRecipe.ingredients.map(i => `• ${i}`).join('\n') +
+          `\n\n**செய்முறை விளக்கம்**\n` +
+          targetRecipe.steps.map((s, idx) => `${idx + 1}. ${s}`).join('\n') +
+          `\n\n**தயாரிப்பு நேரம்:** ${targetRecipe.prepTime} | **பரிமாறும் அளவு:** ${targetRecipe.servings} நபர்கள்`;
 
-      if (targetRecipe.storageTips) {
-        answerText += `\n\n**Storage & Safety:** ${targetRecipe.storageTips}`;
+        if (targetRecipe.storageTips) {
+          answerText += `\n\n**சேமிப்பு & உணவு பாதுகாப்பு:** ${targetRecipe.storageTips}`;
+        }
+      } else {
+        answerText = `🍳 **${targetRecipe.title}**\n\n` +
+          `**Ingredients**\n` +
+          targetRecipe.ingredients.map(i => `• ${i}`).join('\n') +
+          `\n\n**Procedure**\n` +
+          targetRecipe.steps.map((s, idx) => `${idx + 1}. ${s}`).join('\n') +
+          `\n\n**Time:** ${targetRecipe.prepTime} | **Serves:** ${targetRecipe.servings}`;
+
+        if (targetRecipe.storageTips) {
+          answerText += `\n\n**Storage & Safety:** ${targetRecipe.storageTips}`;
+        }
       }
     }
 

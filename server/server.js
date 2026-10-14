@@ -90,8 +90,12 @@ app.use('/api/weather', weatherRoutes);
 // Persistent uploaded product images static serving
 const uploadsDir = path.join(__dirname, 'uploads');
 const productUploadsDir = path.join(uploadsDir, 'products');
+const qrUploadsDir = path.join(uploadsDir, 'qrcodes');
 if (!fs.existsSync(productUploadsDir)) {
   fs.mkdirSync(productUploadsDir, { recursive: true });
+}
+if (!fs.existsSync(qrUploadsDir)) {
+  fs.mkdirSync(qrUploadsDir, { recursive: true });
 }
 app.use('/api/uploads', express.static(uploadsDir));
 app.use('/uploads', express.static(uploadsDir));

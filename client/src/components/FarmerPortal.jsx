@@ -75,7 +75,9 @@ import {
   Lock,
   MessageSquare,
   Bot,
-  Star
+  Star,
+  QrCode,
+  Copy
 } from 'lucide-react';
 import '../farmer.css';
 
@@ -1593,6 +1595,118 @@ export default function FarmerPortal({ onLogout }) {
   const [profileDescription, setProfileDescription] = useState(user?.description || '');
   const [savingProfile, setSavingProfile] = useState(false);
   const [showProfileMapPicker, setShowProfileMapPicker] = useState(false);
+
+  // Farmer-Specific UPI Payment QR State
+  const [upiQrCode, setUpiQrCode] = useState(user?.upiQrCode || '');
+  const [upiId, setUpiId] = useState(user?.upiId || '');
+  const [upiPayeeName, setUpiPayeeName] = useState(user?.upiPayeeName || user?.farmName || user?.name || '');
+  const [isUpiConfigured, setIsUpiConfigured] = useState(Boolean(user?.isUpiConfigured && user?.upiQrCode));
+  const [qrFile, setQrFile] = useState(null);
+  const [qrPreview, setQrPreview] = useState(null);
+  const [savingQr, setSavingQr] = useState(false);
+  const [removingQr, setRemovingQr] = useState(false);
+  const [qrUploadError, setQrUploadError] = useState('');
+  const [isReplacingQr, setIsReplacingQr] = useState(false);
+  const qrFileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (user) {
+      if (user.upiQrCode !== undefined) setUpiQrCode(user.upiQrCode || '');
+      if (user.upiId !== undefined) setUpiId(user.upiId || '');
+      if (user.upiPayeeName !== undefined) setUpiPayeeName(user.upiPayeeName || user.farmName || user.name || '');
+      if (user.isUpiConfigured !== undefined) setIsUpiConfigured(Boolean(user.isUpiConfigured && user.upiQrCode));
+    }
+  }, [user]);
+
+  const handleQrFileSelect = (e) => {
+    setQrUploadError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setQrUploadError(t('Unsupported file type. Please upload a PNG, JPEG, or WebP image.'));
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setQrUploadError(t('File size exceeds 5MB limit. Please upload a smaller image.'));
+      return;
+    }
+
+    setQrFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setQrPreview(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveUpiQr = async () => {
+    if (!qrPreview && !upiQrCode) {
+      setQrUploadError(t('Please select a QR code image to upload.'));
+      return;
+    }
+    setSavingQr(true);
+    setQrUploadError('');
+    try {
+      const payload = {
+        qrImage: qrPreview || upiQrCode,
+        upiId: upiId.trim(),
+        upiPayeeName: (upiPayeeName || user?.farmName || user?.name || '').trim(),
+        mimeType: qrFile?.type || 'image/png',
+        fileName: qrFile?.name || 'upi_qr.png'
+      };
+      const res = await authAPI.uploadFarmerUpiQr(payload);
+      if (res.data?.success) {
+        setUpiQrCode(res.data.upiQrCode);
+        setIsUpiConfigured(true);
+        setQrPreview(null);
+        setQrFile(null);
+        setIsReplacingQr(false);
+        if (updateUserProfile && res.data.user) {
+          updateUserProfile(res.data.user);
+        }
+        showToast(t('UPI Payment QR successfully saved and verified!'), 'success');
+      }
+    } catch (err) {
+      console.error('Save QR error:', err);
+      const msg = err.response?.data?.message || err.message || t('Failed to save QR code');
+      setQrUploadError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setSavingQr(false);
+    }
+  };
+
+  const handleRemoveUpiQr = async () => {
+    if (!window.confirm(t('Are you sure you want to remove your UPI Payment QR? Customers will be requested to pay via Cash on Delivery.'))) {
+      return;
+    }
+    setRemovingQr(true);
+    setQrUploadError('');
+    try {
+      const res = await authAPI.removeFarmerUpiQr();
+      if (res.data?.success) {
+        setUpiQrCode('');
+        setIsUpiConfigured(false);
+        setQrPreview(null);
+        setQrFile(null);
+        setIsReplacingQr(false);
+        if (updateUserProfile && res.data.user) {
+          updateUserProfile(res.data.user);
+        }
+        showToast(t('UPI Payment QR code removed successfully.'), 'info');
+      }
+    } catch (err) {
+      console.error('Remove QR error:', err);
+      const msg = err.response?.data?.message || err.message || t('Failed to remove QR code');
+      setQrUploadError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setRemovingQr(false);
+    }
+  };
 
   const isFarmer = user?.role === 'farmer';
 
@@ -7585,6 +7699,347 @@ export default function FarmerPortal({ onLogout }) {
                   </button>
                 </div>
               </form>
+            </div>
+
+            {/* ── SECTION: MY UPI PAYMENT QR CODE ── */}
+            <div
+              style={{
+                background: 'rgba(9, 38, 28, 0.85)',
+                border: '1.5px solid rgba(74, 222, 128, 0.35)',
+                borderRadius: '20px',
+                padding: '24px',
+                marginBottom: '24px',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.4)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '14px',
+                      background: 'linear-gradient(135deg, #10b981, #047857)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
+                    }}
+                  >
+                    <QrCode size={24} color="#ffffff" />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900', color: '#effbe7' }}>
+                      {t('My UPI Payment QR')}
+                    </h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#9db5aa' }}>
+                      {t('Customers purchasing from your farm will scan this verified QR code at payment.')}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <span
+                    style={{
+                      background: isUpiConfigured ? 'rgba(52, 211, 153, 0.18)' : 'rgba(245, 158, 11, 0.18)',
+                      color: isUpiConfigured ? '#34d399' : '#fbbf24',
+                      border: `1px solid ${isUpiConfigured ? '#34d399' : '#fbbf24'}`,
+                      padding: '4px 14px',
+                      borderRadius: '16px',
+                      fontSize: '11.5px',
+                      fontWeight: '800',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    {isUpiConfigured ? `✓ ${t('QR Configured & Active')}` : `⚠️ ${t('Not Configured Yet')}`}
+                  </span>
+                </div>
+              </div>
+
+              {qrUploadError && (
+                <div
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ef4444',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    marginBottom: '16px',
+                    fontSize: '12.5px',
+                    color: '#fca5a5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <AlertCircle size={16} color="#ef4444" />
+                  <span>{qrUploadError}</span>
+                </div>
+              )}
+
+              {/* View Active QR */}
+              {isUpiConfigured && !isReplacingQr && !qrPreview ? (
+                <div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '20px',
+                      alignItems: 'center',
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '16px',
+                      padding: '18px',
+                      marginBottom: '18px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div
+                        style={{
+                          background: '#ffffff',
+                          padding: '10px',
+                          borderRadius: '14px',
+                          boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+                          display: 'inline-block'
+                        }}
+                      >
+                        <img
+                          src={upiQrCode}
+                          alt="Farmer UPI QR Code"
+                          style={{ width: '160px', height: '160px', objectFit: 'contain', display: 'block', borderRadius: '8px' }}
+                        />
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#a7f3d0', marginTop: '8px', fontWeight: '700' }}>
+                        {t('Active Payment QR on Customer Checkout')}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>
+                          {t('Configured UPI ID / VPA')}
+                        </span>
+                        <div style={{ fontSize: '14px', fontWeight: '800', color: '#effbe7', marginTop: '2px', fontFamily: 'monospace' }}>
+                          {upiId || t('Linked with uploaded QR code')}
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>
+                          {t('Payee / Account Name')}
+                        </span>
+                        <div style={{ fontSize: '14px', fontWeight: '800', color: '#effbe7', marginTop: '2px' }}>
+                          {upiPayeeName || user?.farmName || user?.name || 'Verified Farmer'}
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '12px', color: '#86efac', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <CheckCircle size={14} color="#10b981" />
+                        <span>{t('Stored securely. Applied to all your direct farm shipments.')}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsReplacingQr(true);
+                        setQrUploadError('');
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '10px 18px',
+                        borderRadius: '12px',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <RotateCw size={15} /> {t('Replace QR Code')}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={removingQr}
+                      onClick={handleRemoveUpiQr}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid #ef4444',
+                        color: '#fca5a5',
+                        padding: '10px 18px',
+                        borderRadius: '12px',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        cursor: removingQr ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Trash2 size={15} /> {removingQr ? t('Removing...') : t('Remove QR Code')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Upload / Replace Form */
+                <div>
+                  <input
+                    type="file"
+                    ref={qrFileInputRef}
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={handleQrFileSelect}
+                  />
+
+                  <div
+                    style={{
+                      border: '2px dashed rgba(74, 222, 128, 0.4)',
+                      borderRadius: '16px',
+                      padding: '24px',
+                      textAlign: 'center',
+                      background: 'rgba(0,0,0,0.2)',
+                      marginBottom: '18px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onClick={() => qrFileInputRef.current?.click()}
+                  >
+                    {qrPreview ? (
+                      <div>
+                        <div
+                          style={{
+                            background: '#ffffff',
+                            padding: '8px',
+                            borderRadius: '12px',
+                            display: 'inline-block',
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                            marginBottom: '10px'
+                          }}
+                        >
+                          <img
+                            src={qrPreview}
+                            alt="QR Code Preview"
+                            style={{ width: '150px', height: '150px', objectFit: 'contain', display: 'block', borderRadius: '6px' }}
+                          />
+                        </div>
+                        <div style={{ color: '#86efac', fontWeight: '800', fontSize: '13px', marginBottom: '4px' }}>
+                          ✓ {t('QR Image Selected for Preview')}
+                        </div>
+                        <div style={{ color: '#cbd5e1', fontSize: '11.5px' }}>
+                          {t('Click to select a different image (PNG, JPEG, WebP < 5MB)')}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div
+                          style={{
+                            width: '52px',
+                            height: '52px',
+                            borderRadius: '50%',
+                            background: 'rgba(74, 222, 128, 0.15)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 12px'
+                          }}
+                        >
+                          <UploadCloud size={28} color="#4ade80" />
+                        </div>
+                        <div style={{ color: '#effbe7', fontWeight: '800', fontSize: '14px', marginBottom: '4px' }}>
+                          {t('Click to upload your UPI QR Code image')}
+                        </div>
+                        <div style={{ color: '#9db5aa', fontSize: '12px' }}>
+                          {t('Accepts PNG, JPEG, or WebP (Max 5MB). Screenshot from GPay, PhonePe, Paytm, BHIM.')}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '18px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>
+                        {t('UPI ID / VPA (Optional)')}
+                      </label>
+                      <input
+                        type="text"
+                        value={upiId}
+                        onChange={e => setUpiId(e.target.value)}
+                        placeholder="e.g. mobile@upi or farmer@oksbi"
+                        className="input-field"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#9db5aa', display: 'block', marginBottom: '6px', fontWeight: '700' }}>
+                        {t('Payee / Account Name (Optional)')}
+                      </label>
+                      <input
+                        type="text"
+                        value={upiPayeeName}
+                        onChange={e => setUpiPayeeName(e.target.value)}
+                        placeholder={user?.farmName || user?.name || 'Verified Farmer'}
+                        className="input-field"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      disabled={savingQr || (!qrPreview && !upiQrCode)}
+                      onClick={handleSaveUpiQr}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '11px 22px',
+                        borderRadius: '12px',
+                        fontSize: '13.5px',
+                        fontWeight: '800',
+                        cursor: (savingQr || (!qrPreview && !upiQrCode)) ? 'not-allowed' : 'pointer',
+                        opacity: (!qrPreview && !upiQrCode) ? 0.6 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                      }}
+                    >
+                      <CheckCircle2 size={16} />
+                      <span>{savingQr ? t('Verifying & Saving...') : t('Save UPI Payment QR')}</span>
+                    </button>
+
+                    {isReplacingQr && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsReplacingQr(false);
+                          setQrPreview(null);
+                          setQrFile(null);
+                          setQrUploadError('');
+                        }}
+                        style={{
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          color: '#cbd5e1',
+                          padding: '11px 18px',
+                          borderRadius: '12px',
+                          fontSize: '13px',
+                          fontWeight: '700',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {t('Cancel')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -14,6 +14,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { aiAPI } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const DEFAULT_SUGGESTIONS = [
   'What should I grow this season?',
@@ -23,11 +24,12 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 export default function AskAgriLinkAi({ farmerLocation, showToast }) {
+  const { t, language } = useLanguage();
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
       sender: 'ai',
-      text: "Namaste! I am AgriLink's Agricultural AI Assistant. I can help you with crop selection, soil management, drip irrigation, weather adaptation, pest diagnosis, and harvest practices. What is on your mind today?",
+      text: t("Namaste! I am AgriLink's Agricultural AI Assistant. I can help you with crop selection, soil management, drip irrigation, weather adaptation, pest diagnosis, and harvest practices. What is on your mind today?") || "Namaste! I am AgriLink's Agricultural AI Assistant. I can help you with crop selection, soil management, drip irrigation, weather adaptation, pest diagnosis, and harvest practices. What is on your mind today?",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -48,7 +50,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = false;
-      recognition.lang = 'en-IN';
+      recognition.lang = language === 'ta' ? 'ta-IN' : 'en-IN';
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
@@ -117,7 +119,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
     window.speechSynthesis.cancel();
     const cleanText = text.replace(/[*_#•]/g, ' ');
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'en-IN';
+    utterance.lang = language === 'ta' ? 'ta-IN' : 'en-IN';
     utterance.rate = 0.95;
 
     utterance.onend = () => setSpeakingMsgId(null);
@@ -151,7 +153,8 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
       const res = await aiAPI.askAgriLinkAi({
         query: text,
         conversationHistory: historyContext,
-        location: farmerLocation
+        location: farmerLocation,
+        language
       });
 
       if (res.data?.success) {
@@ -238,7 +241,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
               </span>
             </div>
             <p style={{ margin: 0, fontSize: '11.5px', color: '#a3c2b0' }}>
-              Agricultural Agronomy Advisory, Soils, Weather & Crop Guidance
+              {t('Agricultural Agronomy Advisory, Soils, Weather & Crop Guidance') || 'Agricultural Agronomy Advisory, Soils, Weather & Crop Guidance'}
             </p>
           </div>
         </div>
@@ -258,10 +261,10 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
             alignItems: 'center',
             gap: '6px'
           }}
-          title="Reset Conversation"
+          title={t('Reset Conversation') || 'Reset Conversation'}
         >
           <RefreshCw size={12} />
-          <span>Clear Chat</span>
+          <span>{t('Clear Chat') || 'Clear Chat'}</span>
         </button>
       </div>
 
@@ -347,7 +350,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
                       title="Read aloud"
                     >
                       {speakingMsgId === m.id ? <VolumeX size={13} /> : <Volume2 size={13} />}
-                      <span>{speakingMsgId === m.id ? 'Stop' : 'Listen'}</span>
+                      <span>{speakingMsgId === m.id ? t('Stop') : t('Listen')}</span>
                     </button>
                   )}
                 </div>
@@ -378,7 +381,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
               color: '#9db5aa',
               fontSize: '12.5px'
             }}>
-              Analyzing agricultural parameters...
+              {t('Analyzing agricultural parameters...') || 'Analyzing agricultural parameters...'}
             </div>
           </div>
         )}
@@ -397,7 +400,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
         whiteSpace: 'nowrap'
       }}>
         <span style={{ fontSize: '11px', color: '#6ee7b7', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-          <Sparkles size={12} /> Suggested:
+          <Sparkles size={12} /> {t('Suggested:') || 'Suggested:'}
         </span>
         {DEFAULT_SUGGESTIONS.map((q, idx) => (
           <button
@@ -416,7 +419,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
               transition: 'background 0.2s ease'
             }}
           >
-            {q}
+            {t(q) || q}
           </button>
         ))}
       </div>
@@ -449,7 +452,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
             boxShadow: isListening ? '0 0 16px #ef4444' : 'none',
             transition: 'all 0.2s ease'
           }}
-          title={isListening ? 'Stop listening' : 'Speak into microphone'}
+          title={isListening ? (t('Stop listening') || 'Stop listening') : (t('Speak into microphone') || 'Speak into microphone')}
         >
           {isListening ? <MicOff size={20} /> : <Mic size={20} />}
         </button>
@@ -457,7 +460,7 @@ export default function AskAgriLinkAi({ farmerLocation, showToast }) {
         {/* Text Input */}
         <input
           type="text"
-          placeholder={isListening ? 'Listening to voice...' : 'Ask about crops, soil, irrigation, weather, diseases...'}
+          placeholder={isListening ? (t('Listening to voice...') || 'Listening to voice...') : (t('Ask about crops, soil, irrigation, weather, diseases...') || 'Ask about crops, soil, irrigation, weather, diseases...')}
           value={inputText}
           onChange={e => setInputText(e.target.value)}
           onKeyDown={e => {

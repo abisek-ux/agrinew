@@ -301,6 +301,29 @@ async function runTests() {
 
   check(missingProdOrder.status === 404, 'Order with non-existent product returns clean HTTP 404 (NOT 500)');
   check(!/CastError/i.test(JSON.stringify(missingProdOrder.data)), 'Response contains clean user message without internal CastError leak');
+
+  // Cleanup test records created in this test run to preserve clean 5-farmer DB
+  try {
+    const User = require('./models/User');
+    const Product = require('./models/Product');
+    const Bargain = require('./models/Bargain');
+    const Order = require('./models/Order');
+    const fId = farmerAcc?.user?._id || farmerAcc?.user?.id;
+    if (fId) {
+      await User.deleteOne({ _id: fId });
+      await Product.deleteMany({ farmerId: fId });
+      await Bargain.deleteMany({ farmerId: fId });
+      await Order.deleteMany({ farmerId: fId });
+    }
+    const cId = customerAcc?.user?._id || customerAcc?.user?.id;
+    if (cId) {
+      await User.deleteOne({ _id: cId });
+    }
+    const dId = deliveryAcc?.user?._id || deliveryAcc?.user?.id;
+    if (dId) {
+      await User.deleteOne({ _id: dId });
+    }
+  } catch (e) {}
 }
 
 async function start() {

@@ -63,7 +63,11 @@ const orderSchema = new mongoose.Schema(
     paidAt: { type: Date, default: null },
     paymentCollectedAt: { type: Date, default: null },
     paymentCollectedBy: { type: String, default: null },
-    paymentCollectionMethod: { type: String, default: null }
+    paymentCollectionMethod: { type: String, default: null },
+    // Farmer-Specific UPI Payment Snapshot (Preserves historical payment destination)
+    farmerUpiQrCode: { type: String, default: '' },
+    farmerUpiId: { type: String, default: '' },
+    farmerUpiPayeeName: { type: String, default: '' }
   },
   { timestamps: true }
 );

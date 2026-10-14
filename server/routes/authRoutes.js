@@ -16,7 +16,10 @@ const {
     updateProfile,
     requestProfileEmailOtp,
     verifyProfileEmailOtp,
-    getFarmers
+    getFarmers,
+    uploadFarmerUpiQr,
+    removeFarmerUpiQr,
+    getFarmerUpiDetails
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const { getDBStatus } = require('../config/db');
@@ -35,8 +38,11 @@ router.post('/phone-otp/verify', verifyPhoneOtpHandler);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 
-// Farmers Directory Endpoint
+// Farmers Directory & Farmer UPI Endpoints
 router.get('/farmers', getFarmers);
+router.get('/farmer/:id/upi', getFarmerUpiDetails);
+router.post('/farmer/upi-qr', protect, uploadFarmerUpiQr);
+router.delete('/farmer/upi-qr', protect, removeFarmerUpiQr);
 
 // Authenticated User Profile Endpoints
 router.get('/profile', protect, getProfile);

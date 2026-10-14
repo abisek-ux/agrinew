@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const { getMemoryProducts } = require('./productController');
@@ -73,6 +74,11 @@ const formatUserResponse = (user, token) => {
     isVerified: Boolean(user.isVerified),
     location: user.location,
     wishlist: user.wishlist || [],
+    upiQrCode: user.upiQrCode || '',
+    upiId: user.upiId || '',
+    upiPayeeName: user.upiPayeeName || '',
+    isUpiConfigured: Boolean(user.isUpiConfigured && user.upiQrCode),
+    upiUpdatedAt: user.upiUpdatedAt || null,
     lastProfileModifiedAt: user.lastProfileModifiedAt || null,
     profileModificationLockedUntil: null,
     isProfileLocked: false,
@@ -115,6 +121,11 @@ const persistUser = async (user) => {
         serviceArea: user.serviceArea,
         location: user.location,
         wishlist: user.wishlist,
+        upiQrCode: user.upiQrCode,
+        upiId: user.upiId,
+        upiPayeeName: user.upiPayeeName,
+        isUpiConfigured: user.isUpiConfigured,
+        upiUpdatedAt: user.upiUpdatedAt,
         lastProfileModifiedAt: user.lastProfileModifiedAt,
         profileModificationLockedUntil: user.profileModificationLockedUntil,
         pendingEmailChange: user.pendingEmailChange,
@@ -1140,6 +1151,225 @@ const seedMemoryUser = (userObj) => {
   }
 };
 
+const qrUploadsDir = path.join(__dirname, '../uploads/qrcodes');
+
+/**
+ * Validates binary image buffer for QR code:
+ * - Checks magic numbers (JPEG, PNG, WebP)
+ * - Enforces max 5MB limit
+ * - Rejects executable and script payloads
+ * - Writes to persistent server/uploads/qrcodes/
+ */
+const validateAndSaveQrImage = async (rawImage, fileName = '', mimeType = 'image/png', farmerId = 'farmer') => {
+  if (!rawImage || typeof rawImage !== 'string') {
+    throw new Error('No QR image data provided. Please select a valid UPI QR code image.');
+  }
+
+  let detectedMime = (mimeType || 'image/png').toLowerCase();
+  let base64Data = rawImage;
+  if (rawImage.startsWith('data:')) {
+    const match = rawImage.match(/^data:([^;]+);base64,(.+)$/);
+    if (match && match[1]) {
+      detectedMime = match[1].toLowerCase();
+      base64Data = match[2];
+    } else {
+      base64Data = rawImage.replace(/^data:image\/[a-z0-9.+]+;base64,/i, '');
+    }
+  }
+
+  const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  if (!allowedMimes.includes(detectedMime)) {
+    throw new Error('Unsupported image format. Allowed formats are PNG, JPEG, and WebP.');
+  }
+
+  const buffer = Buffer.from(base64Data, 'base64');
+  if (buffer.length === 0) {
+    throw new Error('QR image buffer is empty or corrupted.');
+  }
+
+  const sizeInMb = buffer.length / (1024 * 1024);
+  if (sizeInMb > 5) {
+    throw new Error('QR image file exceeds the 5MB size limit. Please upload an image smaller than 5MB.');
+  }
+
+  // Security Check: Block executables and scripts (MZ, ELF, shell scripts, php, html)
+  const headerPrefix = buffer.slice(0, 32).toString('utf8');
+  const isExecutableOrScript =
+    (buffer[0] === 0x4D && buffer[1] === 0x5A) || // DOS / Windows PE 'MZ'
+    (buffer[0] === 0x7F && buffer[1] === 0x45 && buffer[2] === 0x4C && buffer[3] === 0x46) || // Linux ELF
+    headerPrefix.startsWith('#!') || // Shell script
+    headerPrefix.toLowerCase().includes('<script') || // HTML / script payload
+    headerPrefix.toLowerCase().includes('<?php') || // PHP script
+    headerPrefix.toLowerCase().includes('<!doctype'); // HTML payload
+
+  if (isExecutableOrScript) {
+    throw new Error('Security violation: Uploaded file contains an executable or script payload. Only genuine QR image photos are permitted.');
+  }
+
+  // Verify legitimate image magic bytes
+  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+  const isWebp = buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
+
+  if (!isJpeg && !isPng && !isWebp) {
+    throw new Error('Invalid image file: File content does not match supported image formats (PNG, JPEG, WebP).');
+  }
+
+  let ext = 'png';
+  if (isPng || detectedMime.includes('png')) ext = 'png';
+  else if (isWebp || detectedMime.includes('webp')) ext = 'webp';
+  else if (isJpeg || detectedMime.includes('jpeg') || detectedMime.includes('jpg')) ext = 'jpg';
+
+  if (!fs.existsSync(qrUploadsDir)) {
+    fs.mkdirSync(qrUploadsDir, { recursive: true });
+  }
+
+  const safeFarmerId = String(farmerId).replace(/[^a-zA-Z0-9_-]/g, '');
+  const safeUniqueName = `qr_${safeFarmerId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+  const filePath = path.join(qrUploadsDir, safeUniqueName);
+  await fs.promises.writeFile(filePath, buffer);
+
+  return `/api/uploads/qrcodes/${safeUniqueName}`;
+};
+
+/**
+ * POST /api/auth/farmer/upi-qr
+ * Authenticated farmer uploads/replaces their own UPI Payment QR code image & UPI ID
+ */
+const uploadFarmerUpiQr = async (req, res) => {
+  try {
+    if (!req.user || (req.user.role !== 'farmer' && req.user.role !== 'admin')) {
+      return res.status(403).json({ success: false, message: 'Access denied: Only authenticated farmers can manage payment QR codes' });
+    }
+
+    const userId = req.user.id || req.user._id;
+    const user = isConnected()
+      ? await User.findById(userId)
+      : findMemoryUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Farmer account record not found' });
+    }
+
+    const { qrImage, qrImageBase64, image, imageBase64, imageData, upiId, upiPayeeName, fileName, mimeType } = req.body || {};
+    const rawImage = qrImage || qrImageBase64 || image || imageBase64 || imageData;
+
+    if (!rawImage) {
+      return res.status(400).json({ success: false, message: 'No QR code image provided. Please select a valid QR image.' });
+    }
+
+    // Save and validate QR image safely
+    const qrUrl = await validateAndSaveQrImage(rawImage, fileName, mimeType, userId);
+
+    user.upiQrCode = qrUrl;
+    if (upiId !== undefined) {
+      user.upiId = String(upiId).trim();
+    }
+    if (upiPayeeName !== undefined) {
+      user.upiPayeeName = String(upiPayeeName).trim();
+    } else if (!user.upiPayeeName) {
+      user.upiPayeeName = user.farmName || user.name || 'Verified Farmer';
+    }
+    user.isUpiConfigured = true;
+    user.upiUpdatedAt = new Date();
+
+    await persistUser(user);
+
+    return res.json({
+      success: true,
+      message: 'UPI Payment QR Code successfully saved and verified.',
+      upiQrCode: user.upiQrCode,
+      upiId: user.upiId,
+      upiPayeeName: user.upiPayeeName,
+      isUpiConfigured: true,
+      user: formatUserResponse(user)
+    });
+  } catch (error) {
+    console.error('uploadFarmerUpiQr error:', error.message);
+    return res.status(400).json({ success: false, message: error.message || 'Failed to save UPI QR code' });
+  }
+};
+
+/**
+ * DELETE /api/auth/farmer/upi-qr
+ * Authenticated farmer removes their active UPI QR code.
+ * Safe replacement policy: Old image files on disk are preserved so historical order snapshots are never broken.
+ */
+const removeFarmerUpiQr = async (req, res) => {
+  try {
+    if (!req.user || (req.user.role !== 'farmer' && req.user.role !== 'admin')) {
+      return res.status(403).json({ success: false, message: 'Access denied: Only authenticated farmers can manage payment QR codes' });
+    }
+
+    const userId = req.user.id || req.user._id;
+    const user = isConnected()
+      ? await User.findById(userId)
+      : findMemoryUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Farmer account record not found' });
+    }
+
+    user.upiQrCode = '';
+    user.isUpiConfigured = false;
+    user.upiUpdatedAt = new Date();
+
+    await persistUser(user);
+
+    return res.json({
+      success: true,
+      message: 'UPI Payment QR Code removed successfully.',
+      isUpiConfigured: false,
+      user: formatUserResponse(user)
+    });
+  } catch (error) {
+    console.error('removeFarmerUpiQr error:', error.message);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to remove UPI QR code' });
+  }
+};
+
+/**
+ * GET /api/auth/farmer/:id/upi
+ * Public / customer checkout endpoint to retrieve specific farmer's payment QR details
+ */
+const getFarmerUpiDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Farmer ID is required' });
+    }
+
+    let farmer = null;
+    if (isConnected()) {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        farmer = await User.findById(id).select('name firstName lastName farmName upiQrCode upiId upiPayeeName isUpiConfigured role').lean();
+      } else {
+        farmer = await User.findOne({ $or: [{ id: String(id) }, { _id: String(id) }] }).select('name firstName lastName farmName upiQrCode upiId upiPayeeName isUpiConfigured role').lean();
+      }
+    } else {
+      farmer = memoryUsers.find(u => String(u.id || u._id) === String(id));
+    }
+
+    if (!farmer || (farmer.role && farmer.role.toLowerCase() !== 'farmer')) {
+      return res.status(404).json({ success: false, message: 'Farmer record not found' });
+    }
+
+    const isConfigured = Boolean(farmer.isUpiConfigured && farmer.upiQrCode);
+    return res.json({
+      success: true,
+      farmerId: String(farmer._id || farmer.id),
+      farmerName: farmer.farmName || farmer.name || `${farmer.firstName || ''} ${farmer.lastName || ''}`.trim() || 'Verified Farmer',
+      isUpiConfigured: isConfigured,
+      upiQrCode: isConfigured ? farmer.upiQrCode : null,
+      upiId: isConfigured ? (farmer.upiId || null) : null,
+      upiPayeeName: isConfigured ? (farmer.upiPayeeName || farmer.farmName || farmer.name) : null
+    });
+  } catch (error) {
+    console.error('getFarmerUpiDetails error:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to retrieve farmer UPI details' });
+  }
+};
+
 module.exports = {
   registerUser,
   sendRegisterOtp,
@@ -1157,6 +1387,9 @@ module.exports = {
   requestProfileEmailOtp,
   verifyProfileEmailOtp,
   getFarmers,
+  uploadFarmerUpiQr,
+  removeFarmerUpiQr,
+  getFarmerUpiDetails,
   seedMemoryUser,
   migrateMemoryPasswords,
   findMemoryUserById,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, KeyRound, Check, AlertCircle, RefreshCw, X, ShieldCheck, Lock } from 'lucide-react';
 import { authAPI } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 /**
  * ProfileEmailOtpModal
@@ -13,6 +14,7 @@ import { authAPI } from '../services/api';
  * - 7-day profile modification lock feedback
  */
 export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, onEmailUpdated, showToast }) {
+  const { t } = useLanguage();
   const [step, setStep] = useState('request'); // 'request' | 'verify'
   const [newEmail, setNewEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -162,10 +164,10 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#effbe7' }}>
-              {step === 'request' ? 'Change Email Address' : 'Verify Email OTP'}
+              {step === 'request' ? (t('Change Email Address') || 'Change Email Address') : (t('Verify Email OTP') || 'Verify Email OTP')}
             </h3>
             <span style={{ fontSize: '11.5px', color: '#9db5aa' }}>
-              {step === 'request' ? 'Requires 2-step verification code' : `Dispatched to ${maskedEmail}`}
+              {step === 'request' ? (t('Requires 2-step verification code') || 'Requires 2-step verification code') : `${t('Dispatched to') || 'Dispatched to'} ${maskedEmail}`}
             </span>
           </div>
         </div>
@@ -192,7 +194,7 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
           <form onSubmit={handleRequestOtp}>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '12px', color: '#a3c2b0', display: 'block', marginBottom: '6px', fontWeight: '700' }}>
-                Current Email Address
+                {t('Current Email Address') || 'Current Email Address'}
               </label>
               <input
                 type="email"
@@ -214,11 +216,11 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
 
             <div style={{ marginBottom: '18px' }}>
               <label style={{ fontSize: '12px', color: '#a3c2b0', display: 'block', marginBottom: '6px', fontWeight: '700' }}>
-                New Email Address
+                {t('New Email Address') || 'New Email Address'}
               </label>
               <input
                 type="email"
-                placeholder="Enter new email address"
+                placeholder={t('Enter new email address') || 'Enter new email address'}
                 value={newEmail}
                 onChange={e => setNewEmail(e.target.value)}
                 required
@@ -249,7 +251,7 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
             }}>
               <Lock size={15} color="#fbbf24" style={{ flexShrink: 0, marginTop: '1px' }} />
               <span>
-                <strong>7-Day Lock Notice:</strong> After updating your email, profile modifications will be locked for 7 days as an account security safeguard.
+                <strong>{t('7-Day Lock Notice:') || '7-Day Lock Notice:'}</strong> {t('After updating your email, profile modifications will be locked for 7 days as an account security safeguard.') || 'After updating your email, profile modifications will be locked for 7 days as an account security safeguard.'}
               </span>
             </div>
 
@@ -275,12 +277,12 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
               {loading ? (
                 <>
                   <RefreshCw size={16} className="animate-spin" />
-                  <span>Sending Verification Code...</span>
+                  <span>{t('Sending Verification Code...') || 'Sending Verification Code...'}</span>
                 </>
               ) : cooldown > 0 ? (
                 <span>Wait {cooldown}s before resend</span>
               ) : (
-                <span>Send 6-Digit OTP</span>
+                <span>{t('Send 6-Digit OTP') || 'Send 6-Digit OTP'}</span>
               )}
             </button>
           </form>
@@ -288,7 +290,7 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
           <form onSubmit={handleVerifyOtp}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ fontSize: '12px', color: '#a3c2b0', display: 'block', marginBottom: '6px', fontWeight: '700' }}>
-                Enter 6-Digit Code
+                {t('Enter 6-Digit Code') || 'Enter 6-Digit Code'}
               </label>
               <input
                 type="text"
@@ -316,7 +318,7 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', fontSize: '12px' }}>
-              <span style={{ color: '#9db5aa' }}>Didn't receive code?</span>
+              <span style={{ color: '#9db5aa' }}>{t("Didn't receive code?") || "Didn't receive code?"}</span>
               <button
                 type="button"
                 onClick={handleRequestOtp}
@@ -330,7 +332,7 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
                   textDecoration: 'underline'
                 }}
               >
-                {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
+                {cooldown > 0 ? `Resend in ${cooldown}s` : (t('Resend Code') || 'Resend Code')}
               </button>
             </div>
 
@@ -350,7 +352,7 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
                   cursor: 'pointer'
                 }}
               >
-                Back
+                {t('Back') || 'Back'}
               </button>
 
               <button
@@ -375,12 +377,12 @@ export default function ProfileEmailOtpModal({ isOpen, onClose, currentEmail, on
                 {loading ? (
                   <>
                     <RefreshCw size={16} className="animate-spin" />
-                    <span>Verifying...</span>
+                    <span>{t('Verifying...') || 'Verifying...'}</span>
                   </>
                 ) : (
                   <>
                     <Check size={16} />
-                    <span>Verify & Save</span>
+                    <span>{t('Verify & Save') || 'Verify & Save'}</span>
                   </>
                 )}
               </button>

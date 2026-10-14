@@ -6,7 +6,8 @@ import {
   Lock, RefreshCw, X, ChevronRight, Download, Printer, Smartphone,
   CheckCircle, Delete, KeyRound, ExternalLink
 } from 'lucide-react';
-import { orderAPI } from '../services/api';
+import { orderAPI, authAPI } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function PaymentPortalModal({
   isOpen,
@@ -15,6 +16,7 @@ export default function PaymentPortalModal({
   onPaymentSuccess,
   onViewOrders
 }) {
+  const { t } = useLanguage();
   if (!isOpen || !orderData) return null;
 
   const orders = Array.isArray(orderData.orders)
@@ -24,6 +26,11 @@ export default function PaymentPortalModal({
   const totalAmount = Number(orderData.totalAmount || orders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0) || 0);
   const primaryOrderId = orders[0]?.orderId || orders[0]?._id || orders[0]?.id || `ORD-${Date.now().toString().slice(-6)}`;
   const orderIds = orders.map(o => o._id || o.id || o.orderId).filter(Boolean);
+
+  // Multi-Farmer Shipment Tab State
+  const [activeShipmentIndex, setActiveShipmentIndex] = useState(0);
+  const [farmerUpiDetailsMap, setFarmerUpiDetailsMap] = useState({});
+  const [loadingFarmerUpi, setLoadingFarmerUpi] = useState(false);
 
   // Payment method tab state
   const [selectedMethod, setSelectedMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking' | 'wallet' | 'cod'
@@ -58,37 +65,54 @@ export default function PaymentPortalModal({
 
   const finalPayable = useCoins ? Math.max(1, totalAmount - 50) : totalAmount;
 
-  // Real UPI deep link URL for India UPI standard
-  const upiDeepLink = `upi://pay?pa=agrilink@oksbi&pn=AgriLink%20Farm%20Direct&am=${finalPayable}&cu=INR&tn=AgriLink_Order_${String(primaryOrderId).slice(-8)}`;
-
-  // Generate authentic scannable QR Code using QRCode library
+  // Fetch specific farmer UPI configurations for orders
   useEffect(() => {
     let isMounted = true;
-    setGeneratingQr(true);
-    QRCode.toDataURL(upiDeepLink, {
-      width: 280,
-      margin: 2,
-      color: {
-        dark: '#064e3b',
-        light: '#ffffff'
-      },
-      errorCorrectionLevel: 'H'
-    })
-      .then(url => {
-        if (isMounted) {
-          setQrDataUrl(url);
-          setGeneratingQr(false);
+    const fetchFarmerUpis = async () => {
+      setLoadingFarmerUpi(true);
+      const map = {};
+      for (const ord of orders) {
+        const fId = ord.farmerId;
+        if (fId && !map[fId]) {
+          if (ord.farmerUpiQrCode) {
+            map[fId] = {
+              isUpiConfigured: true,
+              upiQrCode: ord.farmerUpiQrCode,
+              upiId: ord.farmerUpiId || '',
+              upiPayeeName: ord.farmerUpiPayeeName || ord.farmerName || 'Verified Farm Producer'
+            };
+          } else {
+            try {
+              const res = await authAPI.getFarmerUpiDetails(fId);
+              if (res.data?.success) {
+                map[fId] = res.data;
+              }
+            } catch (err) {
+              map[fId] = { isUpiConfigured: false, upiQrCode: null };
+            }
+          }
         }
-      })
-      .catch(err => {
-        console.error('QR code generation error:', err);
-        if (isMounted) setGeneratingQr(false);
-      });
-
+      }
+      if (isMounted) {
+        setFarmerUpiDetailsMap(map);
+        setLoadingFarmerUpi(false);
+      }
+    };
+    fetchFarmerUpis();
     return () => {
       isMounted = false;
     };
-  }, [upiDeepLink]);
+  }, [orderData]);
+
+  const currentOrder = orders[activeShipmentIndex] || orders[0] || {};
+  const currentFarmerId = currentOrder.farmerId;
+  const currentFarmerInfo = farmerUpiDetailsMap[currentFarmerId] || {};
+  const currentFarmerQr = currentOrder.farmerUpiQrCode || currentFarmerInfo.upiQrCode || null;
+  const isCurrentFarmerQrConfigured = Boolean(currentFarmerQr);
+  const currentFarmerName = currentOrder.farmerName || currentFarmerInfo.farmerName || 'Verified Farm Producer';
+  const currentFarmerUpiId = currentOrder.farmerUpiId || currentFarmerInfo.upiId || '';
+  const currentFarmerPayeeName = currentOrder.farmerUpiPayeeName || currentFarmerInfo.upiPayeeName || currentFarmerName;
+  const currentShipmentAmount = Number(currentOrder.totalAmount || (orders.length === 1 ? finalPayable : totalAmount));
 
   // QR Timer Countdown
   useEffect(() => {
@@ -611,9 +635,9 @@ Zero Brokerage • 100% Direct to Producer
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: '#9db5aa' }}>Payee UPI VPA:</div>
+                  <div style={{ color: '#9db5aa' }}>{t('Payee UPI Destination')}:</div>
                   <div style={{ fontWeight: '700', color: '#effbe7', fontFamily: 'monospace' }}>
-                    agrilink@oksbi
+                    {currentFarmerUpiId || currentFarmerPayeeName || t('Direct Farmer QR')}
                   </div>
                 </div>
                 <div>
@@ -768,6 +792,55 @@ Zero Brokerage • 100% Direct to Producer
                 </div>
               </div>
             </div>
+
+            {/* Multi-Farmer Shipment Navigator */}
+            {orders.length > 1 && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 24px',
+                  background: 'rgba(0,0,0,0.45)',
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                  overflowX: 'auto'
+                }}
+              >
+                <span style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '800', whiteSpace: 'nowrap' }}>
+                  {t('Farm Shipments')}:
+                </span>
+                {orders.map((ord, idx) => {
+                  const fName = ord.farmerName || `Farmer ${idx + 1}`;
+                  const isSel = idx === activeShipmentIndex;
+                  return (
+                    <button
+                      key={ord._id || ord.orderId || idx}
+                      type="button"
+                      onClick={() => setActiveShipmentIndex(idx)}
+                      style={{
+                        background: isSel ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.06)',
+                        border: `1px solid ${isSel ? '#10b981' : 'rgba(255,255,255,0.15)'}`,
+                        color: isSel ? '#ffffff' : '#cbd5e1',
+                        borderRadius: '10px',
+                        padding: '6px 14px',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <span>📦 {t('Shipment')} {idx + 1}: {fName}</span>
+                      <span style={{ background: isSel ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '6px', fontSize: '11px' }}>
+                        ₹{ord.totalAmount}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Layout: Left Sidebar tabs + Right Content */}
             <div
@@ -949,16 +1022,16 @@ Zero Brokerage • 100% Direct to Producer
                       </button>
                     </div>
 
-                    {/* SUB-MODE A: REAL SCANNABLE QR CODE */}
+                    {/* SUB-MODE A: FARMER-SPECIFIC UPI QR CODE */}
                     {upiSubMode === 'qr' && (
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                           <div>
                             <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: '#effbe7' }}>
-                              Scan Real UPI QR Code
+                              {t('Farmer UPI QR Code')}
                             </h4>
                             <p style={{ margin: '2px 0 0', fontSize: '11.5px', color: '#9db5aa' }}>
-                              Point any camera or UPI app (PhonePe, GPay, Paytm)
+                              {t('Pay directly to verified producer')} ({currentFarmerName})
                             </p>
                           </div>
                           <span style={{ fontSize: '12px', color: '#fbbf24', fontWeight: '800', background: 'rgba(251, 191, 36, 0.1)', padding: '4px 10px', borderRadius: '12px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
@@ -966,175 +1039,201 @@ Zero Brokerage • 100% Direct to Producer
                           </span>
                         </div>
 
-                        <div
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: '170px 1fr',
-                            gap: '18px',
-                            alignItems: 'center',
-                            background: 'rgba(0,0,0,0.3)',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            borderRadius: '16px',
-                            padding: '16px',
-                            marginBottom: '16px'
-                          }}
-                        >
-                          {/* Authentic Generated QR Code with Scan Laser */}
-                          <div
-                            style={{
-                              background: '#ffffff',
-                              padding: '10px',
-                              borderRadius: '16px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                              position: 'relative',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            {generatingQr ? (
-                              <div style={{ width: '150px', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Loader2 size={32} className="spin" color="#10b981" />
-                              </div>
-                            ) : (
-                              <div style={{ position: 'relative' }}>
-                                <img
-                                  src={qrDataUrl}
-                                  alt="UPI Scan & Pay QR Code"
-                                  style={{ width: '150px', height: '150px', display: 'block', borderRadius: '8px' }}
-                                />
-                                {/* Laser line animation */}
-                                <div
-                                  style={{
-                                    position: 'absolute',
-                                    left: 0,
-                                    right: 0,
-                                    height: '2px',
-                                    background: 'linear-gradient(90deg, transparent, #10b981, transparent)',
-                                    boxShadow: '0 0 8px #10b981',
-                                    top: '40%',
-                                    animation: 'bounce 2s infinite'
-                                  }}
-                                />
-                              </div>
-                            )}
-
-                            <div style={{ fontSize: '11px', color: '#064e3b', fontWeight: '900', marginTop: '6px', textAlign: 'center' }}>
-                              UPI Scan & Pay ₹{finalPayable}
-                            </div>
-                            <div style={{ fontSize: '9px', color: '#047857', fontWeight: '700' }}>
-                              agrilink@oksbi
-                            </div>
+                        {loadingFarmerUpi ? (
+                          <div style={{ textAlign: 'center', padding: '40px 16px' }}>
+                            <Loader2 size={32} className="spin" color="#10b981" style={{ margin: '0 auto 12px' }} />
+                            <p style={{ color: '#9db5aa', fontSize: '13px' }}>{t('Resolving farmer payment details...')}</p>
                           </div>
-
-                          {/* Instructions & 1-Click Launch on Mobile */}
+                        ) : isCurrentFarmerQrConfigured ? (
                           <div>
-                            <div style={{ fontSize: '12px', color: '#9db5aa', marginBottom: '8px' }}>
-                              Supported UPI Apps:
-                            </div>
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                              {['Google Pay', 'PhonePe', 'Paytm', 'BHIM', 'CRED'].map(app => (
-                                <span
-                                  key={app}
-                                  style={{
-                                    background: 'rgba(255,255,255,0.06)',
-                                    border: '1px solid rgba(255,255,255,0.12)',
-                                    borderRadius: '8px',
-                                    padding: '3px 8px',
-                                    fontSize: '11px',
-                                    color: '#e2e8f0',
-                                    fontWeight: '600'
-                                  }}
-                                >
-                                  {app}
-                                </span>
-                              ))}
-                            </div>
-
-                            {/* Direct Mobile Launch Link */}
-                            <a
-                              href={upiDeepLink}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
-                                color: '#ffffff',
-                                padding: '8px 14px',
-                                borderRadius: '10px',
-                                fontSize: '12px',
-                                fontWeight: '800',
-                                textDecoration: 'none',
-                                marginBottom: '10px',
-                                boxShadow: '0 4px 12px rgba(2, 132, 199, 0.35)'
-                              }}
-                            >
-                              <ExternalLink size={14} /> Open Directly in Your Phone UPI App
-                            </a>
-
-                            {/* Copy UPI ID */}
                             <div
                               style={{
-                                display: 'flex',
+                                display: 'grid',
+                                gridTemplateColumns: '170px 1fr',
+                                gap: '18px',
                                 alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: 'rgba(0,0,0,0.4)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                borderRadius: '10px',
-                                padding: '6px 10px'
+                                background: 'rgba(0,0,0,0.3)',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                borderRadius: '16px',
+                                padding: '16px',
+                                marginBottom: '16px'
                               }}
                             >
-                              <div style={{ fontSize: '11.5px', color: '#cbd5e1', fontFamily: 'monospace' }}>
-                                agrilink@oksbi
-                              </div>
-                              <button
-                                type="button"
-                                onClick={handleCopyUpi}
+                              {/* Authentic Farmer Uploaded QR Code */}
+                              <div
                                 style={{
-                                  background: copiedUpi ? '#10b981' : 'rgba(255,255,255,0.1)',
-                                  border: 'none',
-                                  color: '#fff',
-                                  borderRadius: '6px',
-                                  padding: '3px 8px',
-                                  fontSize: '10.5px',
-                                  fontWeight: '700',
-                                  cursor: 'pointer',
+                                  background: '#ffffff',
+                                  padding: '10px',
+                                  borderRadius: '16px',
                                   display: 'flex',
+                                  flexDirection: 'column',
                                   alignItems: 'center',
-                                  gap: '4px'
+                                  boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                                  position: 'relative'
                                 }}
                               >
-                                {copiedUpi ? <Check size={11} /> : <Copy size={11} />}
-                                {copiedUpi ? 'Copied' : 'Copy'}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
+                                <img
+                                  src={currentFarmerQr}
+                                  alt={`${currentFarmerName} UPI QR Code`}
+                                  style={{ width: '150px', height: '150px', objectFit: 'contain', display: 'block', borderRadius: '8px' }}
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
+                                <div style={{ fontSize: '11px', color: '#064e3b', fontWeight: '900', marginTop: '6px', textAlign: 'center' }}>
+                                  ₹{currentShipmentAmount} {t('Due to')} {currentFarmerName}
+                                </div>
+                                {currentFarmerUpiId && (
+                                  <div style={{ fontSize: '9.5px', color: '#047857', fontWeight: '700', wordBreak: 'break-all' }}>
+                                    {currentFarmerUpiId}
+                                  </div>
+                                )}
+                              </div>
 
-                        {/* Button: Report paid via QR */}
-                        <button
-                          type="button"
-                          onClick={() => handleReportUpiPayment('UPI_QR_SCAN')}
-                          style={{
-                            width: '100%',
-                            background: 'linear-gradient(135deg, #10b981, #059669)',
-                            border: 'none',
-                            color: '#ffffff',
-                            padding: '13px 20px',
-                            borderRadius: '14px',
-                            fontSize: '14.5px',
-                            fontWeight: '800',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
-                          }}
-                        >
-                          <CheckCircle2 size={16} /> I Have Paid / Notify Handover (₹{finalPayable})
-                        </button>
+                              {/* Details & Instructions */}
+                              <div>
+                                <div style={{ fontSize: '12px', color: '#9db5aa', marginBottom: '4px' }}>
+                                  {t('Shipment Producer')}:
+                                </div>
+                                <div style={{ fontSize: '14px', fontWeight: '800', color: '#effbe7', marginBottom: '8px' }}>
+                                  🌾 {currentFarmerName}
+                                </div>
+
+                                <div style={{ fontSize: '12px', color: '#9db5aa', marginBottom: '4px' }}>
+                                  {t('Shipment Amount Due')}:
+                                </div>
+                                <div style={{ fontSize: '20px', fontWeight: '900', color: '#10b981', marginBottom: '12px' }}>
+                                  ₹{currentShipmentAmount}
+                                </div>
+
+                                {currentFarmerUpiId ? (
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      background: 'rgba(0,0,0,0.4)',
+                                      border: '1px solid rgba(255,255,255,0.1)',
+                                      borderRadius: '10px',
+                                      padding: '6px 10px',
+                                      marginBottom: '10px'
+                                    }}
+                                  >
+                                    <div style={{ fontSize: '11.5px', color: '#cbd5e1', fontFamily: 'monospace' }}>
+                                      {currentFarmerUpiId}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(currentFarmerUpiId);
+                                        setCopiedUpi(true);
+                                        setTimeout(() => setCopiedUpi(false), 2000);
+                                      }}
+                                      style={{
+                                        background: copiedUpi ? '#10b981' : 'rgba(255,255,255,0.1)',
+                                        border: 'none',
+                                        color: '#fff',
+                                        borderRadius: '6px',
+                                        padding: '3px 8px',
+                                        fontSize: '10.5px',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                      }}
+                                    >
+                                      {copiedUpi ? <Check size={11} /> : <Copy size={11} />}
+                                      {copiedUpi ? t('Copied') : t('Copy UPI ID')}
+                                    </button>
+                                  </div>
+                                ) : null}
+
+                                <p style={{ fontSize: '11.5px', color: '#a7f3d0', margin: 0, lineHeight: '1.4' }}>
+                                  ℹ️ {t('Scan with any UPI app on produce delivery or tap below after scanning to notify handover.')}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Button: Report paid via QR */}
+                            <button
+                              type="button"
+                              onClick={() => handleReportUpiPayment('UPI_QR_SCAN')}
+                              style={{
+                                width: '100%',
+                                background: 'linear-gradient(135deg, #10b981, #059669)',
+                                border: 'none',
+                                color: '#ffffff',
+                                padding: '13px 20px',
+                                borderRadius: '14px',
+                                fontSize: '14.5px',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyCenter: 'center',
+                                gap: '8px',
+                                boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
+                              }}
+                            >
+                              <CheckCircle2 size={16} /> {t('I Have Paid / Notify Handover')} (₹{finalPayable})
+                            </button>
+                          </div>
+                        ) : (
+                          /* Unconfigured Farmer QR fallback - Exact user requirement */
+                          <div
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.12)',
+                              border: '1.5px dashed rgba(239, 68, 68, 0.4)',
+                              borderRadius: '16px',
+                              padding: '24px 20px',
+                              textAlign: 'center',
+                              marginBottom: '16px'
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: '52px',
+                                height: '52px',
+                                borderRadius: '50%',
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 12px'
+                              }}
+                            >
+                              <AlertCircle size={28} color="#f87171" />
+                            </div>
+                            <h4 style={{ margin: '0 0 8px', fontSize: '15.5px', fontWeight: '800', color: '#fecaca' }}>
+                              This farmer has not configured a UPI QR code yet.
+                            </h4>
+                            <p style={{ margin: '0 0 18px', fontSize: '12.5px', color: '#cbd5e1', lineHeight: '1.5', maxWidth: '380px', marginLeft: 'auto', marginRight: 'auto' }}>
+                              {t('Farmer')} <strong>{currentFarmerName}</strong> {t('has not uploaded a UPI QR code. Please pay via Cash on Delivery when your order arrives.')}
+                            </p>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMethod('cod')}
+                              style={{
+                                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                border: 'none',
+                                color: '#ffffff',
+                                padding: '11px 22px',
+                                borderRadius: '12px',
+                                fontSize: '13.5px',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)'
+                              }}
+                            >
+                              <Banknote size={16} /> {t('Switch to Cash on Delivery')}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1142,34 +1241,50 @@ Zero Brokerage • 100% Direct to Producer
                     {upiSubMode === 'direct_transfer' && (
                       <div>
                         <h4 style={{ margin: '0 0 10px', fontSize: '15px', fontWeight: '800', color: '#effbe7' }}>
-                          Direct Bank UPI Transfer
+                          {t('Direct Bank UPI Transfer')}
                         </h4>
                         <p style={{ fontSize: '12.5px', color: '#cbd5e1', marginBottom: '14px' }}>
-                          Use your bank UPI app to transfer ₹{finalPayable} to our verified account. The delivery partner will verify receipt upon produce arrival.
+                          {t('Use your bank UPI app to transfer to verified farmer account. The delivery partner will verify receipt upon produce arrival.')}
                         </p>
 
-                        <div
-                          style={{
-                            background: 'rgba(6, 78, 59, 0.25)',
-                            border: '1px solid rgba(16, 185, 129, 0.3)',
-                            borderRadius: '12px',
-                            padding: '14px 16px',
-                            marginBottom: '16px'
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
-                            <span style={{ color: '#9db5aa' }}>Payee Account:</span>
-                            <span style={{ color: '#effbe7', fontWeight: '700' }}>AgriLink Producer Account</span>
+                        {currentFarmerUpiId ? (
+                          <div
+                            style={{
+                              background: 'rgba(6, 78, 59, 0.25)',
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              borderRadius: '12px',
+                              padding: '14px 16px',
+                              marginBottom: '16px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
+                              <span style={{ color: '#9db5aa' }}>{t('Farmer Payee')}:</span>
+                              <span style={{ color: '#effbe7', fontWeight: '700' }}>{currentFarmerPayeeName}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
+                              <span style={{ color: '#9db5aa' }}>{t('Payee UPI ID')}:</span>
+                              <span style={{ color: '#6ee7b7', fontWeight: '700', fontFamily: 'monospace' }}>{currentFarmerUpiId}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '800' }}>
+                              <span style={{ color: '#effbe7' }}>{t('Amount Due')}:</span>
+                              <span style={{ color: '#34d399', fontSize: '16px' }}>₹{currentShipmentAmount}</span>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
-                            <span style={{ color: '#9db5aa' }}>Payee UPI ID:</span>
-                            <span style={{ color: '#6ee7b7', fontWeight: '700', fontFamily: 'monospace' }}>agrilink@oksbi</span>
+                        ) : (
+                          <div
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.12)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              borderRadius: '12px',
+                              padding: '14px 16px',
+                              marginBottom: '16px',
+                              color: '#fecaca',
+                              fontSize: '12.5px'
+                            }}
+                          >
+                            This farmer has not configured a UPI ID yet. Please choose Cash on Delivery.
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '800' }}>
-                            <span style={{ color: '#effbe7' }}>Amount Due:</span>
-                            <span style={{ color: '#34d399', fontSize: '16px' }}>₹{finalPayable}</span>
-                          </div>
-                        </div>
+                        )}
 
                         <button
                           type="button"
@@ -1191,7 +1306,7 @@ Zero Brokerage • 100% Direct to Producer
                             boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
                           }}
                         >
-                          <CheckCircle2 size={16} /> I Have Transferred ₹{finalPayable} (Notify Driver)
+                          <CheckCircle2 size={16} /> {t('Report Payment on Handover / Notify Driver')} (₹{finalPayable})
                         </button>
                       </div>
                     )}
@@ -1200,7 +1315,7 @@ Zero Brokerage • 100% Direct to Producer
                     {upiSubMode === 'vpa' && (
                       <div>
                         <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: '800', color: '#effbe7' }}>
-                          Enter Your UPI ID (VPA)
+                          {t('Enter Your UPI ID (VPA)')}
                         </h4>
                         <div style={{ marginBottom: '16px' }}>
                           <input
@@ -1222,7 +1337,7 @@ Zero Brokerage • 100% Direct to Producer
                         </div>
 
                         <div style={{ fontSize: '12px', color: '#9db5aa', marginBottom: '8px' }}>
-                          Quick UPI Handles:
+                          {t('Quick UPI Handles')}:
                         </div>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
                           {['@oksbi', '@okhdfcbank', '@okaxis', '@ybl', '@paytm'].map(suffix => (
@@ -1253,7 +1368,7 @@ Zero Brokerage • 100% Direct to Producer
                           type="button"
                           onClick={() => {
                             if (!upiId.trim() || !upiId.includes('@')) {
-                              setErrorMessage('Please enter a valid UPI ID (e.g. mobile@upi or name@oksbi)');
+                              setErrorMessage(t('Please enter a valid UPI ID (e.g. mobile@upi or name@oksbi)'));
                               return;
                             }
                             handleReportUpiPayment('UPI_VPA_REQUEST');
@@ -1275,7 +1390,7 @@ Zero Brokerage • 100% Direct to Producer
                             boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
                           }}
                         >
-                          Request Doorstep UPI Handover for ₹{finalPayable}
+                          {t('Request Doorstep UPI Handover for')} ₹{finalPayable}
                         </button>
                       </div>
                     )}

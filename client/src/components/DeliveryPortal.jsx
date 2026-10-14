@@ -445,6 +445,7 @@ function ColdChainTelemetry3D({ temp = 4.2, humidity = 88, onBoostCryo }) {
    OTP Handover Verification Modal
 ───────────────────────────────────────────────────────────── */
 function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollectCodPayment, collectingPayment }) {
+  const { t } = useLanguage();
   const [enteredOtp, setEnteredOtp] = useState('');
   const [verified, setVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -489,7 +490,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
   const handleVerify = async () => {
     const entered = enteredOtp.trim();
     if (!entered || entered.length !== 6) {
-      setErrorMsg('Please enter a valid 6-digit customer handover PIN');
+      setErrorMsg(t('Please enter a valid 6-digit customer handover PIN') || 'Please enter a valid 6-digit customer handover PIN');
       return;
     }
     setSubmitting(true);
@@ -554,10 +555,10 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
             </div>
             <div>
               <h3 style={{ margin: 0, color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
-                Customer Handover PIN
+                {t('Customer Handover PIN')}
               </h3>
               <p style={{ margin: '2px 0 0 0', color: '#f4c95d', fontSize: '12px', fontWeight: '700' }}>
-                Order #{String(order.orderId || orderId).slice(-8).toUpperCase()}
+                {t('Order Placed')} #{String(order.orderId || orderId).slice(-8).toUpperCase()}
               </p>
             </div>
           </div>
@@ -597,10 +598,10 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
               <Check size={44} color="#fff" />
             </div>
             <h3 style={{ color: '#86efac', fontSize: '20px', fontWeight: '900', margin: '0 0 6px 0' }}>
-              Handover Authenticated!
+              {t('Handover Authenticated!')}
             </h3>
             <p style={{ color: '#a3c2b0', fontSize: '13.5px', margin: 0 }}>
-              Produce securely transferred. Order marked as <strong>DELIVERED</strong>.
+              {t('Produce securely transferred. Order marked as DELIVERED.')}
             </p>
           </div>
         ) : (
@@ -613,7 +614,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
               marginBottom: '14px'
             }}>
               <p style={{ color: '#fef08a', fontSize: '12px', fontWeight: '700', margin: '0 0 4px 0' }}>
-                🛡️ Verified Doorstep Handover
+                🛡️ {t('Verified Doorstep Handover')}
               </p>
               <p style={{ color: '#c0d9cb', fontSize: '12px', lineHeight: '1.5', margin: 0 }}>
                 When standing at the customer's door, ask for their 6-digit confirmation PIN. If the customer has not received it, tap the dispatch button below to send it to <strong style={{ color: '#effbe7' }}>{customerEmail}</strong>.
@@ -639,10 +640,10 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
             }}>
               <div>
                 <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: '800', color: '#a3c2b0', letterSpacing: '0.5px' }}>
-                  Payment Method: {order.paymentMethod || 'COD'}
+                  {t('Payment Method:')} {order.paymentMethod || 'COD'}
                 </div>
                 <div style={{ fontSize: '17px', fontWeight: '900', color: '#effbe7', marginTop: '2px' }}>
-                  Amount: ₹{order.totalAmount}
+                  {t('Amount:')} ₹{order.totalAmount}
                 </div>
                 <div style={{
                   fontSize: '11.5px',
@@ -657,12 +658,12 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
                   marginTop: '3px'
                 }}>
                   {order.paymentStatus === 'collected'
-                    ? '✓ Cash / Payment Collected on Handover'
+                    ? t('✓ Cash / Payment Collected on Handover')
                     : order.paymentStatus === 'paid' && order.paymentMethod !== 'COD'
-                    ? '✓ Paid Online'
+                    ? t('✓ Paid Online')
                     : order.paymentStatus === 'reported'
-                    ? '⚠️ Customer Reported Handover UPI'
-                    : 'Payment Pending Collection (Collect from customer)'}
+                    ? t('⚠️ Customer Reported Handover UPI')
+                    : t('Payment Pending Collection (Collect from customer)')}
                 </div>
               </div>
 
@@ -687,7 +688,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
                   }}
                 >
                   <Banknote size={15} />
-                  <span>{collectingPayment ? 'Recording...' : `Collect ₹${order.totalAmount}`}</span>
+                  <span>{collectingPayment ? t('Recording...') : `${t('Collect')} ₹${order.totalAmount}`}</span>
                 </button>
               )}
             </div>
@@ -717,10 +718,10 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
               <Send size={16} />
               <span>
                 {generating
-                  ? 'Dispatching PIN...'
+                  ? t('Dispatching PIN...')
                   : cooldown > 0
                   ? `Resend Available in ${cooldown}s`
-                  : 'Send Handover PIN to Customer Email'}
+                  : t('Send Handover PIN to Customer Email')}
               </span>
             </button>
 
@@ -738,7 +739,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
 
             <div style={{ marginBottom: '18px' }}>
               <label style={{ display: 'block', fontSize: '12px', color: '#effbe7', fontWeight: '800', marginBottom: '8px', letterSpacing: '0.5px' }}>
-                ENTER 6-DIGIT CUSTOMER PIN:
+                {t('ENTER 6-DIGIT CUSTOMER PIN:')}
               </label>
               <input
                 type="text"
@@ -787,7 +788,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollect
               }}
             >
               <CheckCircle2 size={19} />
-              <span>{submitting ? 'Verifying PIN...' : 'Verify PIN & Complete Delivery'}</span>
+              <span>{submitting ? t('Verifying PIN...') : t('Verify PIN & Complete Delivery')}</span>
             </button>
           </div>
         )}
