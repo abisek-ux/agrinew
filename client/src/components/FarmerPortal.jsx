@@ -957,18 +957,14 @@ function SoilDigitalTwin3D({ onTriggerDrip }) {
    Real-Time Delivery Summon Beacon Modal
 ───────────────────────────────────────────────────────────── */
 function DeliverySummonModal({ isOpen, orderId, onClose, onDriverConfirmed }) {
-  const [stage, setStage] = useState('searching'); // 'searching' | 'assigned'
   const [submittingDispatch, setSubmittingDispatch] = useState(false);
   const [dispatchError, setDispatchError] = useState('');
+  const [dispatchSuccess, setDispatchSuccess] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
-    setStage('searching');
     setDispatchError('');
-    const timer = setTimeout(() => {
-      setStage('assigned');
-    }, 1800);
-    return () => clearTimeout(timer);
+    setDispatchSuccess(false);
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -978,17 +974,16 @@ function DeliverySummonModal({ isOpen, orderId, onClose, onDriverConfirmed }) {
     setDispatchError('');
     try {
       if (orderId) {
-        await orderAPI.confirmDispatchSignal(orderId, {
-          driverName: 'David Swift',
-          vehicleNumber: 'KA-04-EA-2026'
-        });
+        await orderAPI.confirmDispatchSignal(orderId);
       }
-      const driver = { name: 'David Swift', vehicle: 'KA-04-EA-2026', eta: '6 Minutes' };
-      if (onDriverConfirmed) onDriverConfirmed(driver);
-      onClose();
+      setDispatchSuccess(true);
+      if (onDriverConfirmed) onDriverConfirmed({ dispatched: true });
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (err) {
       console.error('Dispatch signal error:', err);
-      setDispatchError(err.response?.data?.message || 'Failed to dispatch order. Please verify connectivity.');
+      setDispatchError(err.response?.data?.message || 'Failed to dispatch order. Please verify network connectivity.');
     } finally {
       setSubmittingDispatch(false);
     }
@@ -1010,17 +1005,17 @@ function DeliverySummonModal({ isOpen, orderId, onClose, onDriverConfirmed }) {
         maxWidth: '500px',
         width: '100%',
         background: 'linear-gradient(145deg, rgba(8, 28, 22, 0.98), rgba(4, 16, 13, 0.99))',
-        border: '1.5px solid rgba(251, 191, 36, 0.5)',
+        border: '1.5px solid rgba(52, 211, 153, 0.5)',
         borderRadius: '24px',
         padding: '28px',
-        boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 35px rgba(251,191,36,0.25)',
+        boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 35px rgba(52, 211, 153, 0.25)',
         textAlign: 'center'
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Radio size={18} color="#fbbf24" />
+            <Radio size={18} color="#34d399" />
             <h3 style={{ margin: 0, color: '#effbe7', fontSize: '17px', fontWeight: '800' }}>
-              Real-Time Delivery Dispatch Summon
+              Regional Courier Fleet Dispatch
             </h3>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>
@@ -1028,34 +1023,11 @@ function DeliverySummonModal({ isOpen, orderId, onClose, onDriverConfirmed }) {
           </button>
         </div>
 
-        {stage === 'searching' ? (
-          <div style={{ padding: '30px 10px' }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: 'rgba(251, 191, 36, 0.15)',
-              border: '2px solid #fbbf24',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 16px auto',
-              animation: 'pulse 1.2s infinite'
-            }}>
-              <Truck size={36} color="#fbbf24" />
-            </div>
-            <h4 style={{ color: '#effbe7', fontSize: '18px', margin: '0 0 8px 0' }}>
-              Pinging Regional Logistics Fleet...
-            </h4>
-            <p style={{ color: '#a3c2b0', fontSize: '13px', margin: 0 }}>
-              Triangulating nearest verified cold-chain delivery vehicle near your farm.
-            </p>
-          </div>
-        ) : (
+        {dispatchSuccess ? (
           <div style={{ padding: '20px 10px' }}>
             <div style={{
-              width: '80px',
-              height: '80px',
+              width: '74px',
+              height: '74px',
               borderRadius: '50%',
               background: 'linear-gradient(135deg, #10b981, #059669)',
               display: 'flex',
@@ -1064,24 +1036,45 @@ function DeliverySummonModal({ isOpen, orderId, onClose, onDriverConfirmed }) {
               margin: '0 auto 16px auto',
               boxShadow: '0 0 30px #10b981'
             }}>
-              <Check size={42} color="#fff" />
+              <Check size={38} color="#fff" />
             </div>
-            <h4 style={{ color: '#86efac', fontSize: '20px', fontWeight: '900', margin: '0 0 6px 0' }}>
-              Partner Driver Dispatched!
+            <h4 style={{ color: '#86efac', fontSize: '19px', fontWeight: '900', margin: '0 0 8px 0' }}>
+              Dispatch Signal Broadcasted!
             </h4>
-            <p style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700', margin: '0 0 16px 0' }}>
-              Driver David Swift (Vehicle: KA-04-EA-2026)
+            <p style={{ color: '#effbe7', fontSize: '13.5px', lineHeight: '1.5', margin: '0 0 14px 0' }}>
+              Order marked <strong>Packed & Ready</strong>. Regional courier network notified to claim and pick up this package at your farm gate.
             </p>
             <div style={{
               background: 'rgba(255,255,255,0.05)',
               borderRadius: '12px',
-              padding: '12px',
-              fontSize: '12.5px',
-              color: '#dcfce7',
-              marginBottom: '16px'
+              padding: '10px 14px',
+              fontSize: '12px',
+              color: '#dcfce7'
             }}>
-              ⏱️ Estimated Arrival at Farm Gate: <strong>6 Minutes</strong> • ❄️ Cold-Chain Ready
+              📦 Order status: <strong>Packed & Ready</strong> • Verified delivery partner will be displayed once claimed.
             </div>
+          </div>
+        ) : (
+          <div style={{ padding: '20px 10px' }}>
+            <div style={{
+              width: '74px',
+              height: '74px',
+              borderRadius: '50%',
+              background: 'rgba(52, 211, 153, 0.15)',
+              border: '2px solid #34d399',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px auto'
+            }}>
+              <Truck size={34} color="#34d399" />
+            </div>
+            <h4 style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800', margin: '0 0 8px 0' }}>
+              Summon Courier for Farm Gate Pickup
+            </h4>
+            <p style={{ color: '#a3c2b0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px 0' }}>
+              Confirming this will mark the produce as packed and alert active regional delivery couriers in your district to accept and collect the package.
+            </p>
 
             {dispatchError && (
               <div style={{
@@ -1102,16 +1095,19 @@ function DeliverySummonModal({ isOpen, orderId, onClose, onDriverConfirmed }) {
               disabled={submittingDispatch}
               style={{
                 width: '100%',
-                background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
                 border: 'none',
                 color: '#fff',
                 padding: '12px',
                 borderRadius: '12px',
                 fontWeight: '800',
-                cursor: 'pointer'
+                fontSize: '13.5px',
+                cursor: submittingDispatch ? 'not-allowed' : 'pointer',
+                opacity: submittingDispatch ? 0.7 : 1,
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
               }}
             >
-              {submittingDispatch ? 'Confirming Dispatch Signal...' : 'Confirm Dispatch Signal'}
+              {submittingDispatch ? 'Broadcasting Fleet Dispatch...' : '📡 Signal Courier Fleet for Pickup'}
             </button>
           </div>
         )}
@@ -1565,6 +1561,13 @@ export default function FarmerPortal({ onLogout }) {
   const [farmerBargains, setFarmerBargains] = useState([]);
   const [loadingBargains, setLoadingBargains] = useState(false);
   const [counterInputs, setCounterInputs] = useState({});
+  const [bargainFilterTab, setBargainFilterTab] = useState('active'); // 'active' | 'history'
+
+  // Order Filtering State
+  const [orderFilterTab, setOrderFilterTab] = useState('all'); // 'all' | 'new' | 'action_needed' | 'packed' | 'transit' | 'delivered' | 'cancelled'
+  const [earningsFilterTab, setEarningsFilterTab] = useState('all'); // 'all' | 'paid' | 'pending_cod' | 'pipeline'
+  const [updatingStockId, setUpdatingStockId] = useState(null);
+  const [templateProductId, setTemplateProductId] = useState('');
 
   // Edit Product Modal State
   const [editingProduct, setEditingProduct] = useState(null);
@@ -1575,6 +1578,10 @@ export default function FarmerPortal({ onLogout }) {
   const [editUnit, setEditUnit] = useState('kg');
   const [editDescription, setEditDescription] = useState('');
   const [editImage, setEditImage] = useState('');
+  const [editImageFile, setEditImageFile] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState(null);
+  const [editUploadingImage, setEditUploadingImage] = useState(false);
+  const editImageInputRef = useRef(null);
   const [editHarvestDate, setEditHarvestDate] = useState('');
   const [editVariety, setEditVariety] = useState('');
   const [editQualityGrade, setEditQualityGrade] = useState('');
@@ -1722,7 +1729,7 @@ export default function FarmerPortal({ onLogout }) {
 
   // Periodic polling using visibility-aware hook: stops on hidden tab, prevents overlaps
   usePolling(() => fetchIncomingOrders(), 20000, {
-    enabled: activeNav === 'orders'
+    enabled: activeNav === 'orders' || activeNav === 'earnings'
   });
 
   usePolling(() => fetchFarmerBargains(), 30000, {
@@ -2214,6 +2221,77 @@ export default function FarmerPortal({ onLogout }) {
     }
   };
 
+  const handleReuseProductDetails = (tplId) => {
+    if (!tplId) {
+      setTemplateProductId('');
+      return;
+    }
+    const tpl = farmerProducts.find(p => String(p._id || p.id) === String(tplId));
+    if (!tpl) return;
+    setTemplateProductId(tplId);
+    setTitle(tpl.title || '');
+    setCategory(tpl.category || 'vegetable');
+    setUnit(tpl.unit || 'kg');
+    setMinOrderQty(String(tpl.minOrderQty || '1'));
+    setVariety(tpl.variety || '');
+    setQualityGrade(tpl.qualityGrade || '');
+    setCultivationType(tpl.cultivationType || '');
+    setIrrigationMethod(tpl.irrigationMethod || '');
+    setAllowBargain(tpl.allowBargain !== false);
+    if (tpl.description) setDescription(tpl.description);
+    showToast(`Reused details from "${tpl.title}". Please enter stock, price & harvest date for this batch.`, 'info');
+  };
+
+  const handleEditImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.match(/^image\/(jpeg|jpg|png|webp)$/)) {
+      showToast('Please select a valid image file (JPEG, PNG, or WebP)', 'warning');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Image file size must be less than 5MB', 'warning');
+      return;
+    }
+
+    setEditImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setEditImagePreview(event.target.result);
+      setEditImage(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleQuickStockUpdate = async (productId, deltaOrAbsolute) => {
+    if (!isFarmer) {
+      showToast('Only registered farmers can update stock', 'error');
+      return;
+    }
+    const prod = farmerProducts.find(p => String(p._id || p.id) === String(productId));
+    if (!prod) return;
+    const currentStock = Number(prod.stock) || 0;
+    const newStock = typeof deltaOrAbsolute === 'number'
+      ? Math.max(0, currentStock + deltaOrAbsolute)
+      : Math.max(0, Number(deltaOrAbsolute) || 0);
+
+    setUpdatingStockId(productId);
+    try {
+      const res = await productAPI.updateProduct(productId, { stock: newStock });
+      const updatedProduct = res.data;
+      setFarmerProducts(farmerProducts.map(p =>
+        (String(p._id || p.id) === String(productId)) ? { ...p, stock: newStock } : p
+      ));
+      showToast(`Stock updated to ${newStock} ${prod.unit || 'kg'}`, 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to update stock', 'error');
+    } finally {
+      setUpdatingStockId(null);
+    }
+  };
+
   const openEditModal = (prod) => {
     setEditingProduct(prod);
     setEditTitle(prod.title || '');
@@ -2223,6 +2301,8 @@ export default function FarmerPortal({ onLogout }) {
     setEditStock(String(prod.stock || '0'));
     setEditDescription(prod.description || '');
     setEditImage(prod.image || '');
+    setEditImageFile(null);
+    setEditImagePreview(prod.image || null);
     setEditHarvestDate(prod.harvestDate ? new Date(prod.harvestDate).toISOString().split('T')[0] : '');
     // Agricultural fields (Phase 1 & 2)
     setEditVariety(prod.variety || '');
@@ -2264,7 +2344,7 @@ export default function FarmerPortal({ onLogout }) {
         unit: editUnit.trim() || 'kg',
         stock: Math.max(0, numStock),
         description: editDescription.trim(),
-        image: editImage || editingProduct.image,
+        image: editImagePreview || editImage || editingProduct.image,
         harvestDate: editHarvestDate ? new Date(editHarvestDate) : undefined,
         // Agricultural fields (Phase 1 & 2)
         variety: editVariety.trim(),
@@ -2398,18 +2478,49 @@ export default function FarmerPortal({ onLogout }) {
   const transitOrdersCount = incomingOrders.filter(o => ['assigned', 'driver_assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status)).length;
   const completedOrdersCount = incomingOrders.filter(o => o.status === 'delivered').length;
   const cancelledOrdersCount = incomingOrders.filter(o => o.status === 'cancelled').length;
+  const ordersAwaitingFarmerAction = incomingOrders.filter(o => o.status === 'pending' || o.status === 'confirmed');
+
+  // Bargain groupings
+  const activeBargains = (farmerBargains || []).filter(b => ['PENDING', 'COUNTERED', 'ACCEPTED'].includes(b.status));
+  const historyBargains = (farmerBargains || []).filter(b => ['ADDED_TO_CART', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(b.status));
   const pendingBargainsCount = (farmerBargains || []).filter(b => b.status === 'PENDING').length;
 
+  // Real Financial Metrics Derived Strictly from Authenticated Database Records
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  // Today's completed sales
+  const todayCompletedSales = incomingOrders
+    .filter(o => o.status === 'delivered' && new Date(o.updatedAt || o.deliveredAt || o.createdAt) >= todayStart)
+    .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+
+  // Gross completed sales (all-time delivered)
   const realDeliveredEarnings = incomingOrders
     .filter(o => o.status === 'delivered')
     .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 
+  // Payments actually confirmed received by farmer (paymentStatus === 'paid')
+  const paymentsActuallyReceived = incomingOrders
+    .filter(o => o.paymentStatus === 'paid')
+    .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+
+  // Pending COD collection or settlement
+  const pendingCodAmount = incomingOrders
+    .filter(o => (o.paymentMethod === 'cod' || o.isCod) && o.paymentStatus !== 'paid' && o.status !== 'cancelled')
+    .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+
+  // Delivered COD orders awaiting driver remittance / bank settlement
+  const deliveredAwaitingRemittance = incomingOrders
+    .filter(o => o.status === 'delivered' && (o.paymentMethod === 'cod' || o.isCod) && o.paymentStatus !== 'paid');
+
+  // Active pipeline revenue (confirmed/packed/transit orders not yet delivered or cancelled)
   const realPendingRevenue = incomingOrders
     .filter(o => o.status !== 'delivered' && o.status !== 'cancelled')
     .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 
   const lowStockProducts = farmerProducts.filter(p => Number(p.stock) > 0 && Number(p.stock) <= 10);
   const outOfStockProducts = farmerProducts.filter(p => Number(p.stock) <= 0);
+  const activeCropCategoriesCount = new Set(farmerProducts.map(p => p.category).filter(Boolean)).size || (farmerProducts.length > 0 ? 1 : 0);
   const recentOrdersList = [...incomingOrders].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
 
   const farmerDisplayName = user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Farmer';
@@ -2525,6 +2636,18 @@ export default function FarmerPortal({ onLogout }) {
                   {farmerReviews.length}
                 </span>
               )}
+            </button>
+
+            <button
+              className={`farmer-nav-item ${activeNav === 'earnings' ? 'active' : ''}`}
+              onClick={() => setActiveNav('earnings')}
+              style={{
+                background: activeNav === 'earnings' ? 'rgba(52, 211, 153, 0.22)' : undefined,
+                borderColor: activeNav === 'earnings' ? '#34d399' : undefined
+              }}
+            >
+              <IndianRupee size={18} color="#34d399" />
+              <span>{t('Earnings & Settlements') || 'Earnings & Settlements'}</span>
             </button>
 
             <button
@@ -3015,9 +3138,168 @@ export default function FarmerPortal({ onLogout }) {
               </div>
             </div>
 
-            {/* 3 Metric Cards with Glassmorphism (Real Database Data) */}
+            {/* ACTION REQUIRED: High-Priority Farm Tasks Section */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(16, 38, 28, 0.95), rgba(8, 24, 18, 0.98))',
+              border: (pendingOrdersCount > 0 || activeBargains.length > 0 || outOfStockProducts.length > 0 || deliveredAwaitingRemittance.length > 0)
+                ? '1.5px solid rgba(245, 158, 11, 0.45)'
+                : '1.5px solid rgba(52, 211, 153, 0.35)',
+              borderRadius: '20px',
+              padding: '20px 24px',
+              marginBottom: '26px',
+              boxShadow: '0 12px 32px rgba(0,0,0,0.4)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '10px',
+                    background: (pendingOrdersCount > 0 || activeBargains.length > 0 || outOfStockProducts.length > 0 || deliveredAwaitingRemittance.length > 0)
+                      ? 'rgba(245, 158, 11, 0.2)'
+                      : 'rgba(52, 211, 153, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: (pendingOrdersCount > 0 || activeBargains.length > 0 || outOfStockProducts.length > 0 || deliveredAwaitingRemittance.length > 0) ? '#fbbf24' : '#34d399'
+                  }}>
+                    <AlertCircle size={18} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '900', color: '#effbe7', letterSpacing: '0.3px' }}>
+                      ⚡ {t('action_required_title') || 'ACTION REQUIRED'}
+                    </h3>
+                    <p style={{ margin: '2px 0 0', fontSize: '11.5px', color: '#9db5aa' }}>
+                      {t('action_required_subtitle') || 'High-priority farm business tasks requiring your immediate attention'}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    background: (pendingOrdersCount > 0 || activeBargains.length > 0 || outOfStockProducts.length > 0 || deliveredAwaitingRemittance.length > 0)
+                      ? 'rgba(245, 158, 11, 0.2)'
+                      : 'rgba(52, 211, 153, 0.2)',
+                    color: (pendingOrdersCount > 0 || activeBargains.length > 0 || outOfStockProducts.length > 0 || deliveredAwaitingRemittance.length > 0)
+                      ? '#fbbf24'
+                      : '#34d399',
+                    border: `1px solid ${(pendingOrdersCount > 0 || activeBargains.length > 0 || outOfStockProducts.length > 0 || deliveredAwaitingRemittance.length > 0) ? 'rgba(245, 158, 11, 0.4)' : 'rgba(52, 211, 153, 0.4)'}`
+                  }}>
+                    {(pendingOrdersCount > 0 || activeBargains.length > 0 || outOfStockProducts.length > 0 || deliveredAwaitingRemittance.length > 0)
+                      ? `${(pendingOrdersCount > 0 ? 1 : 0) + (activeBargains.length > 0 ? 1 : 0) + (outOfStockProducts.length > 0 ? 1 : 0) + (deliveredAwaitingRemittance.length > 0 ? 1 : 0)} Tasks Pending`
+                      : 'All Clear'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Tasks List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {pendingOrdersCount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: '12px', padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '18px' }}>📦</span>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
+                          {pendingOrdersCount} {t('new_orders_awaiting_confirmation') || 'New Customer Orders Awaiting Confirmation'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#fbbf24' }}>
+                          Confirm produce availability to begin packing
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveNav('orders')}
+                      style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '6px 14px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer' }}
+                    >
+                      Review Orders →
+                    </button>
+                  </div>
+                )}
+
+                {activeBargains.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '18px' }}>🤝</span>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
+                          {activeBargains.length} {t('customer_bargain_awaiting_response') || 'Customer Bulk Bargain Proposals Awaiting Decision'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#7dd3fc' }}>
+                          Wholesale buyers awaiting your acceptance or counteroffer
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveNav('bargains')}
+                      style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer' }}
+                    >
+                      Review Offers →
+                    </button>
+                  </div>
+                )}
+
+                {outOfStockProducts.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '12px', padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '18px' }}>🚨</span>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
+                          {outOfStockProducts.length} {t('products_out_of_stock') || 'Product Listings Completely Out of Stock'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#fca5a5' }}>
+                          Restock available produce or adjust inventory levels
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveNav('products')}
+                      style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '6px 14px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer' }}
+                    >
+                      Update Inventory →
+                    </button>
+                  </div>
+                )}
+
+                {deliveredAwaitingRemittance.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '12px', padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '18px' }}>💼</span>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
+                          {deliveredAwaitingRemittance.length} {t('cod_remittance_pending') || 'Delivered COD Orders Pending Payment Remittance'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#6ee7b7' }}>
+                          Courier has collected customer payment; awaiting remittance reconciliation
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveNav('earnings')}
+                      style={{ background: '#10b981', color: '#000', border: 'none', padding: '6px 14px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer' }}
+                    >
+                      View Ledger →
+                    </button>
+                  </div>
+                )}
+
+                {pendingOrdersCount === 0 && activeBargains.length === 0 && outOfStockProducts.length === 0 && deliveredAwaitingRemittance.length === 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 4px', color: '#86efac', fontSize: '13px', fontWeight: '700' }}>
+                    <span>✨</span>
+                    <span>{t('no_actions_required') || 'All farm operations up to date • No urgent actions required'}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3 Metric Cards with Glassmorphism (Clickable to Section) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px', marginBottom: '28px' }}>
               <div
+                onClick={() => setActiveNav('products')}
+                title="Tap to manage active produce and inventory"
                 style={{
                   background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(16, 185, 129, 0.04) 50%, rgba(5, 30, 20, 0.3) 100%)',
                   backdropFilter: 'blur(24px) saturate(180%)',
@@ -3031,7 +3313,8 @@ export default function FarmerPortal({ onLogout }) {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   boxShadow: '0 16px 36px -10px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.25)',
-                  transition: 'all 0.25s ease'
+                  transition: 'all 0.25s ease',
+                  cursor: 'pointer'
                 }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 20px 42px -10px rgba(0,0,0,0.6), 0 0 25px rgba(16, 185, 129, 0.25)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 16px 36px -10px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.25)'; }}
@@ -3055,6 +3338,8 @@ export default function FarmerPortal({ onLogout }) {
               </div>
 
               <div
+                onClick={() => setActiveNav('orders')}
+                title="Tap to manage buyer orders"
                 style={{
                   background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(245, 158, 11, 0.04) 50%, rgba(35, 20, 5, 0.3) 100%)',
                   backdropFilter: 'blur(24px) saturate(180%)',
@@ -3068,7 +3353,8 @@ export default function FarmerPortal({ onLogout }) {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   boxShadow: '0 16px 36px -10px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.25)',
-                  transition: 'all 0.25s ease'
+                  transition: 'all 0.25s ease',
+                  cursor: 'pointer'
                 }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 20px 42px -10px rgba(0,0,0,0.6), 0 0 25px rgba(245, 158, 11, 0.25)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 16px 36px -10px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.25)'; }}
@@ -3092,6 +3378,8 @@ export default function FarmerPortal({ onLogout }) {
               </div>
 
               <div
+                onClick={() => setActiveNav('earnings')}
+                title="Tap to view earnings and settlements ledger"
                 style={{
                   background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(14, 165, 233, 0.04) 50%, rgba(5, 25, 35, 0.3) 100%)',
                   backdropFilter: 'blur(24px) saturate(180%)',
@@ -3105,7 +3393,8 @@ export default function FarmerPortal({ onLogout }) {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   boxShadow: '0 16px 36px -10px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.25)',
-                  transition: 'all 0.25s ease'
+                  transition: 'all 0.25s ease',
+                  cursor: 'pointer'
                 }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 20px 42px -10px rgba(0,0,0,0.6), 0 0 25px rgba(14, 165, 233, 0.25)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 16px 36px -10px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.25)'; }}
@@ -3500,44 +3789,55 @@ export default function FarmerPortal({ onLogout }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
                   <div>
                     <h4 style={{ fontSize: '16px', fontWeight: '800', color: '#effbe7', margin: 0 }}>
-                      1. My Farm
+                      1. My Farm Inventory Health
                     </h4>
-                    <span style={{ fontSize: '11.5px', color: '#9db5aa' }}>Your farm. Your crops. Your progress.</span>
+                    <span style={{ fontSize: '11.5px', color: '#9db5aa' }}>Authoritative inventory & crop status derived from database.</span>
                   </div>
                   <button
                     onClick={() => setActiveNav('profile')}
                     style={{ background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(52, 211, 153, 0.3)', padding: '5px 12px', borderRadius: '12px', color: '#34d399', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
                   >
-                    View Details →
+                    Farm Bio →
                   </button>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '18px' }}>
                   <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', padding: '14px', borderRadius: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '24px', marginBottom: '4px' }}>🌽</div>
-                    <div style={{ fontSize: '18px', fontWeight: '900', color: '#effbe7' }}>4</div>
-                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>Active Crops</div>
+                    <div style={{ fontSize: '18px', fontWeight: '900', color: '#effbe7' }}>{activeCropCategoriesCount}</div>
+                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>Crop Categories</div>
                   </div>
                   <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', padding: '14px', borderRadius: '14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>📍</div>
-                    <div style={{ fontSize: '18px', fontWeight: '900', color: '#effbe7' }}>3</div>
-                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>Farm Fields</div>
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>📦</div>
+                    <div style={{ fontSize: '18px', fontWeight: '900', color: '#effbe7' }}>{farmerProducts.length}</div>
+                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>Active Listings</div>
                   </div>
                   <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', padding: '14px', borderRadius: '14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>📅</div>
-                    <div style={{ fontSize: '18px', fontWeight: '900', color: '#4ade80' }}>82%</div>
-                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>Crop Progress</div>
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>📉</div>
+                    <div style={{ fontSize: '18px', fontWeight: '900', color: lowStockProducts.length > 0 ? '#f59e0b' : '#4ade80' }}>
+                      {lowStockProducts.length}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#9db5aa' }}>Low Stock Items</div>
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px', color: '#9db5aa' }}>
-                    <span>Current Crop Growth Progress</span>
-                    <span style={{ color: '#4ade80', fontWeight: '800' }}>82%</span>
-                  </div>
-                  <div className="farmer-progress-bar">
-                    <div className="farmer-progress-fill" style={{ width: '82%' }} />
-                  </div>
+                  {(() => {
+                    const inStockPct = farmerProducts.length > 0
+                      ? Math.round(((farmerProducts.length - outOfStockProducts.length) / farmerProducts.length) * 100)
+                      : 100;
+                    return (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px', color: '#9db5aa' }}>
+                          <span>In-Stock Listing Availability</span>
+                          <span style={{ color: inStockPct < 80 ? '#f59e0b' : '#4ade80', fontWeight: '800' }}>{inStockPct}%</span>
+                        </div>
+                        <div className="farmer-progress-bar">
+                          <div className="farmer-progress-fill" style={{ width: `${inStockPct}%`, background: inStockPct < 80 ? '#f59e0b' : '#4ade80' }} />
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -3602,37 +3902,127 @@ export default function FarmerPortal({ onLogout }) {
 
             </div>
 
-            {/* Quick KPI Strip (Real Database Data) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '28px' }}>
-              <div style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
+            {/* Comprehensive Clickable KPI Grid (Real Database Data) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '28px' }}>
+              {/* 1. Active Products */}
+              <div
+                onClick={() => setActiveNav('products')}
+                title="Tap to manage produce catalog"
+                style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
                 <span style={{ fontSize: '24px' }}>📦</span>
                 <div>
                   <div style={{ fontSize: '18px', fontWeight: '900', color: '#effbe7' }}>{farmerProducts.length}</div>
-                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Active Listings</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Active Listings ({activeCropCategoriesCount} Categories)</div>
                 </div>
               </div>
 
-              <div style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
-                <span style={{ fontSize: '24px' }}>💰</span>
+              {/* 2. Available Stock */}
+              <div
+                onClick={() => setActiveNav('products')}
+                title="Tap to view inventory stock levels"
+                style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: '24px' }}>🌾</span>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#4ade80' }}>₹{realDeliveredEarnings.toLocaleString('en-IN')}</div>
-                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Completed Earnings</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#4ade80' }}>{totalStockUnits.toLocaleString()}</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Available Units ({lowStockProducts.length} Low)</div>
                 </div>
               </div>
 
-              <div style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
+              {/* 3. New Orders */}
+              <div
+                onClick={() => setActiveNav('orders')}
+                title="Tap to view new orders"
+                style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
                 <span style={{ fontSize: '24px' }}>📑</span>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#fbbf24' }}>{pendingOrdersCount}</div>
-                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Pending Orders</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: pendingOrdersCount > 0 ? '#fbbf24' : '#effbe7' }}>{pendingOrdersCount}</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>New Orders Awaiting Confirmation</div>
                 </div>
               </div>
 
-              <div style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
-                <span style={{ fontSize: '24px' }}>🚚</span>
+              {/* 4. Active Bargains */}
+              <div
+                onClick={() => setActiveNav('bargains')}
+                title="Tap to view bulk bargaining proposals"
+                style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: '24px' }}>🤝</span>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#38bdf8' }}>{completedOrdersCount}</div>
-                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Delivered Orders</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: activeBargains.length > 0 ? '#38bdf8' : '#effbe7' }}>{activeBargains.length}</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Active Bargain Offers</div>
+                </div>
+              </div>
+
+              {/* 5. Today's Completed Sales */}
+              <div
+                onClick={() => setActiveNav('earnings')}
+                title="Tap to view completed sales in ledger"
+                style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: '24px' }}>📅</span>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#4ade80' }}>₹{todayCompletedSales.toFixed(2)}</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Today's Completed Sales</div>
+                </div>
+              </div>
+
+              {/* 6. Payments Actually Received */}
+              <div
+                onClick={() => setActiveNav('earnings')}
+                title="Tap to view received payments in ledger"
+                style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: '24px' }}>💰</span>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#34d399' }}>₹{paymentsActuallyReceived.toFixed(2)}</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Payments Actually Received</div>
+                </div>
+              </div>
+
+              {/* 7. Pending COD Remittance */}
+              <div
+                onClick={() => setActiveNav('earnings')}
+                title="Tap to reconcile COD remittances"
+                style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: '24px' }}>⏳</span>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: pendingCodAmount > 0 ? '#fbbf24' : '#effbe7' }}>₹{pendingCodAmount.toFixed(2)}</div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>Pending COD Collection</div>
+                </div>
+              </div>
+
+              {/* 8. Customer Reviews */}
+              <div
+                onClick={() => setActiveNav('reviews')}
+                title="Tap to view authentic customer ratings"
+                style={{ background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)', backdropFilter: 'blur(16px)', padding: '16px 18px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)', borderTop: '1px solid rgba(255, 255, 255, 0.25)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 20px rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: '24px' }}>⭐</span>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#facc15' }}>
+                    {farmerReviews.length > 0 ? (farmerReviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0) / farmerReviews.length).toFixed(1) : '5.0'} / 5.0
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', fontWeight: '600' }}>{farmerReviews.length} Verified Reviews</div>
                 </div>
               </div>
             </div>
@@ -4936,6 +5326,33 @@ export default function FarmerPortal({ onLogout }) {
                   </div>
                 </div>
 
+                {/* Reuse Previous Listing Details */}
+                {farmerProducts.length > 0 && (
+                  <div style={{ marginBottom: '18px', background: 'rgba(52, 211, 153, 0.06)', border: '1px solid rgba(52, 211, 153, 0.25)', padding: '12px 14px', borderRadius: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#86efac', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        📋 {t('reuse_details_previous_listing') || 'Reuse Details from Previous Listing:'}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#9db5aa' }}>
+                        Copies variety, category & agronomy. Fresh stock, price & harvest date remain yours to set.
+                      </span>
+                    </div>
+                    <select
+                      value={templateProductId}
+                      onChange={(e) => handleReuseProductDetails(e.target.value)}
+                      className="input-field"
+                      style={{ minHeight: '40px', fontSize: '13px', background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(52, 211, 153, 0.4)' }}
+                    >
+                      <option value="">-- {t('select_listing_to_reuse') || 'Select an existing listing to reuse details...'} --</option>
+                      {farmerProducts.map((p) => (
+                        <option key={p._id || p.id} value={p._id || p.id}>
+                          {p.title} ({p.category || 'produce'} • {p.variety || 'Standard'} • {p.unit || 'kg'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <form onSubmit={handleAddProduct}>
                   {/* ─────────────────────────────────────────────────────────────
                       SECTION 1: BASIC PRODUCE INFORMATION & PHOTO (Required)
@@ -5302,11 +5719,25 @@ export default function FarmerPortal({ onLogout }) {
                     {showHarvestSection && (
                       <div style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(251, 191, 36, 0.15)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginTop: '12px' }}>
                         <div>
-                          <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb', display: 'block', marginBottom: '4px' }}>
-                            {t('Crop Variety')} *
-                          </label>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '700', color: '#e5e7eb' }}>
+                              {t('Crop Variety')} *
+                            </label>
+                            {variety !== 'Not Applicable' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVariety('Not Applicable');
+                                  if (formErrors.variety) setFormErrors(prev => ({ ...prev, variety: null }));
+                                }}
+                                style={{ background: 'none', border: 'none', color: '#34d399', fontSize: '11px', cursor: 'pointer', padding: 0 }}
+                              >
+                                {t('Set Not Applicable') || 'Mark Not Applicable'}
+                              </button>
+                            )}
+                          </div>
                           <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '6px' }}>
-                            Specific cultivar name
+                            Specific cultivar name (or Not Applicable)
                           </span>
                           <input
                             type="text"
@@ -5315,7 +5746,7 @@ export default function FarmerPortal({ onLogout }) {
                               setVariety(e.target.value);
                               if (formErrors.variety) setFormErrors(prev => ({ ...prev, variety: null }));
                             }}
-                            placeholder="e.g. Sona Masoori, Alphonso, PKM-1, G4 Chilli"
+                            placeholder="e.g. Sona Masoori, Alphonso, PKM-1, or Not Applicable"
                             className="input-field"
                             style={{
                               minHeight: '46px',
@@ -5389,6 +5820,7 @@ export default function FarmerPortal({ onLogout }) {
                             <option value="Premium">🌟 {t('Premium Export Quality')}</option>
                             <option value="Grade A">⭐ {t('Grade A Standard Quality')}</option>
                             <option value="Standard">🌾 {t('Standard Market Grade')}</option>
+                            <option value="Not Applicable">📋 {t('Not Applicable') || 'Not Applicable (N/A)'}</option>
                           </select>
                           {formErrors.qualityGrade && (
                             <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block' }}>
@@ -5469,6 +5901,7 @@ export default function FarmerPortal({ onLogout }) {
                             <option value="Organic">🌿 {t('Organic Farming')}</option>
                             <option value="Conventional">🚜 {t('Conventional Farming')}</option>
                             <option value="Hydroponic">💧 {t('Hydroponic Farming')}</option>
+                            <option value="Not Applicable">📋 {t('Not Applicable') || 'Not Applicable (N/A)'}</option>
                           </select>
                           {cultivationType === 'Organic' && (
                             <span style={{ fontSize: '10.5px', color: '#fbbf24', marginTop: '4px', display: 'block' }}>
@@ -5510,6 +5943,7 @@ export default function FarmerPortal({ onLogout }) {
                             <option value="Rain-fed">🌧️ {t('Rain-fed')}</option>
                             <option value="Borewell">⚡ {t('Borewell')}</option>
                             <option value="Canal/River">🌊 {t('Canal / River Basin')}</option>
+                            <option value="Not Applicable">📋 {t('Not Applicable') || 'Not Applicable (N/A)'}</option>
                           </select>
                           {formErrors.irrigationMethod && (
                             <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block' }}>
@@ -5851,6 +6285,97 @@ export default function FarmerPortal({ onLogout }) {
                         </div>
                       </div>
 
+                      {/* Quick Inline Stock Controls */}
+                      <div
+                        style={{ padding: '6px 10px', background: 'rgba(0,0,0,0.25)', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span style={{ fontSize: '11px', color: '#9db5aa', fontWeight: '700' }}>
+                          Stock:
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            type="button"
+                            disabled={updatingStockId === prodId || Number(p.stock) <= 0}
+                            onClick={() => handleQuickStockUpdate(prodId, -10)}
+                            style={{
+                              minWidth: '32px',
+                              height: '28px',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              color: '#f87171',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              cursor: (updatingStockId === prodId || Number(p.stock) <= 0) ? 'not-allowed' : 'pointer'
+                            }}
+                            title="Decrease 10 units"
+                          >
+                            -10
+                          </button>
+                          <button
+                            type="button"
+                            disabled={updatingStockId === prodId}
+                            onClick={() => handleQuickStockUpdate(prodId, 10)}
+                            style={{
+                              minWidth: '32px',
+                              height: '28px',
+                              background: 'rgba(52, 211, 153, 0.15)',
+                              border: '1px solid rgba(52, 211, 153, 0.3)',
+                              color: '#34d399',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              cursor: updatingStockId === prodId ? 'not-allowed' : 'pointer'
+                            }}
+                            title="Add 10 units"
+                          >
+                            +10
+                          </button>
+                          {Number(p.stock) > 0 ? (
+                            <button
+                              type="button"
+                              disabled={updatingStockId === prodId}
+                              onClick={() => handleQuickStockUpdate(prodId, 0)}
+                              style={{
+                                height: '28px',
+                                padding: '0 6px',
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                color: '#9ca3af',
+                                borderRadius: '6px',
+                                fontSize: '10px',
+                                fontWeight: '700',
+                                cursor: updatingStockId === prodId ? 'not-allowed' : 'pointer'
+                              }}
+                              title="Mark completely out of stock"
+                            >
+                              Zero
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={updatingStockId === prodId}
+                              onClick={() => handleQuickStockUpdate(prodId, 50)}
+                              style={{
+                                height: '28px',
+                                padding: '0 6px',
+                                background: 'rgba(52, 211, 153, 0.25)',
+                                border: '1px solid #34d399',
+                                color: '#a7f3d0',
+                                borderRadius: '6px',
+                                fontSize: '10px',
+                                fontWeight: '800',
+                                cursor: updatingStockId === prodId ? 'not-allowed' : 'pointer'
+                              }}
+                              title="Restock 50 units"
+                            >
+                              Restock 50
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Compact Actions (Touch targets >= 44px) */}
                       <div
                         style={{ padding: '8px 10px', display: 'flex', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}
@@ -5943,66 +6468,151 @@ export default function FarmerPortal({ onLogout }) {
               </button>
             </div>
 
-            {incomingOrders.length === 0 ? (
-              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '14px', padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
-                <Package size={44} style={{ margin: '0 auto 14px auto', color: '#38bdf8', opacity: 0.6 }} />
-                <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#f3f4f6', margin: '0 0 6px 0' }}>
-                  No customer orders received yet
-                </h3>
-                <p style={{ fontSize: '12px' }}>
-                  When buyers order your vegetables, fruits, or seeds, their delivery orders appear here in real-time.
-                </p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {incomingOrders.map((o) => {
-                  const orderId = o._id || o.id;
-                  const isPending = o.status === 'pending';
-                  const isConfirmed = o.status === 'confirmed' || o.status === 'accepted';
-                  const isPacked = o.status === 'packed';
-                  const isInTransit = ['assigned', 'driver_assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status);
-                  const isDelivered = o.status === 'delivered';
+            {/* Order Filter Tabs Bar */}
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              {[
+                { id: 'all', label: 'All Orders', count: incomingOrders.length },
+                { id: 'new', label: 'New', count: pendingOrdersCount, badgeColor: '#f59e0b' },
+                { id: 'action_needed', label: 'Awaiting Action', count: ordersAwaitingFarmerAction.length, badgeColor: '#ef4444' },
+                { id: 'packed', label: 'Packed & Ready', count: packedOrdersCount },
+                { id: 'transit', label: 'In Transit', count: transitOrdersCount },
+                { id: 'delivered', label: 'Delivered', count: completedOrdersCount, badgeColor: '#10b981' },
+                { id: 'cancelled', label: 'Cancelled', count: cancelledOrdersCount }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setOrderFilterTab(tab.id)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    fontSize: '12.5px',
+                    fontWeight: orderFilterTab === tab.id ? '800' : '600',
+                    background: orderFilterTab === tab.id ? 'rgba(52, 211, 153, 0.18)' : 'rgba(255, 255, 255, 0.04)',
+                    border: orderFilterTab === tab.id ? '1.5px solid #34d399' : '1px solid rgba(255, 255, 255, 0.1)',
+                    color: orderFilterTab === tab.id ? '#effbe7' : '#9ca3af',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  <span style={{
+                    fontSize: '10.5px',
+                    padding: '1px 6px',
+                    borderRadius: '8px',
+                    background: tab.badgeColor ? tab.badgeColor : (orderFilterTab === tab.id ? '#059669' : 'rgba(255,255,255,0.1)'),
+                    color: '#ffffff'
+                  }}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-                  return (
-                    <div
-                      key={orderId}
-                      style={{
-                        background: 'rgba(255,255,255,0.03)',
-                        border: '1px solid rgba(55, 189, 120, 0.15)',
-                        borderLeft: isPending ? '4px solid #f59e0b' : isConfirmed ? '4px solid #38bdf8' : isPacked ? '4px solid #0284c7' : isInTransit ? '4px solid #a855f7' : '4px solid #10b981',
-                        borderRadius: '12px',
-                        padding: '18px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontSize: '16px', fontWeight: '800', color: '#38bdf8' }}>
-                              Order #{o.orderId || String(orderId).slice(-6)}
-                            </span>
-                            <span style={{
-                              fontSize: '11px',
-                              fontWeight: '700',
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              background: isPending ? 'rgba(245, 158, 11, 0.2)' : isConfirmed ? 'rgba(56, 189, 248, 0.2)' : isPacked ? 'rgba(2, 132, 199, 0.2)' : isInTransit ? 'rgba(168, 85, 247, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                              color: isPending ? '#f59e0b' : isConfirmed ? '#38bdf8' : isPacked ? '#38bdf8' : isInTransit ? '#c084fc' : '#34d399'
-                            }}>
-                              {(o.status || 'pending').toUpperCase()}
+            {(() => {
+              const filteredOrders = incomingOrders.filter(o => {
+                if (orderFilterTab === 'new') return o.status === 'pending';
+                if (orderFilterTab === 'action_needed') return o.status === 'pending' || o.status === 'confirmed';
+                if (orderFilterTab === 'packed') return o.status === 'packed';
+                if (orderFilterTab === 'transit') return ['assigned', 'driver_assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status);
+                if (orderFilterTab === 'delivered') return o.status === 'delivered';
+                if (orderFilterTab === 'cancelled') return o.status === 'cancelled';
+                return true;
+              });
+
+              if (filteredOrders.length === 0) {
+                return (
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '14px', padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
+                    <Package size={44} style={{ margin: '0 auto 14px auto', color: '#38bdf8', opacity: 0.6 }} />
+                    <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#f3f4f6', margin: '0 0 6px 0' }}>
+                      {orderFilterTab === 'all' ? 'No customer orders received yet' : `No orders found in '${orderFilterTab.replace('_', ' ').toUpperCase()}' category`}
+                    </h3>
+                    <p style={{ fontSize: '12px' }}>
+                      When buyers order your vegetables, fruits, or seeds, their delivery orders appear here in real-time.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {filteredOrders.map((o) => {
+                    const orderId = o._id || o.id;
+                    const isPending = o.status === 'pending';
+                    const isConfirmed = o.status === 'confirmed' || o.status === 'accepted';
+                    const isPacked = o.status === 'packed';
+                    const isInTransit = ['assigned', 'driver_assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status);
+                    const isDelivered = o.status === 'delivered';
+
+                    return (
+                      <div
+                        key={orderId}
+                        style={{
+                          background: 'rgba(255,255,255,0.03)',
+                          border: '1px solid rgba(55, 189, 120, 0.15)',
+                          borderLeft: isPending ? '4px solid #f59e0b' : isConfirmed ? '4px solid #38bdf8' : isPacked ? '4px solid #0284c7' : isInTransit ? '4px solid #a855f7' : '4px solid #10b981',
+                          borderRadius: '12px',
+                          padding: '18px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '16px', fontWeight: '800', color: '#38bdf8' }}>
+                                Order #{o.orderId || String(orderId).slice(-6)}
+                              </span>
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                background: isPending ? 'rgba(245, 158, 11, 0.2)' : isConfirmed ? 'rgba(56, 189, 248, 0.2)' : isPacked ? 'rgba(2, 132, 199, 0.2)' : isInTransit ? 'rgba(168, 85, 247, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                                color: isPending ? '#f59e0b' : isConfirmed ? '#38bdf8' : isPacked ? '#38bdf8' : isInTransit ? '#c084fc' : '#34d399'
+                              }}>
+                                {(o.status || 'pending').toUpperCase()}
+                              </span>
+
+                              {/* Explicit Verified Payment Status Badge */}
+                              {(o.paymentMethod === 'cod' || o.isCod) ? (
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  padding: '2px 8px',
+                                  borderRadius: '10px',
+                                  background: o.paymentStatus === 'paid' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                                  color: o.paymentStatus === 'paid' ? '#34d399' : '#fbbf24',
+                                  border: `1px solid ${o.paymentStatus === 'paid' ? 'rgba(52, 211, 153, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
+                                }}>
+                                  {o.paymentStatus === 'paid' ? '💵 COD Collected & Settled' : '⏳ COD Pending Collection'}
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  padding: '2px 8px',
+                                  borderRadius: '10px',
+                                  background: o.paymentStatus === 'paid' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                                  color: o.paymentStatus === 'paid' ? '#34d399' : '#fbbf24',
+                                  border: `1px solid ${o.paymentStatus === 'paid' ? 'rgba(52, 211, 153, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
+                                }}>
+                                  {o.paymentStatus === 'paid' ? '⚡ UPI / Online Verified' : '⏳ Payment Pending'}
+                                </span>
+                              )}
+                            </div>
+                            <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginTop: '4px' }}>
+                              Placed on {new Date(o.createdAt || Date.now()).toLocaleString()}
                             </span>
                           </div>
-                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>
-                            Placed on {new Date(o.createdAt || Date.now()).toLocaleString()}
-                          </span>
-                        </div>
 
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: '20px', fontWeight: '900', color: '#10b981' }}>
-                            ₹{Number(o.totalAmount || 0).toFixed(2)}
-                          </span>
-                          <div style={{ fontSize: '11px', color: '#9ca3af' }}>Total Amount</div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '20px', fontWeight: '900', color: '#10b981' }}>
+                              ₹{Number(o.totalAmount || 0).toFixed(2)}
+                            </span>
+                            <div style={{ fontSize: '11px', color: '#9ca3af' }}>Total Amount</div>
+                          </div>
                         </div>
-                      </div>
 
                       {/* Buyer Details */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', marginBottom: '14px' }}>
@@ -6125,7 +6735,8 @@ export default function FarmerPortal({ onLogout }) {
                   );
                 })}
               </div>
-            )}
+            );
+          })()}
           </div>
         )}
 
@@ -6137,10 +6748,10 @@ export default function FarmerPortal({ onLogout }) {
             <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
               <div>
                 <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
-                  Buyer Bulk Bargains & Direct Price Offers
+                  Buyer Bulk Bargains & Wholesale Price Offers
                 </h2>
                 <p style={{ fontSize: '13px', color: '#9ca3af', margin: '4px 0 0 0' }}>
-                  Review real bulk purchase price proposals from customers. Submissions are marked PENDING until you choose to Accept, Reject, or propose a Counter Offer.
+                  Review real bulk purchase price proposals from customers. Submissions remain in Active Proposals until accepted, countered, or consumed.
                 </p>
               </div>
 
@@ -6166,145 +6777,233 @@ export default function FarmerPortal({ onLogout }) {
               </button>
             </div>
 
+            {/* Bargain Tabs: Active vs History */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
+              <button
+                onClick={() => setBargainFilterTab('active')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: bargainFilterTab === 'active' ? '800' : '600',
+                  background: bargainFilterTab === 'active' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                  border: bargainFilterTab === 'active' ? '1.5px solid #fbbf24' : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: bargainFilterTab === 'active' ? '#fbbf24' : '#9ca3af',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span>⚡ {t('active_proposals') || 'Active Proposals'}</span>
+                <span style={{ fontSize: '11px', background: bargainFilterTab === 'active' ? '#fbbf24' : 'rgba(255,255,255,0.1)', color: bargainFilterTab === 'active' ? '#000' : '#fff', padding: '1px 7px', borderRadius: '8px', fontWeight: '800' }}>
+                  {activeBargains.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setBargainFilterTab('history')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: bargainFilterTab === 'history' ? '800' : '600',
+                  background: bargainFilterTab === 'history' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                  border: bargainFilterTab === 'history' ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: bargainFilterTab === 'history' ? '#38bdf8' : '#9ca3af',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span>📜 {t('bargain_history') || 'Bargain History'}</span>
+                <span style={{ fontSize: '11px', background: bargainFilterTab === 'history' ? '#38bdf8' : 'rgba(255,255,255,0.1)', color: bargainFilterTab === 'history' ? '#000' : '#fff', padding: '1px 7px', borderRadius: '8px', fontWeight: '800' }}>
+                  {historyBargains.length}
+                </span>
+              </button>
+            </div>
+
             {loadingBargains && farmerBargains.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9ca3af' }}>
                 <RotateCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px auto' }} />
                 <p>Loading bulk buyer offers...</p>
               </div>
-            ) : farmerBargains.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <IndianRupee size={36} color="#fbbf24" style={{ margin: '0 auto 12px auto', opacity: 0.6 }} />
-                <h3 style={{ color: '#f3f4f6', fontSize: '17px', margin: '0 0 6px 0' }}>No Bulk Price Offers Yet</h3>
-                <p style={{ color: '#9ca3af', fontSize: '13px', margin: 0 }}>
-                  When buyers offer wholesale prices on your fresh produce, their pending offers will appear here for your review and negotiation.
-                </p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {farmerBargains.map((b) => {
-                  const bId = String(b._id || b.id);
-                  const isPending = b.status === 'PENDING';
-                  const isAccepted = b.status === 'ACCEPTED';
-                  const isRejected = b.status === 'REJECTED';
-                  const isCountered = b.status === 'COUNTERED';
+            ) : (() => {
+              const displayedBargains = bargainFilterTab === 'active' ? activeBargains : historyBargains;
 
-                  const discountPct = b.originalPrice && b.proposedPrice
-                    ? Math.round(((b.originalPrice - b.proposedPrice) / b.originalPrice) * 100)
-                    : 0;
+              if (displayedBargains.length === 0) {
+                return (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <IndianRupee size={36} color="#fbbf24" style={{ margin: '0 auto 12px auto', opacity: 0.6 }} />
+                    <h3 style={{ color: '#f3f4f6', fontSize: '17px', margin: '0 0 6px 0' }}>
+                      {bargainFilterTab === 'active' ? 'No Active Bulk Price Offers' : 'No Past Bargain History'}
+                    </h3>
+                    <p style={{ color: '#9ca3af', fontSize: '13px', margin: 0 }}>
+                      {bargainFilterTab === 'active'
+                        ? 'When buyers propose wholesale prices for your farm produce, their pending offers will appear here for negotiation.'
+                        : 'Accepted proposals added to cart, expired offers, and closed negotiations appear here.'}
+                    </p>
+                  </div>
+                );
+              }
 
-                  return (
-                    <div
-                      key={bId}
-                      style={{
-                        background: 'linear-gradient(145deg, rgba(14, 38, 30, 0.7), rgba(8, 24, 19, 0.8))',
-                        border: isPending ? '1.5px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '16px',
-                        padding: '20px',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <span style={{ fontSize: '16px', fontWeight: '800', color: '#effbe7' }}>
-                              {b.productTitle || 'Farm Produce'}
-                            </span>
-                            <span style={{
-                              padding: '2px 8px',
-                              borderRadius: '8px',
-                              fontSize: '11px',
-                              fontWeight: '800',
-                              background: isPending ? 'rgba(245, 158, 11, 0.2)' : isAccepted ? 'rgba(16, 185, 129, 0.2)' : isCountered ? 'rgba(56, 189, 248, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                              color: isPending ? '#fbbf24' : isAccepted ? '#34d399' : isCountered ? '#38bdf8' : '#f87171',
-                              border: `1px solid ${isPending ? '#fbbf24' : isAccepted ? '#34d399' : isCountered ? '#38bdf8' : '#f87171'}`
-                            }}>
-                              {b.status}
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {displayedBargains.map((b) => {
+                    const bId = String(b._id || b.id);
+                    const isPending = b.status === 'PENDING';
+                    const isAccepted = b.status === 'ACCEPTED';
+                    const isRejected = b.status === 'REJECTED';
+                    const isCountered = b.status === 'COUNTERED';
+                    const isAddedToCart = b.status === 'ADDED_TO_CART';
+
+                    const discountPct = b.originalPrice && b.proposedPrice
+                      ? Math.round(((b.originalPrice - b.proposedPrice) / b.originalPrice) * 100)
+                      : 0;
+
+                    const counterNum = Number(counterInputs[bId]);
+                    const hasValidCounter = !isNaN(counterNum) && counterNum > 0;
+
+                    return (
+                      <div
+                        key={bId}
+                        style={{
+                          background: 'linear-gradient(145deg, rgba(14, 38, 30, 0.7), rgba(8, 24, 19, 0.8))',
+                          border: isPending ? '1.5px solid rgba(245, 158, 11, 0.5)' : isAccepted ? '1.5px solid rgba(16, 185, 129, 0.4)' : isAddedToCart ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '16px',
+                          padding: '20px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '16px', fontWeight: '800', color: '#effbe7' }}>
+                                {b.productTitle || 'Farm Produce'}
+                              </span>
+                              <span style={{
+                                padding: '2px 8px',
+                                borderRadius: '8px',
+                                fontSize: '11px',
+                                fontWeight: '800',
+                                background: isPending ? 'rgba(245, 158, 11, 0.2)' : isAccepted ? 'rgba(16, 185, 129, 0.2)' : isCountered ? 'rgba(56, 189, 248, 0.2)' : isAddedToCart ? 'rgba(168, 85, 247, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                                color: isPending ? '#fbbf24' : isAccepted ? '#34d399' : isCountered ? '#38bdf8' : isAddedToCart ? '#c084fc' : '#f87171',
+                                border: `1px solid ${isPending ? '#fbbf24' : isAccepted ? '#34d399' : isCountered ? '#38bdf8' : isAddedToCart ? '#c084fc' : '#f87171'}`
+                              }}>
+                                {isAddedToCart ? '🛒 ADDED TO CART (CONSUMED)' : isAccepted ? '✓ ACCEPTED (PENDING CHECKOUT)' : b.status}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                              Buyer: <strong style={{ color: '#effbe7' }}>{b.customerName || 'AgriLink Shopper'}</strong> • {new Date(b.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '11px', color: '#9ca3af' }}>Requested Quantity</div>
+                            <span style={{ fontSize: '18px', fontWeight: '800', color: '#effbe7' }}>
+                              {b.quantity} {b.unit || b.productUnit || 'kg'}
                             </span>
                           </div>
-                          <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
-                            Buyer: <strong style={{ color: '#effbe7' }}>{b.customerName || 'AgriLink Shopper'}</strong> • {new Date(b.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+
+                        {/* Pricing Comparison */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', background: 'rgba(0,0,0,0.25)', padding: '12px', borderRadius: '12px', marginBottom: '14px' }}>
+                          <div>
+                            <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>Catalog Price:</span>
+                            <strong style={{ color: '#effbe7', fontSize: '14px' }}>₹{b.originalPrice} / {b.unit || b.productUnit || 'kg'}</strong>
                           </div>
-                        </div>
-
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '11px', color: '#9ca3af' }}>Requested Quantity</div>
-                          <span style={{ fontSize: '18px', fontWeight: '800', color: '#effbe7' }}>
-                            {b.quantity} {b.unit || b.productUnit || 'kg'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Pricing Comparison */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', background: 'rgba(0,0,0,0.25)', padding: '12px', borderRadius: '12px', marginBottom: '14px' }}>
-                        <div>
-                          <span style={{ fontSize: '11px', color: '#9ca3af', display: 'block' }}>Catalog Price:</span>
-                          <strong style={{ color: '#effbe7', fontSize: '14px' }}>₹{b.originalPrice} / {b.unit || b.productUnit || 'kg'}</strong>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '11px', color: '#fbbf24', display: 'block' }}>Buyer Proposed Offer:</span>
-                          <strong style={{ color: '#fbbf24', fontSize: '16px' }}>₹{b.proposedPrice} / {b.unit || b.productUnit || 'kg'}</strong>
-                          {discountPct > 0 && (
-                            <span style={{ fontSize: '11px', color: '#f87171', marginLeft: '6px' }}>(-{discountPct}%)</span>
+                          <div>
+                            <span style={{ fontSize: '11px', color: '#fbbf24', display: 'block' }}>Buyer Proposed Offer:</span>
+                            <strong style={{ color: '#fbbf24', fontSize: '16px' }}>₹{b.proposedPrice} / {b.unit || b.productUnit || 'kg'}</strong>
+                            {discountPct > 0 && (
+                              <span style={{ fontSize: '11px', color: '#f87171', marginLeft: '6px' }}>(-{discountPct}%)</span>
+                            )}
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '11px', color: '#a3c2b0', display: 'block' }}>Total Proposed Value:</span>
+                            <strong style={{ color: '#34d399', fontSize: '16px' }}>₹{(b.proposedPrice * b.quantity).toFixed(2)}</strong>
+                          </div>
+                          {b.counterPrice && (
+                            <div>
+                              <span style={{ fontSize: '11px', color: '#38bdf8', display: 'block' }}>Your Counter Price:</span>
+                              <strong style={{ color: '#38bdf8', fontSize: '15px' }}>₹{b.counterPrice} / {b.unit || b.productUnit || 'kg'}</strong>
+                              <span style={{ fontSize: '11px', color: '#93c5fd', display: 'block' }}>
+                                Total: ₹{(b.counterPrice * b.quantity).toFixed(2)}
+                              </span>
+                            </div>
                           )}
                         </div>
-                        <div>
-                          <span style={{ fontSize: '11px', color: '#a3c2b0', display: 'block' }}>Total Proposed Value:</span>
-                          <strong style={{ color: '#34d399', fontSize: '16px' }}>₹{(b.proposedPrice * b.quantity).toFixed(2)}</strong>
-                        </div>
-                        {b.counterPrice && (
-                          <div>
-                            <span style={{ fontSize: '11px', color: '#38bdf8', display: 'block' }}>Your Counter Price:</span>
-                            <strong style={{ color: '#38bdf8', fontSize: '15px' }}>₹{b.counterPrice} / {b.unit || b.productUnit || 'kg'}</strong>
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Actions */}
-                      {isPending && (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '10px' }}>
-                          <button
-                            onClick={() => handleUpdateBargain(bId, 'accept')}
-                            style={{
-                              background: '#10b981',
-                              color: '#fff',
-                              border: 'none',
-                              padding: '8px 18px',
-                              borderRadius: '8px',
-                              fontSize: '12.5px',
-                              fontWeight: '700',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <CheckCircle size={15} /> Accept Offer
-                          </button>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <input
-                              type="number"
-                              min="1"
-                              placeholder="Counter ₹"
-                              value={counterInputs[bId] || ''}
-                              onChange={e => setCounterInputs({ ...counterInputs, [bId]: e.target.value })}
-                              style={{
-                                width: '90px',
-                                padding: '8px 10px',
-                                borderRadius: '8px',
-                                background: 'rgba(0,0,0,0.5)',
-                                border: '1px solid rgba(56, 189, 248, 0.4)',
-                                color: '#effbe7',
-                                fontSize: '12px',
-                                fontWeight: '700'
-                              }}
-                            />
+                        {/* Active Farmer Actions */}
+                        {isPending && (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '10px' }}>
                             <button
-                              onClick={() => handleUpdateBargain(bId, 'counter', counterInputs[bId])}
+                              onClick={() => handleUpdateBargain(bId, 'accept')}
                               style={{
-                                background: '#0284c7',
+                                background: '#10b981',
                                 color: '#fff',
                                 border: 'none',
+                                padding: '8px 18px',
+                                borderRadius: '8px',
+                                fontSize: '12.5px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <CheckCircle size={15} /> Accept Offer
+                            </button>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <input
+                                type="number"
+                                min="1"
+                                placeholder="Counter ₹"
+                                value={counterInputs[bId] || ''}
+                                onChange={e => setCounterInputs({ ...counterInputs, [bId]: e.target.value })}
+                                style={{
+                                  width: '90px',
+                                  padding: '8px 10px',
+                                  borderRadius: '8px',
+                                  background: 'rgba(0,0,0,0.5)',
+                                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                                  color: '#effbe7',
+                                  fontSize: '12px',
+                                  fontWeight: '700'
+                                }}
+                              />
+                              {hasValidCounter && (
+                                <span style={{ fontSize: '11.5px', color: '#38bdf8', fontWeight: '700' }}>
+                                  = ₹{(counterNum * b.quantity).toFixed(2)} total
+                                </span>
+                              )}
+                              <button
+                                onClick={() => handleUpdateBargain(bId, 'counter', counterInputs[bId])}
+                                disabled={!hasValidCounter}
+                                style={{
+                                  background: hasValidCounter ? '#0284c7' : 'rgba(255,255,255,0.1)',
+                                  color: '#fff',
+                                  border: 'none',
+                                  padding: '8px 14px',
+                                  borderRadius: '8px',
+                                  fontSize: '12px',
+                                  fontWeight: '700',
+                                  cursor: hasValidCounter ? 'pointer' : 'not-allowed'
+                                }}
+                              >
+                                Propose Counter
+                              </button>
+                            </div>
+
+                            <button
+                              onClick={() => handleUpdateBargain(bId, 'reject')}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                color: '#f87171',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
                                 padding: '8px 14px',
                                 borderRadius: '8px',
                                 fontSize: '12px',
@@ -6312,32 +7011,16 @@ export default function FarmerPortal({ onLogout }) {
                                 cursor: 'pointer'
                               }}
                             >
-                              Counter Offer
+                              Reject
                             </button>
                           </div>
-
-                          <button
-                            onClick={() => handleUpdateBargain(bId, 'reject')}
-                            style={{
-                              background: 'rgba(239, 68, 68, 0.15)',
-                              color: '#f87171',
-                              border: '1px solid rgba(239, 68, 68, 0.3)',
-                              padding: '8px 14px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              fontWeight: '700',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -6547,6 +7230,515 @@ export default function FarmerPortal({ onLogout }) {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            VIEW: EARNINGS & SETTLEMENTS (Financial Ledger & Telemetry)
+            ========================================================================= */}
+        {activeNav === 'earnings' && (
+          <div style={{ padding: 'clamp(16px, 3vw, 28px)', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+            {/* Header & Controls */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(52, 211, 153, 0.15)', border: '1px solid rgba(52, 211, 153, 0.35)', color: '#34d399', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  <ShieldCheck size={13} /> {t('Direct Farmer Financial Ledger')}
+                </div>
+                <h2 style={{ fontSize: 'clamp(20px, 3vw, 24px)', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
+                  {t('Earnings & Financial Settlements')}
+                </h2>
+                <p style={{ fontSize: '13px', color: '#9ca3af', margin: '4px 0 0 0', maxWidth: '680px' }}>
+                  {t('Verifiable reconciliation of direct UPI transfers, Cash on Delivery receipts, and fleet dispatch disbursements.')}
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  fetchIncomingOrders();
+                  showToast('Financial ledger refreshed from server', 'info');
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(74, 222, 128, 0.3)',
+                  color: '#effbe7',
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  minHeight: '44px'
+                }}
+              >
+                <RefreshCw size={15} />
+                {t('Refresh Ledger')}
+              </button>
+            </div>
+
+            {/* Financial Telemetry KPI Grid (4 Cards) */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '16px',
+              marginBottom: '28px'
+            }}>
+              {/* 1. Net Received to Date */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(6, 20, 18, 0.7) 100%)',
+                border: '1px solid rgba(52, 211, 153, 0.35)',
+                borderRadius: '14px',
+                padding: '20px',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {t('Net Payments Received')}
+                  </span>
+                  <div style={{ background: 'rgba(52, 211, 153, 0.2)', padding: '6px', borderRadius: '8px', color: '#34d399' }}>
+                    <CheckCircle2 size={18} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.5px' }}>
+                  ₹{paymentsActuallyReceived.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#a7f3d0', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  ✓ {incomingOrders.filter(o => o.paymentStatus === 'paid').length} {t('orders fully settled (Direct/Verified)')}
+                </div>
+              </div>
+
+              {/* 2. Pending COD Remittance */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(6, 20, 18, 0.7) 100%)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                borderRadius: '14px',
+                padding: '20px',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {t('Pending COD Remittance')}
+                  </span>
+                  <div style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '6px', borderRadius: '8px', color: '#fbbf24' }}>
+                    <Clock size={18} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.5px' }}>
+                  ₹{pendingCodAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#fde68a', marginTop: '6px' }}>
+                  ⏳ {deliveredAwaitingRemittance.length} {t('delivered orders awaiting driver deposit')}
+                </div>
+              </div>
+
+              {/* 3. Gross Completed Deliveries */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(6, 20, 18, 0.7) 100%)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                borderRadius: '14px',
+                padding: '20px',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#7dd3fc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {t('Gross Completed Sales')}
+                  </span>
+                  <div style={{ background: 'rgba(56, 189, 248, 0.2)', padding: '6px', borderRadius: '8px', color: '#7dd3fc' }}>
+                    <Package size={18} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.5px' }}>
+                  ₹{realDeliveredEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#bae6fd', marginTop: '6px' }}>
+                  📦 {completedOrdersCount} {t('orders successfully delivered')}
+                </div>
+              </div>
+
+              {/* 4. Active Pipeline Volume */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(167, 139, 250, 0.15) 0%, rgba(6, 20, 18, 0.7) 100%)',
+                border: '1px solid rgba(167, 139, 250, 0.35)',
+                borderRadius: '14px',
+                padding: '20px',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {t('Pipeline Revenue')}
+                  </span>
+                  <div style={{ background: 'rgba(167, 139, 250, 0.2)', padding: '6px', borderRadius: '8px', color: '#c4b5fd' }}>
+                    <Truck size={18} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.5px' }}>
+                  ₹{realPendingRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#ddd6fe', marginTop: '6px' }}>
+                  🚚 {ordersAwaitingFarmerAction.length + packedOrdersCount + transitOrdersCount} {t('active orders in fulfillment pipeline')}
+                </div>
+              </div>
+            </div>
+
+            {/* Direct UPI Payment Settlement Card */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.025)',
+              border: '1px solid rgba(74, 222, 128, 0.25)',
+              borderRadius: '14px',
+              padding: 'clamp(16px, 3vw, 22px)',
+              marginBottom: '28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '10px',
+                    background: (upiQrCode || upiId) ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: (upiQrCode || upiId) ? '#34d399' : '#f59e0b',
+                    flexShrink: 0
+                  }}>
+                    <QrCode size={24} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: '#f3f4f6' }}>
+                        {t('Direct UPI Payment Integration')}
+                      </h4>
+                      {(upiQrCode || upiId) ? (
+                        <span style={{ fontSize: '10.5px', fontWeight: '800', background: 'rgba(52, 211, 153, 0.2)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.4)', padding: '2px 8px', borderRadius: '12px' }}>
+                          ✓ {t('Active — 100% Direct Payout')}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '10.5px', fontWeight: '800', background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.4)', padding: '2px 8px', borderRadius: '12px' }}>
+                          ⚠️ {t('Not Configured')}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ margin: '3px 0 0 0', fontSize: '12.5px', color: '#9ca3af' }}>
+                      {(upiQrCode || upiId)
+                        ? t('Customer UPI checkout payments are routed straight into your registered bank account without intermediate holding.')
+                        : t('Upload your phone UPI QR code or VPA ID in Profile to allow customers to pay you directly.')}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setActiveNav('profile')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: (upiQrCode || upiId) ? 'rgba(74, 222, 128, 0.15)' : '#10b981',
+                    border: `1px solid ${(upiQrCode || upiId) ? 'rgba(74, 222, 128, 0.35)' : 'transparent'}`,
+                    color: (upiQrCode || upiId) ? '#4ade80' : '#ffffff',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    minHeight: '44px'
+                  }}
+                >
+                  {(upiQrCode || upiId) ? t('Manage QR & UPI in Profile') : t('Configure UPI QR in Profile')}
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+
+              {(upiQrCode || upiId) && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  flexWrap: 'wrap'
+                }}>
+                  {upiQrCode && (
+                    <div style={{ width: '56px', height: '56px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(74, 222, 128, 0.4)', flexShrink: 0, background: '#ffffff', padding: '2px' }}>
+                      <img src={upiQrCode} alt="Farmer UPI QR" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: '180px' }}>
+                    <div style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>
+                      {t('Registered UPI Virtual Payment Address (VPA)')}
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: '800', color: '#4ade80', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
+                      {upiId || t('Linked with uploaded QR code')}
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: '#cbd5e1', marginTop: '2px' }}>
+                      {t('Payee')}: <strong>{upiPayeeName || user?.farmName || farmerDisplayName}</strong>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#9db5aa', background: 'rgba(255,255,255,0.04)', padding: '6px 12px', borderRadius: '8px' }}>
+                    🛡️ {t('100% Farm-Gate Guarantee — 0% Commission')}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Financial Ledger Section */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid rgba(74, 222, 128, 0.2)',
+              borderRadius: '16px',
+              padding: 'clamp(16px, 3vw, 24px)'
+            }}>
+              {/* Ledger Filter Tabs & Subtitle */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '20px' }}>
+                <div>
+                  <h3 style={{ fontSize: '17px', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
+                    {t('Order-Linked Financial Ledger')}
+                  </h3>
+                  <p style={{ fontSize: '12.5px', color: '#9ca3af', margin: '3px 0 0 0' }}>
+                    {t('Line-by-line reconciliation of orders, payment methods, and settlement statuses')}
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {[
+                    { id: 'all', label: t('All Orders'), count: incomingOrders.length },
+                    { id: 'paid', label: t('Confirmed Settled'), count: incomingOrders.filter(o => o.paymentStatus === 'paid').length },
+                    { id: 'pending_cod', label: t('Pending COD Remittance'), count: incomingOrders.filter(o => (o.paymentMethod === 'cod' || o.isCod) && o.paymentStatus !== 'paid' && o.status !== 'cancelled').length },
+                    { id: 'pipeline', label: t('In Pipeline'), count: incomingOrders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled').length }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setEarningsFilterTab(tab.id)}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        border: '1px solid',
+                        minHeight: '44px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: earningsFilterTab === tab.id ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                        borderColor: earningsFilterTab === tab.id ? '#4ade80' : 'rgba(255, 255, 255, 0.1)',
+                        color: earningsFilterTab === tab.id ? '#4ade80' : '#cbd5e1'
+                      }}
+                    >
+                      <span>{tab.label}</span>
+                      <span style={{
+                        fontSize: '10px',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        background: earningsFilterTab === tab.id ? '#4ade80' : 'rgba(255,255,255,0.1)',
+                        color: earningsFilterTab === tab.id ? '#041d17' : '#9ca3af',
+                        fontWeight: '900'
+                      }}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Ledger Items List */}
+              {(() => {
+                const ledgerOrders = incomingOrders.filter(o => {
+                  if (earningsFilterTab === 'paid') return o.paymentStatus === 'paid';
+                  if (earningsFilterTab === 'pending_cod') return (o.paymentMethod === 'cod' || o.isCod) && o.paymentStatus !== 'paid' && o.status !== 'cancelled';
+                  if (earningsFilterTab === 'pipeline') return o.status !== 'delivered' && o.status !== 'cancelled';
+                  return true;
+                });
+
+                if (ledgerOrders.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: '48px 20px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      <FileText size={36} color="#6b7280" style={{ margin: '0 auto 12px auto', display: 'block' }} />
+                      <h4 style={{ fontSize: '15px', fontWeight: '700', color: '#e5e7eb', margin: '0 0 6px 0' }}>
+                        {t('No Ledger Entries Under This Filter')}
+                      </h4>
+                      <p style={{ fontSize: '12.5px', color: '#9ca3af', margin: 0 }}>
+                        {t('Switch to "All Orders" to view every transaction record.')}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {ledgerOrders.map(order => {
+                      const orderId = order._id || order.id;
+                      const isPaid = order.paymentStatus === 'paid';
+                      const isCod = order.paymentMethod === 'cod' || order.isCod;
+                      const isDelivered = order.status === 'delivered';
+                      const isCancelled = order.status === 'cancelled';
+                      const itemsSummary = (order.items || []).map(it => `${it.quantity || 1}x ${it.title || it.name || 'Produce'}`).join(', ') || 'Agricultural Produce';
+
+                      return (
+                        <div
+                          key={orderId}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: '12px',
+                            padding: '14px 18px',
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            border: `1px solid ${isPaid ? 'rgba(52, 211, 153, 0.25)' : isDelivered && isCod ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.08)'}`,
+                            borderRadius: '12px'
+                          }}
+                        >
+                          {/* Order ID & Details */}
+                          <div style={{ flex: '1 1 240px', minWidth: '220px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: '800', color: '#4ade80', fontFamily: 'monospace' }}>
+                                #{String(orderId).slice(-6).toUpperCase()}
+                              </span>
+                              <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                                • {new Date(order.createdAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '13px', fontWeight: '600', color: '#f3f4f6' }}>
+                              {order.customer?.name || order.customerName || t('Registered Buyer')}
+                            </div>
+                            <div style={{ fontSize: '11.5px', color: '#9db5aa', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '340px' }}>
+                              {itemsSummary}
+                            </div>
+                          </div>
+
+                          {/* Payment Method & Delivery Status */}
+                          <div style={{ flex: '1 1 180px', minWidth: '160px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {isCod ? '💵 Cash on Delivery' : '⚡ Direct UPI / Online'}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '3px' }}>
+                              Order Status: <strong style={{ textTransform: 'capitalize', color: isDelivered ? '#4ade80' : isCancelled ? '#f87171' : '#fbbf24' }}>{order.status}</strong>
+                            </div>
+                          </div>
+
+                          {/* Financial Settlement Classification Badge */}
+                          <div style={{ flex: '1 1 180px', minWidth: '160px' }}>
+                            {isPaid ? (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                background: 'rgba(52, 211, 153, 0.15)',
+                                color: '#34d399',
+                                border: '1px solid rgba(52, 211, 153, 0.35)',
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '700'
+                              }}>
+                                <CheckCircle2 size={12} /> {t('✓ Settled / Received')}
+                              </span>
+                            ) : isCancelled ? (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                background: 'rgba(239, 68, 68, 0.12)',
+                                color: '#f87171',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '700'
+                              }}>
+                                ❌ {t('Order Cancelled')}
+                              </span>
+                            ) : isCod && isDelivered ? (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                background: 'rgba(245, 158, 11, 0.15)',
+                                color: '#fbbf24',
+                                border: '1px solid rgba(245, 158, 11, 0.35)',
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '700'
+                              }}>
+                                <Clock size={12} /> {t('⏳ COD in Fleet Custody')}
+                              </span>
+                            ) : isCod ? (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                background: 'rgba(56, 189, 248, 0.12)',
+                                color: '#7dd3fc',
+                                border: '1px solid rgba(56, 189, 248, 0.3)',
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '700'
+                              }}>
+                                ⏳ {t('COD on Handover')}
+                              </span>
+                            ) : (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                background: 'rgba(250, 204, 21, 0.12)',
+                                color: '#facc15',
+                                border: '1px solid rgba(250, 204, 21, 0.3)',
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '700'
+                              }}>
+                                ⏳ {t('Awaiting Settlement')}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Order Valuation Amount */}
+                          <div style={{ textAlign: 'right', minWidth: '90px' }}>
+                            <div style={{ fontSize: '16px', fontWeight: '900', color: isPaid ? '#4ade80' : '#ffffff' }}>
+                              ₹{(Number(order.totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <span style={{ fontSize: '10px', color: '#9ca3af' }}>
+                              {order.items?.length || 1} {order.items?.length === 1 ? 'item' : 'items'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Zero Intermediary Guarantee Callout */}
+            <div style={{
+              marginTop: '24px',
+              padding: '14px 18px',
+              borderRadius: '12px',
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(52, 211, 153, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <ShieldCheck size={22} color="#34d399" style={{ flexShrink: 0 }} />
+              <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.5' }}>
+                <strong style={{ color: '#4ade80' }}>{t('AgriLink Transparent Settlement Pledge')}:</strong> {t('100% of the farm produce price listed by you is remitted to you without commission cuts. COD cash collected by AgriLink drivers is cleared directly into your ledger upon delivery confirmation.')}
+              </div>
+            </div>
           </div>
         )}
 
@@ -8363,6 +9555,7 @@ export default function FarmerPortal({ onLogout }) {
                             style={{ minHeight: '44px' }}
                           >
                             <option value="">Leave empty (Unspecified)</option>
+                            <option value="Not Applicable">Not Applicable (N/A)</option>
                             <option value="Premium">Premium</option>
                             <option value="Grade A">Grade A</option>
                             <option value="Standard">Standard</option>
@@ -8412,6 +9605,7 @@ export default function FarmerPortal({ onLogout }) {
                             style={{ minHeight: '44px' }}
                           >
                             <option value="">Not Specified</option>
+                            <option value="Not Applicable">Not Applicable (N/A)</option>
                             <option value="Natural">Natural</option>
                             <option value="Organic">Organic</option>
                             <option value="Conventional">Conventional</option>
@@ -8435,6 +9629,7 @@ export default function FarmerPortal({ onLogout }) {
                             style={{ minHeight: '44px' }}
                           >
                             <option value="">Not Specified</option>
+                            <option value="Not Applicable">Not Applicable (N/A)</option>
                             <option value="Drip">Drip</option>
                             <option value="Rain-fed">Rain-fed</option>
                             <option value="Borewell">Borewell</option>
@@ -8446,24 +9641,119 @@ export default function FarmerPortal({ onLogout }) {
                   )}
                 </div>
 
-                {/* IMAGE & DESCRIPTION */}
+                {/* PRODUCE IMAGE (FILE UPLOAD OR URL) */}
                 <div>
-                  <label style={{ fontSize: '12px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>Produce Image URL</label>
+                  <label style={{ fontSize: '12px', color: '#effbe7', display: 'block', marginBottom: '6px', fontWeight: '600' }}>
+                    Produce Photo
+                  </label>
+                  
+                  {/* Hidden file input */}
+                  <input
+                    type="file"
+                    ref={editImageInputRef}
+                    onChange={handleEditImageChange}
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                  />
+
+                  {/* Photo Preview & Action Container */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px',
+                    padding: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px dashed rgba(52, 211, 153, 0.4)',
+                    borderRadius: '12px',
+                    marginBottom: '10px'
+                  }}>
+                    {(editImagePreview || editImage) ? (
+                      <div style={{ position: 'relative', width: '70px', height: '70px', borderRadius: '10px', overflow: 'hidden', border: '2px solid #10b981', flexShrink: 0 }}>
+                        <img
+                          src={editImagePreview || editImage}
+                          alt="Edit Produce Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80'; }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ width: '70px', height: '70px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', flexShrink: 0 }}>
+                        <Camera size={26} />
+                      </div>
+                    )}
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => editImageInputRef.current?.click()}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: '#10b981',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '8px 14px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Camera size={14} /> Upload / Take Photo
+                        </button>
+                        {(editImagePreview || editImage) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditImage('');
+                              setEditImagePreview(null);
+                              setEditImageFile(null);
+                              if (editImageInputRef.current) editImageInputRef.current.value = '';
+                            }}
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                              color: '#f87171',
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '11px', color: '#9db5aa', display: 'block', marginTop: '6px' }}>
+                        JPG, PNG, WebP up to 5MB. Or use web link below.
+                      </span>
+                    </div>
+                  </div>
+
                   <input
                     type="url"
                     value={editImage}
-                    onChange={e => setEditImage(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
+                    onChange={e => {
+                      setEditImage(e.target.value);
+                      setEditImagePreview(e.target.value);
+                    }}
+                    placeholder="Or paste image URL (https://images.unsplash.com/...)"
                     className="input-field"
                     style={{ minHeight: '44px' }}
                   />
+
                   {/* Preset quick buttons */}
                   <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
                     {(PRESET_IMAGES[editCategory] || PRESET_IMAGES.vegetable).slice(0, 3).map((item, idx) => (
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => setEditImage(item.url)}
+                        onClick={() => {
+                          setEditImage(item.url);
+                          setEditImagePreview(item.url);
+                        }}
                         style={{
                           background: editImage === item.url ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.06)',
                           border: `1px solid ${editImage === item.url ? '#34d399' : 'rgba(255,255,255,0.1)'}`,
@@ -8639,6 +9929,17 @@ export default function FarmerPortal({ onLogout }) {
             )}
           </div>
           <span>Orders</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeNav === 'earnings' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveNav('earnings');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <IndianRupee size={20} />
+          <span>Earnings</span>
         </button>
 
         <button

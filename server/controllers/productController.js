@@ -308,29 +308,29 @@ const addProduct = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Valid harvest date is required' });
       }
 
-      const validGrades = ['Premium', 'Grade A', 'Standard'];
+      const validGrades = ['Premium', 'Grade A', 'Standard', 'Not Applicable', 'N/A'];
       if (!qualityGrade || typeof qualityGrade !== 'string' || !validGrades.includes(qualityGrade.trim())) {
         return res.status(400).json({
           success: false,
-          message: 'Quality grade is required (must be Premium, Grade A, or Standard)'
+          message: 'Quality grade is required (must be Premium, Grade A, Standard, or Not Applicable)'
         });
       }
       cleanedQualityGrade = qualityGrade.trim();
 
-      const validCultivations = ['Natural', 'Organic', 'Conventional', 'Hydroponic'];
+      const validCultivations = ['Natural', 'Organic', 'Conventional', 'Hydroponic', 'Not Applicable', 'N/A'];
       if (!cultivationType || typeof cultivationType !== 'string' || !validCultivations.includes(cultivationType.trim())) {
         return res.status(400).json({
           success: false,
-          message: 'Cultivation type is required (must be Natural, Organic, Conventional, or Hydroponic)'
+          message: 'Cultivation type is required (must be Natural, Organic, Conventional, Hydroponic, or Not Applicable)'
         });
       }
       cleanedCultivationType = cultivationType.trim();
 
-      const validIrrigations = ['Drip', 'Rain-fed', 'Borewell', 'Canal/River'];
+      const validIrrigations = ['Drip', 'Rain-fed', 'Borewell', 'Canal/River', 'Not Applicable', 'N/A'];
       if (!irrigationMethod || typeof irrigationMethod !== 'string' || !validIrrigations.includes(irrigationMethod.trim())) {
         return res.status(400).json({
           success: false,
-          message: 'Irrigation method is required (must be Drip, Rain-fed, Borewell, or Canal/River)'
+          message: 'Irrigation method is required (must be Drip, Rain-fed, Borewell, Canal/River, or Not Applicable)'
         });
       }
       cleanedIrrigationMethod = irrigationMethod.trim();
@@ -471,16 +471,10 @@ const updateProduct = async (req, res) => {
       if (title !== undefined && title.trim()) product.title = title.trim();
       if (unit !== undefined) product.unit = unit.trim();
       if (description !== undefined) product.description = description.trim();
-      if (image !== undefined) {
-        if (typeof image === 'string' && image.startsWith('data:image/')) {
-          try {
-            product.image = validateAndSaveProductImage(image);
-          } catch (e) {
-            // retain existing image on error
-          }
-        } else {
-          product.image = image;
-        }
+      if (req.body.image !== undefined) {
+        product.image = req.body.image;
+      } else if (image !== undefined) {
+        product.image = image;
       }
       if (category !== undefined) product.category = category;
       if (location !== undefined) product.location = location;
