@@ -72,7 +72,8 @@ export const orderAPI = {
   generateDeliveryOtp: (id) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/generate`, {}, { headers: getAuthHeaders() }),
   verifyDeliveryOtp: (id, data) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/verify`, data, { headers: getAuthHeaders() }),
   confirmDispatchSignal: (id, data) => axios.post(`${API_BASE}/orders/${id || 'batch'}/dispatch-signal`, data || {}, { headers: getAuthHeaders() }),
-  processPayment: (data) => axios.post(`${API_BASE}/orders/pay`, data, { headers: getAuthHeaders() })
+  processPayment: (data) => axios.post(`${API_BASE}/orders/pay`, data, { headers: getAuthHeaders() }),
+  collectCodPayment: (id, data) => axios.post(`${API_BASE}/orders/${id}/collect-cod`, data || {}, { headers: getAuthHeaders() })
 };
 
 
@@ -85,6 +86,9 @@ export const aiAPI = {
 
 export const reviewAPI = {
   createReview: (data) => axios.post(`${API_BASE}/reviews`, data, { headers: getAuthHeaders() }),
+  createDeliveryReview: (data) => axios.post(`${API_BASE}/reviews/delivery`, data, { headers: getAuthHeaders() }),
+  getFarmerReviews: () => axios.get(`${API_BASE}/reviews/farmer`, { headers: getAuthHeaders() }),
+  getDeliveryReviews: () => axios.get(`${API_BASE}/reviews/delivery`, { headers: getAuthHeaders() }),
   getProductReviews: (productId) => axios.get(`${API_BASE}/reviews/product/${productId}`)
 };
 

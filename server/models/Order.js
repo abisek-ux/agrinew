@@ -58,9 +58,12 @@ const orderSchema = new mongoose.Schema(
     checkoutId: { type: String, default: null },
     stockRestored: { type: Boolean, default: false },
     paymentMethod: { type: String, enum: ['cod', 'upi', 'COD', 'UPI'], default: 'cod' },
-    paymentStatus: { type: String, enum: ['pending', 'paid', 'refunded', 'failed'], default: 'pending' },
+    paymentStatus: { type: String, enum: ['pending', 'paid', 'collected', 'reported', 'refunded', 'failed'], default: 'pending' },
     transactionId: { type: String, default: null },
-    paidAt: { type: Date, default: null }
+    paidAt: { type: Date, default: null },
+    paymentCollectedAt: { type: Date, default: null },
+    paymentCollectedBy: { type: String, default: null },
+    paymentCollectionMethod: { type: String, default: null }
   },
   { timestamps: true }
 );

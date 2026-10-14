@@ -460,7 +460,7 @@ const recipeAssistant = async (req, res) => {
     }
 
     // 2. Off-topic Guardrail
-    const isOffTopic = /weather forecast|stock price|cricket score|movie showtime|write code/i.test(cleanQuery);
+    const isOffTopic = /weather forecast|stock price|cricket score|movie showtime|write code|crypto|bitcoin/i.test(cleanQuery);
     if (isOffTopic) {
       return res.json({
         success: true,
@@ -471,41 +471,107 @@ const recipeAssistant = async (req, res) => {
       });
     }
 
-    // 3. Conversation Context & Follow-Up Resolution
-    let activeRecipeTarget = '';
+    // 3. Strict Intent: Greetings ("Hi", "Hello", "Hey", "Namaste", etc.)
+    const isGreeting =
+      /^(hi|hii|hiii|hello|hey|heyy|namaste|vanakkam|good\s*(morning|afternoon|evening)|howdy|greetings)[!.,\s]*$/i.test(cleanQuery) ||
+      (/^(hi|hello|hey|namaste|vanakkam)\b/i.test(cleanQuery) && cleanQuery.split(/\s+/).length <= 2 && !/juice|soup|curry|recipe|cook|make|smoothie|salad|dish|cart/i.test(cleanQuery));
+
+    if (isGreeting) {
+      const greetingReply = "Hello! I am your AgriLink Farm-to-Table Culinary Assistant. You can ask me what to cook with the fresh produce in your cart, request step-by-step preparation for juices, soups, curries, or smoothies, or ask for ingredient substitutions. What fresh dish would you like to prepare today?";
+      return res.json({
+        success: true,
+        intent: 'greeting',
+        answer: greetingReply,
+        reply: greetingReply,
+        recipe: null
+      });
+    }
+
+    // 4. Conversation Context & Follow-Up Resolution
     const recentHistoryText = conversationHistory.map(h => (h.text || h.message || h.query || '')).join(' ').toLowerCase();
 
     // Check if user is referencing a prior recipe via pronouns ("it", "this", "the juice", "the recipe", "without sugar", "add ginger")
     const isFollowUp = /without sugar|add ginger|no lemon|don't have lemon|cooking time|how long|procedure|how to make it|serves/i.test(qLower) &&
-      !/beans|poriyal|salad|biryani|dal/i.test(qLower);
+      !/grapes|cabbage|banana|tomato|beans|poriyal|salad|biryani|dal|soup|smoothie|curry/i.test(qLower);
 
-    if (qLower.includes('carrot juice') || (!isFollowUp && qLower.includes('juice') && qLower.includes('carrot'))) {
-      activeRecipeTarget = 'carrot_juice';
-    } else if (qLower.includes('beans poriyal') || qLower.includes('poriyal') || qLower.includes('beans')) {
-      activeRecipeTarget = 'beans_poriyal';
-    } else if (qLower.includes('salad') || qLower.includes('cucumber')) {
-      activeRecipeTarget = 'farm_salad';
-    } else if (qLower.includes('spinach') || qLower.includes('dal')) {
-      activeRecipeTarget = 'spinach_dal';
-    } else if (qLower.includes('biryani') || qLower.includes('pulao')) {
-      activeRecipeTarget = 'vegetable_pulao';
-    } else if (isFollowUp) {
-      // Retain context from lastRecipeName or history
+    let activeRecipeTarget = '';
+    if (isFollowUp) {
       if (lastRecipeName && lastRecipeName.toLowerCase().includes('carrot')) {
         activeRecipeTarget = 'carrot_juice';
+      } else if (lastRecipeName && lastRecipeName.toLowerCase().includes('grape')) {
+        activeRecipeTarget = 'grape_juice';
+      } else if (lastRecipeName && lastRecipeName.toLowerCase().includes('banana')) {
+        activeRecipeTarget = 'banana_smoothie';
+      } else if (lastRecipeName && lastRecipeName.toLowerCase().includes('tomato')) {
+        activeRecipeTarget = 'tomato_soup';
+      } else if (lastRecipeName && lastRecipeName.toLowerCase().includes('cabbage')) {
+        activeRecipeTarget = 'cabbage_curry';
       } else if (recentHistoryText.includes('carrot juice')) {
         activeRecipeTarget = 'carrot_juice';
+      } else if (recentHistoryText.includes('grape')) {
+        activeRecipeTarget = 'grape_juice';
       } else if (recentHistoryText.includes('poriyal')) {
         activeRecipeTarget = 'beans_poriyal';
       }
     }
 
-    // Fallback if carrot mentioned in generic query
-    if (!activeRecipeTarget && qLower.includes('carrot')) {
-      activeRecipeTarget = 'carrot_juice';
+    // Detect Dish Category Intent
+    const isJuice = /juice|cold\s*press|sharbat|extract|drink/i.test(qLower);
+    const isSmoothie = /smoothie|shake|thick\s*shake|frappe/i.test(qLower);
+    const isSoup = /soup|broth|rasam|shorba|chowder/i.test(qLower);
+    const isCurry = /curry|poriyal|sabzi|gravy|sambar|korma|masala|saute/i.test(qLower);
+    const isSalad = /salad|bowl|slaw|medley/i.test(qLower);
+    const isRice = /rice|pulao|biryani|khichdi/i.test(qLower);
+    const isPreservation = /preserve|preservation|store|shelf\s*life|spoilage|keep fresh|pickling|canning/i.test(qLower);
+    const isCartBased = /cart|my cart|in my cart|items in cart|cook with my/i.test(qLower);
+    const isSubstitution = /substitute|substitution|replace|alternative|instead of/i.test(qLower);
+
+    // Detect Target Ingredient
+    let detectedIngredient = '';
+    if (/grape|grapes/i.test(qLower)) detectedIngredient = 'grapes';
+    else if (/carrot|carrots/i.test(qLower)) detectedIngredient = 'carrot';
+    else if (/tomato|tomatoes/i.test(qLower)) detectedIngredient = 'tomato';
+    else if (/banana|bananas/i.test(qLower)) detectedIngredient = 'banana';
+    else if (/cabbage/i.test(qLower)) detectedIngredient = 'cabbage';
+    else if (/bean|beans/i.test(qLower)) detectedIngredient = 'beans';
+    else if (/spinach|palak/i.test(qLower)) detectedIngredient = 'spinach';
+    else if (/cucumber/i.test(qLower)) detectedIngredient = 'cucumber';
+    else if (/apple|apples/i.test(qLower)) detectedIngredient = 'apple';
+    else if (/potato|potatoes/i.test(qLower)) detectedIngredient = 'potato';
+    else if (/mango|mangoes/i.test(qLower)) detectedIngredient = 'mango';
+    else if (/orange|oranges/i.test(qLower)) detectedIngredient = 'orange';
+    else if (/beetroot|beets/i.test(qLower)) detectedIngredient = 'beetroot';
+    else if (/pumpkin/i.test(qLower)) detectedIngredient = 'pumpkin';
+    else if (/corn|maize/i.test(qLower)) detectedIngredient = 'corn';
+    else if (/onion|onions/i.test(qLower)) detectedIngredient = 'onion';
+    else if (/ginger/i.test(qLower)) detectedIngredient = 'ginger';
+
+    // Map specific target if explicit
+    if (!activeRecipeTarget) {
+      if (detectedIngredient === 'grapes' && (isJuice || !isSoup)) {
+        activeRecipeTarget = 'grape_juice';
+      } else if (detectedIngredient === 'carrot' && (isJuice || (!isCurry && !isSalad))) {
+        activeRecipeTarget = 'carrot_juice';
+      } else if (detectedIngredient === 'tomato' && (isSoup || !isCurry)) {
+        activeRecipeTarget = 'tomato_soup';
+      } else if (detectedIngredient === 'banana' && (isSmoothie || isJuice || !isCurry)) {
+        activeRecipeTarget = 'banana_smoothie';
+      } else if (detectedIngredient === 'cabbage' && (isCurry || !isJuice)) {
+        activeRecipeTarget = 'cabbage_curry';
+      } else if (detectedIngredient === 'beans' || qLower.includes('beans poriyal') || qLower.includes('poriyal')) {
+        activeRecipeTarget = 'beans_poriyal';
+      } else if (detectedIngredient === 'spinach' && isSoup) {
+        activeRecipeTarget = 'spinach_soup';
+      } else if (isSalad || detectedIngredient === 'cucumber') {
+        activeRecipeTarget = 'farm_salad';
+      } else if (isCartBased) {
+        activeRecipeTarget = 'cart_recipe';
+      } else if (isPreservation) {
+        activeRecipeTarget = 'preservation_guide';
+      }
     }
 
-    // 4. Dedicated Recipe Definitions
+    // 5. Curated Recipe Catalog
     const recipes = {
       carrot_juice: {
         recipeName: 'Carrot Juice',
@@ -527,7 +593,111 @@ const recipeAssistant = async (req, res) => {
           'Strain through a fine mesh strainer if preferred (or retain pulp for natural fiber).',
           'Squeeze fresh lemon juice for brightness and stir gently.',
           'Serve chilled and fresh immediately to maximize nutrient absorption.'
-        ]
+        ],
+        storageTips: 'Best consumed within 20 minutes of extraction. Can be refrigerated in an airtight glass bottle for up to 12 hours.'
+      },
+      grape_juice: {
+        recipeName: 'Grape Juice',
+        title: '🍇 Fresh Farm Sweet Grape Juice',
+        category: 'Fresh Juice & Beverages',
+        servings: 2,
+        prepTime: '8 minutes',
+        cookTime: '0 minutes',
+        ingredients: [
+          '2 cups fresh seedless organic grapes (black or green, thoroughly washed)',
+          '1/2 cup cold water or crushed ice',
+          '1 tsp fresh lemon juice',
+          'Pinch of black salt (kala namak) for digestion',
+          '1 tsp honey (optional, grapes are naturally sweet)'
+        ],
+        steps: [
+          'Pluck grapes from stems and soak in cold water with a pinch of turmeric/salt for 5 minutes, then rinse well.',
+          'Place grapes in a blender jar along with 1/2 cup of chilled water.',
+          'Pulse for 45-60 seconds on high speed until completely puréed.',
+          'Pour through a fine mesh strainer into a pitcher, gently pressing the skins with the back of a spoon.',
+          'Stir in fresh lemon juice and a light pinch of black salt.',
+          'Pour into chilled tall glasses and serve fresh immediately.'
+        ],
+        storageTips: 'Keep refrigerated in a sealed glass jug. Shake well before serving. Best consumed within 24 hours.'
+      },
+      tomato_soup: {
+        recipeName: 'Tomato Soup',
+        title: '🍅 Creamy Farm-Fresh Tomato Soup',
+        category: 'Warm Soups & Broths',
+        servings: 3,
+        prepTime: '10 minutes',
+        cookTime: '15 minutes',
+        ingredients: [
+          '500g ripe farm-fresh red tomatoes (washed and quartered)',
+          '1 medium onion (thinly sliced)',
+          '4 cloves fresh garlic (crushed)',
+          '1 tbsp cold-pressed olive oil or butter',
+          '1 cup organic vegetable broth or clean water',
+          '1/2 tsp freshly cracked black pepper',
+          'Salt to taste',
+          '4-5 fresh basil leaves for garnish'
+        ],
+        steps: [
+          'Heat olive oil or butter in a heavy-bottomed saucepan over medium flame.',
+          'Add crushed garlic and sliced onions; sauté for 2-3 minutes until fragrant and translucent.',
+          'Add quartered fresh tomatoes, 1/2 tsp salt, and 1 cup of vegetable broth.',
+          'Cover and simmer gently for 12–15 minutes until tomatoes are soft and collapsed.',
+          'Remove from heat, let cool for 3 minutes, and blend until silky smooth using an immersion blender.',
+          'Return to low heat, adjust salt, and sprinkle freshly cracked black pepper.',
+          'Ladle into warm bowls and garnish with torn fresh basil leaves.'
+        ],
+        storageTips: 'Store in an airtight container in the refrigerator for up to 3 days. Reheat gently on the stovetop.'
+      },
+      banana_smoothie: {
+        recipeName: 'Banana Smoothie',
+        title: '🍌 Creamy Farm Banana Protein Smoothie',
+        category: 'Smoothies & Breakfast Bowls',
+        servings: 2,
+        prepTime: '5 minutes',
+        cookTime: '0 minutes',
+        ingredients: [
+          '2 ripe organic bananas (peeled and sliced)',
+          '1.5 cups chilled milk (or oat / almond milk)',
+          '1 tbsp pure honey or dates paste',
+          '1 tbsp rolled oats or soaked chia seeds (for sustained energy)',
+          '1/4 tsp fragrant cinnamon powder',
+          '4 ice cubes'
+        ],
+        steps: [
+          'Peel bananas and slice into uniform rounds.',
+          'Add banana slices, chilled milk, rolled oats, and honey into the blender pitcher.',
+          'Add ice cubes and ground cinnamon.',
+          'Blend on high power for 60 seconds until rich, frothy, and completely uniform.',
+          'Pour into tall chilled glasses and dust lightly with cinnamon before enjoying immediately.'
+        ],
+        storageTips: 'Bananas oxidize quickly; enjoy right after blending for optimal texture and enzyme retention.'
+      },
+      cabbage_curry: {
+        recipeName: 'Cabbage Curry',
+        title: '🥬 South Indian Cabbage Poriyal Curry',
+        category: 'Farm Sauté & Traditional Curries',
+        servings: 4,
+        prepTime: '10 minutes',
+        cookTime: '12 minutes',
+        ingredients: [
+          '350g fresh organic cabbage (finely shredded)',
+          '1 tbsp cold-pressed coconut oil or mustard oil',
+          '1 tsp mustard seeds and split urad dal',
+          '1 sprig fresh green curry leaves',
+          '1 green chilli (slit lengthwise)',
+          '1/4 tsp organic turmeric powder',
+          'Salt to taste',
+          '3 tbsp fresh grated coconut'
+        ],
+        steps: [
+          'Rinse and finely shred the cabbage.',
+          'Heat oil in a pan; splutter mustard seeds, urad dal, green chilli, and curry leaves.',
+          'Add the shredded cabbage, turmeric powder, and salt. Toss well to combine.',
+          'Sprinkle 2-3 tablespoons of clean water, cover with a lid, and cook on low flame for 7–8 minutes until tender-crisp.',
+          'Uncover the pan and sauté on medium flame for 1-2 minutes until any moisture evaporates.',
+          'Turn off the heat and fold in fresh grated coconut. Serve warm with steamed rice or rotis.'
+        ],
+        storageTips: 'Refrigerate in a covered glass dish for up to 48 hours. Reheat on a dry pan.'
       },
       beans_poriyal: {
         recipeName: 'Beans Poriyal',
@@ -549,57 +719,185 @@ const recipeAssistant = async (req, res) => {
           'Add vegetables with 1/4 tsp turmeric, salt, and 3 tbsp water.',
           'Cover and steam on low flame for 6–7 minutes until tender-crisp.',
           'Uncover, allow remaining water to evaporate, and finish with grated coconut.'
-        ]
+        ],
+        storageTips: 'Store in an airtight container for up to 2 days.'
+      },
+      farm_salad: {
+        recipeName: 'Farm Salad',
+        title: '🥗 Crunchy Farm-Fresh Cucumber & Tomato Salad',
+        category: 'Salads & Raw Bowls',
+        servings: 2,
+        prepTime: '8 minutes',
+        cookTime: '0 minutes',
+        ingredients: [
+          '2 crisp organic cucumbers (sliced)',
+          '2 vine-ripened tomatoes (chopped)',
+          '1/2 red onion (finely sliced)',
+          '1 tbsp extra virgin olive oil',
+          '1 tbsp fresh lemon juice',
+          'Salt and freshly ground black pepper',
+          'Fresh coriander or mint leaves (chopped)'
+        ],
+        steps: [
+          'Wash and chop cucumbers and tomatoes into bite-sized pieces.',
+          'Toss vegetables in a wide salad bowl with sliced onions.',
+          'Whisk olive oil, lemon juice, salt, and black pepper in a small bowl.',
+          'Drizzle the dressing over the vegetables just before serving and toss lightly.',
+          'Garnish with freshly chopped coriander or mint.'
+        ],
+        storageTips: 'Consume immediately after dressing to prevent greens from wilting.'
       }
     };
 
-    const targetRecipe = recipes[activeRecipeTarget] || recipes.carrot_juice;
+    // Dynamic cart recipe if requested
+    if (isCartBased || activeRecipeTarget === 'cart_recipe') {
+      const cartProduceTitles = Array.isArray(cartItems) && cartItems.length > 0
+        ? cartItems.map(i => i.title || i.name).filter(Boolean)
+        : ['Organic Vine Tomatoes', 'Fresh Spinach', 'Garden Carrots'];
 
-    // 5. Intelligent Follow-Up Answers
+      recipes.cart_recipe = {
+        recipeName: 'Farm Cart Harvest Sauté',
+        title: `🍲 Farm Cart Harvest Sauté (${cartProduceTitles.slice(0, 2).join(' & ')})`,
+        category: 'Cart-to-Table Custom Meal',
+        servings: 3,
+        prepTime: '10 minutes',
+        cookTime: '12 minutes',
+        ingredients: [
+          ...cartProduceTitles.map(p => `Fresh ${p} from your order`),
+          '2 cloves garlic (minced)',
+          '1 tbsp cold-pressed vegetable oil',
+          '1/2 tsp cumin seeds',
+          'Salt and freshly cracked black pepper to taste',
+          'Fresh coriander leaves for garnish'
+        ],
+        steps: [
+          `Wash and prep your cart produce (${cartProduceTitles.join(', ')}).`,
+          'Heat 1 tbsp oil in a heavy skillet and temper with cumin seeds and minced garlic.',
+          'Add firm vegetables first, sautéing on medium-high heat for 4–5 minutes.',
+          'Add leafy greens or softer vegetables, seasoning with salt and pepper.',
+          'Toss together until vibrant and tender-crisp. Serve hot with whole grains or flatbreads.'
+        ],
+        storageTips: 'Keeps well refrigerated in a sealed container for up to 2 days.'
+      };
+      activeRecipeTarget = 'cart_recipe';
+    }
+
+    // Preservation guide intent
+    if (isPreservation || activeRecipeTarget === 'preservation_guide') {
+      recipes.preservation_guide = {
+        recipeName: 'Farm Produce Preservation Guide',
+        title: '🌿 Farm-Fresh Produce Preservation Protocol',
+        category: 'Storage & Zero-Waste Culinary Guide',
+        servings: 1,
+        prepTime: '5 minutes',
+        cookTime: '0 minutes',
+        ingredients: [
+          'Clean glass storage jars with airtight lids',
+          'Unbleached paper towels or cotton produce bags',
+          'Cold water and organic apple cider vinegar (for washing)'
+        ],
+        steps: [
+          'Leafy Greens: Do not wash before storage. Wrap loosely in a dry cotton cloth or paper towel and store in the crisper drawer to absorb moisture.',
+          'Tomatoes: Never refrigerate unripened tomatoes as cold breaks down their aromatic sugars. Store stem-down at room temperature away from direct sunlight.',
+          'Carrots & Root Crops: Trim leafy tops immediately to prevent moisture extraction from roots. Store in an airtight container lined with a damp paper towel.',
+          'Berries & Grapes: Wash in a 3:1 water-to-vinegar bath to eliminate fungal spores, dry completely, and store in a ventilated container in the fridge.'
+        ],
+        storageTips: 'Proper storage extends organic produce life by 5 to 10 days while preserving vitamins.'
+      };
+      activeRecipeTarget = 'preservation_guide';
+    }
+
+    // Dynamic ingredient fallback: if ingredient is recognized but not specifically in static catalog
+    if (!activeRecipeTarget && detectedIngredient) {
+      const capIng = detectedIngredient.charAt(0).toUpperCase() + detectedIngredient.slice(1);
+      const dishType = isJuice ? 'Juice' : isSmoothie ? 'Smoothie' : isSoup ? 'Soup' : isCurry ? 'Curry' : isSalad ? 'Salad' : 'Homestyle Dish';
+      const key = `${detectedIngredient}_${dishType.toLowerCase()}`;
+
+      recipes[key] = {
+        recipeName: `${capIng} ${dishType}`,
+        title: `🌱 Fresh Farm ${capIng} ${dishType}`,
+        category: `Farm-Fresh ${dishType}s`,
+        servings: 2,
+        prepTime: '10 minutes',
+        cookTime: isJuice || isSmoothie || isSalad ? '0 minutes' : '12 minutes',
+        ingredients: [
+          `Fresh organic ${detectedIngredient} (washed and prepped)`,
+          '1 tbsp cold-pressed oil or chilled clean water',
+          'Pinch of sea salt or rock salt',
+          'Natural seasonings (herbs, cumin, or lemon juice to taste)'
+        ],
+        steps: [
+          `Wash and prepare the fresh ${detectedIngredient} carefully.`,
+          isJuice || isSmoothie
+            ? `Place in a blender with clean water or milk and blend until silky smooth.`
+            : `Sauté aromatics in a pan, add the ${detectedIngredient}, and cook gently until tender.`,
+          'Season with sea salt, lemon juice, or fresh herbs.',
+          'Serve fresh immediately to enjoy maximum farm flavor and nutrients.'
+        ],
+        storageTips: 'Store in an airtight container in the refrigerator.'
+      };
+      activeRecipeTarget = key;
+    }
+
+    // Unrecognized or non-recipe query resolution (Never default to carrot juice!)
+    if (!activeRecipeTarget || !recipes[activeRecipeTarget]) {
+      const guidanceMsg = "I am your Farm-to-Table Culinary Assistant. Please specify a dish or fresh ingredient you would like to prepare (for example: fresh grapes juice, tomato soup, banana smoothie, cabbage curry, or items from your cart), and I will provide the ingredients and step-by-step cooking procedure!";
+      return res.json({
+        success: true,
+        intent: 'general_guidance',
+        answer: guidanceMsg,
+        reply: guidanceMsg,
+        recipe: null
+      });
+    }
+
+    const targetRecipe = recipes[activeRecipeTarget];
+
+    // 6. Intelligent Follow-Up Answers
     let answerText = '';
     if (qLower.includes('without sugar') || qLower.includes('no sugar')) {
-      answerText = `Yes! **${targetRecipe.recipeName}** is naturally sweet and best enjoyed without sugar.\n\n` +
-        `• Farm-fresh carrots have natural fructose and Beta-carotene.\n` +
-        `• Lemon juice balances the earthy sweetness without needing any added sweetener.\n` +
+      answerText = `Yes! **${targetRecipe.recipeName}** is naturally flavorful and best enjoyed without sugar.\n\n` +
+        `• Farm-fresh ingredients contain natural sweet notes and minerals.\n` +
+        `• Lemon juice or natural spices balance the flavor without needing any refined sweetener.\n` +
         `• Preparation time remains **${targetRecipe.prepTime}**.`;
     } else if (qLower.includes('add ginger') || qLower.includes('ginger')) {
       answerText = `Yes, you can definitely add fresh ginger to **${targetRecipe.recipeName}**!\n\n` +
-        `• Add a 1/2-inch piece of peeled fresh ginger into the blender along with the carrots.\n` +
+        `• Add a 1/2-inch piece of peeled fresh ginger into the preparation.\n` +
         `• It adds a warm, zesty kick and promotes healthy digestion.`;
     } else if (qLower.includes('without lemon') || qLower.includes('no lemon') || qLower.includes("don't have lemon")) {
       answerText = `You can easily prepare **${targetRecipe.recipeName}** without lemon!\n\n` +
-        `• Substitute lemon with a dash of fresh orange juice, amla (Indian gooseberry), or enjoy pure carrot flavor.`;
-    } else if (qLower.includes('procedure') || qLower.includes('how do i make') || qLower.includes('how to make')) {
-      answerText = `🥕 **${targetRecipe.title}**\n\n` +
-        `**Ingredients**\n` +
-        targetRecipe.ingredients.map(i => `• ${i}`).join('\n') +
-        `\n\n**Procedure**\n` +
-        targetRecipe.steps.map((s, idx) => `${idx + 1}. ${s}`).join('\n') +
-        `\n\n**Time:** ${targetRecipe.prepTime} | **Serves:** ${targetRecipe.servings}`;
+        `• Substitute lemon with a dash of fresh orange juice, amla (Indian gooseberry), or enjoy pure natural flavor.`;
     } else {
-      answerText = `🥕 **${targetRecipe.title}**\n\n` +
+      answerText = `🍳 **${targetRecipe.title}**\n\n` +
         `**Ingredients**\n` +
         targetRecipe.ingredients.map(i => `• ${i}`).join('\n') +
         `\n\n**Procedure**\n` +
         targetRecipe.steps.map((s, idx) => `${idx + 1}. ${s}`).join('\n') +
         `\n\n**Time:** ${targetRecipe.prepTime} | **Serves:** ${targetRecipe.servings}`;
+
+      if (targetRecipe.storageTips) {
+        answerText += `\n\n**Storage & Safety:** ${targetRecipe.storageTips}`;
+      }
     }
 
-    // 6. Return Structured Output & Pure Content (No cross-recipe contamination)
+    // 7. Return Structured Output & Pure Content
     return res.json({
       success: true,
-      intent: 'recipe',
+      intent: isCartBased ? 'cart_recipe' : isPreservation ? 'preservation' : 'recipe',
       recipeName: targetRecipe.recipeName,
       answer: answerText,
       reply: answerText,
       recipe: {
         recipeName: targetRecipe.recipeName,
         title: targetRecipe.title,
+        category: targetRecipe.category,
         ingredients: targetRecipe.ingredients,
         steps: targetRecipe.steps,
+        procedure: targetRecipe.steps,
         prepTime: targetRecipe.prepTime,
         cookTime: targetRecipe.cookTime,
-        servings: targetRecipe.servings
+        servings: targetRecipe.servings,
+        storageTips: targetRecipe.storageTips || ''
       }
     });
   } catch (error) {

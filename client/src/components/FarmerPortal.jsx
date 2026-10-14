@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSelector from './LanguageSelector';
-import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI, authAPI, weatherAPI } from '../services/api';
+import { productAPI, orderAPI, notificationAPI, aiAPI, bargainAPI, authAPI, weatherAPI, reviewAPI } from '../services/api';
 import usePolling from '../hooks/usePolling';
 import LiveTrackingMap from './LiveTrackingMap';
 import MapPicker from './MapPicker';
@@ -74,7 +74,8 @@ import {
   Radio,
   Lock,
   MessageSquare,
-  Bot
+  Bot,
+  Star
 } from 'lucide-react';
 import '../farmer.css';
 
@@ -1122,6 +1123,8 @@ export default function FarmerPortal({ onLogout }) {
   const { t } = useLanguage();
   const [farmerProducts, setFarmerProducts] = useState([]);
   const [incomingOrders, setIncomingOrders] = useState([]);
+  const [farmerReviews, setFarmerReviews] = useState([]);
+  const [farmerReviewsLoading, setFarmerReviewsLoading] = useState(false);
   
   // Navigation State
   // 'home' | 'before_cultivation' | 'after_cultivation' | 'products' | 'orders' | 'market_prices' | 'disease_detection' | 'profile' | 'settings'
@@ -1600,6 +1603,7 @@ export default function FarmerPortal({ onLogout }) {
     fetchIncomingOrders();
     fetchFarmerNotifications();
     fetchFarmerBargains();
+    fetchFarmerReviews();
   }, []);
 
   // Periodic polling using visibility-aware hook: stops on hidden tab, prevents overlaps
@@ -1861,6 +1865,18 @@ export default function FarmerPortal({ onLogout }) {
     }
   };
 
+  const fetchFarmerReviews = async () => {
+    try {
+      setFarmerReviewsLoading(true);
+      const res = await reviewAPI.getFarmerReviews();
+      setFarmerReviews(res.data?.reviews || []);
+    } catch (err) {
+      console.warn('Reviews fetch note:', err.message);
+    } finally {
+      setFarmerReviewsLoading(false);
+    }
+  };
+
   const handleUpdateBargain = async (bargainId, action, counterPrice = null) => {
     try {
       const payload = { action };
@@ -1881,7 +1897,7 @@ export default function FarmerPortal({ onLogout }) {
 
   const handleRefreshAll = async () => {
     setRefreshing(true);
-    await Promise.all([fetchFarmerProducts(), fetchIncomingOrders(), fetchFarmerNotifications(), fetchFarmerBargains()]);
+    await Promise.all([fetchFarmerProducts(), fetchIncomingOrders(), fetchFarmerNotifications(), fetchFarmerBargains(), fetchFarmerReviews()]);
     setRefreshing(false);
     showToast('Farmer dashboard synchronized with live marketplace', 'info');
   };
@@ -2373,6 +2389,26 @@ export default function FarmerPortal({ onLogout }) {
               {pendingBargainsCount > 0 && (
                 <span className="farmer-nav-badge" style={{ background: '#f59e0b' }}>
                   {pendingBargainsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              className={`farmer-nav-item ${activeNav === 'reviews' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveNav('reviews');
+                fetchFarmerReviews();
+              }}
+              style={{
+                background: activeNav === 'reviews' ? 'rgba(52, 211, 153, 0.22)' : undefined,
+                borderColor: activeNav === 'reviews' ? '#34d399' : undefined
+              }}
+            >
+              <Star size={18} color="#facc15" fill={activeNav === 'reviews' ? '#facc15' : 'none'} />
+              <span>{t('Produce Reviews') || 'Produce Reviews'}</span>
+              {farmerReviews.length > 0 && (
+                <span className="farmer-nav-badge" style={{ background: '#059669' }}>
+                  {farmerReviews.length}
                 </span>
               )}
             </button>
@@ -6182,6 +6218,215 @@ export default function FarmerPortal({ onLogout }) {
                             Reject
                           </button>
                         </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            PRODUCE REVIEWS VIEW (Customer Ratings for Farmer's Produce)
+            ========================================================================= */}
+        {activeNav === 'reviews' && (
+          <div style={{ padding: '24px 28px', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(52, 211, 153, 0.15)', border: '1px solid rgba(52, 211, 153, 0.35)', color: '#34d399', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  <Star size={12} fill="#34d399" /> Verified Direct Customer Reviews
+                </div>
+                <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#f3f4f6', margin: 0 }}>
+                  Produce Reviews & Customer Ratings
+                </h2>
+                <p style={{ fontSize: '13px', color: '#9ca3af', margin: '4px 0 0 0' }}>
+                  Authentic reviews submitted by verified buyers who purchased your produce.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchFarmerReviews}
+                style={{
+                  background: 'rgba(52, 211, 153, 0.15)',
+                  border: '1px solid rgba(52, 211, 153, 0.4)',
+                  color: '#34d399',
+                  padding: '8px 14px',
+                  borderRadius: '10px',
+                  fontSize: '12.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RefreshCw size={14} style={{ animation: farmerReviewsLoading ? 'spin 1s linear infinite' : 'none' }} />
+                <span>Refresh Reviews</span>
+              </button>
+            </div>
+
+            {/* Overall Rating Score Card */}
+            {(() => {
+              const totalCount = farmerReviews.length;
+              const avgRating = totalCount > 0
+                ? (farmerReviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0) / totalCount).toFixed(1)
+                : '5.0';
+
+              return (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '16px',
+                    marginBottom: '24px'
+                  }}
+                >
+                  <div
+                    style={{
+                      background: 'rgba(9, 43, 39, 0.85)',
+                      border: '1.5px solid rgba(52, 211, 153, 0.35)',
+                      borderRadius: '18px',
+                      padding: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '16px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '54px',
+                        height: '54px',
+                        borderRadius: '16px',
+                        background: 'rgba(250, 204, 21, 0.15)',
+                        border: '1.5px solid #facc15',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '24px',
+                        fontWeight: '900',
+                        color: '#facc15'
+                      }}
+                    >
+                      ★
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '800' }}>
+                        Average Buyer Rating
+                      </div>
+                      <div style={{ fontSize: '26px', fontWeight: '900', color: '#effbe7' }}>
+                        {avgRating} <span style={{ fontSize: '14px', color: '#9db5aa' }}>/ 5.0</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      background: 'rgba(9, 43, 39, 0.85)',
+                      border: '1.5px solid rgba(52, 211, 153, 0.35)',
+                      borderRadius: '18px',
+                      padding: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '16px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '54px',
+                        height: '54px',
+                        borderRadius: '16px',
+                        background: 'rgba(52, 211, 153, 0.15)',
+                        border: '1.5px solid #34d399',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '22px',
+                        color: '#34d399'
+                      }}
+                    >
+                      📦
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '800' }}>
+                        Verified Reviews
+                      </div>
+                      <div style={{ fontSize: '26px', fontWeight: '900', color: '#34d399' }}>
+                        {totalCount}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Reviews List */}
+            {farmerReviews.length === 0 ? (
+              <div
+                style={{
+                  background: 'rgba(9, 43, 39, 0.5)',
+                  border: '1px dashed rgba(110, 219, 208, 0.3)',
+                  borderRadius: '20px',
+                  padding: '60px 20px',
+                  textAlign: 'center',
+                  color: '#a3c2b0'
+                }}
+              >
+                <Star size={44} color="#facc15" style={{ margin: '0 auto 14px' }} />
+                <h3 style={{ color: '#effbe7', margin: '0 0 8px', fontSize: '18px' }}>No Product Reviews Yet</h3>
+                <p style={{ margin: 0, fontSize: '13px' }}>
+                  Reviews will appear here as customers receive their delivered farm orders and review your produce.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {farmerReviews.map((rev) => {
+                  const revDate = rev.createdAt
+                    ? new Date(rev.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : 'Recent Order';
+
+                  return (
+                    <div
+                      key={rev._id || rev.id}
+                      style={{
+                        background: 'rgba(9, 43, 39, 0.75)',
+                        border: '1px solid rgba(52, 211, 153, 0.25)',
+                        borderRadius: '16px',
+                        padding: '18px 22px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.25)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                        <div>
+                          <div style={{ fontSize: '16px', fontWeight: '800', color: '#effbe7' }}>
+                            {rev.productTitle || rev.productId?.title || 'Farm Produce'}
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: '#9db5aa', marginTop: '2px' }}>
+                            Order #{String(rev.orderId || rev.order?._id || '').slice(-8).toUpperCase()} • Verified Buyer: {rev.customerName || 'AgriLink Customer'}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ display: 'flex', gap: '3px' }}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                size={16}
+                                color={star <= Number(rev.rating) ? '#facc15' : '#4b5563'}
+                                fill={star <= Number(rev.rating) ? '#facc15' : 'none'}
+                              />
+                            ))}
+                          </div>
+                          <span style={{ fontSize: '11.5px', color: '#a3c2b0', background: 'rgba(255,255,255,0.06)', padding: '3px 8px', borderRadius: '8px' }}>
+                            📅 {revDate}
+                          </span>
+                        </div>
+                      </div>
+
+                      {rev.comment && (
+                        <p style={{ margin: '8px 0 0 0', fontSize: '13.5px', color: '#cbd5e1', lineHeight: '1.5', background: 'rgba(0,0,0,0.25)', padding: '10px 14px', borderRadius: '10px', borderLeft: '3px solid #34d399' }}>
+                          "{rev.comment}"
+                        </p>
                       )}
                     </div>
                   );

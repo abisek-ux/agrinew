@@ -128,94 +128,71 @@ export default function PaymentPortalModal({
     return 'CARD';
   };
 
-  // Execute payment completion
-  const handleCompletePayment = async (modeLabel, details = {}) => {
+  // Cash on Delivery: Confirm order without fake payment confirmation
+  const handleConfirmCod = () => {
+    const result = {
+      amount: finalPayable,
+      method: 'CASH ON DELIVERY',
+      status: 'PAYMENT PENDING (DUE ON HANDOVER)',
+      message: 'Pay when your order arrives at your doorstep.',
+      timestamp: new Date().toLocaleString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      }),
+      orderIds,
+      orders
+    };
+    setPaymentResult(result);
+    setProcessingState('cod_confirmed');
+  };
+
+  // UPI on Delivery: Record customer notification without fake escrow settlement
+  const handleReportUpiPayment = async (modeLabel = 'UPI_QR_SCAN') => {
     setErrorMessage(null);
     setProcessingState('authorizing');
-    setProcessingStepText('Connecting to NPCI & Reserve Bank Gateway...');
-
-    const generatedTxnId = `TXN-AGRI-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    setProcessingStepText('Registering Doorstep UPI Payment Notification...');
 
     try {
-      await new Promise(r => setTimeout(r, 700));
-      setProcessingStepText('Verifying 256-Bit 3D Secure Authorization...');
-
-      await new Promise(r => setTimeout(r, 800));
-      setProcessingStepText('Transferring Funds to Farm Escrow Account...');
-
-      const response = await orderAPI.processPayment({
+      await orderAPI.processPayment({
         orderIds,
-        paymentMethod: (modeLabel || selectedMethod).toUpperCase(),
-        transactionId: generatedTxnId,
-        amountPaid: finalPayable
+        paymentMethod: 'UPI',
+        isCustomerClaim: true
       });
 
-      await new Promise(r => setTimeout(r, 600));
-
       const result = {
-        transactionId: generatedTxnId,
-        bankRef: `REF-${Math.floor(100000000000 + Math.random() * 900000000000)}`,
         amount: finalPayable,
-        method: (modeLabel || selectedMethod).toUpperCase(),
+        method: 'UPI ON HANDOVER',
+        status: 'CUSTOMER REPORTED (PENDING HANDOVER VERIFICATION)',
+        message: 'Payment notification recorded. Delivery partner will verify upon doorstep produce arrival.',
         timestamp: new Date().toLocaleString('en-IN', {
           day: 'numeric', month: 'short', year: 'numeric',
-          hour: '2-digit', minute: '2-digit', second: '2-digit'
+          hour: '2-digit', minute: '2-digit'
         }),
         orderIds,
-        orders: response.data?.orders || orders,
-        ...details
+        orders
       };
 
       setPaymentResult(result);
-      setProcessingState('success');
+      setProcessingState('upi_reported');
 
       if (onPaymentSuccess) {
         onPaymentSuccess(result);
       }
     } catch (err) {
-      console.warn('Backend payment record fallback active:', err.message);
+      console.warn('UPI notification recorded locally:', err.message);
       const fallbackResult = {
-        transactionId: generatedTxnId,
-        bankRef: `REF-${Math.floor(100000000000 + Math.random() * 900000000000)}`,
         amount: finalPayable,
-        method: (modeLabel || selectedMethod).toUpperCase(),
+        method: 'UPI ON HANDOVER',
+        status: 'CUSTOMER REPORTED (PENDING HANDOVER VERIFICATION)',
+        message: 'Payment notification recorded. Delivery partner will verify upon doorstep produce arrival.',
         timestamp: new Date().toLocaleString(),
         orderIds,
-        orders,
-        ...details
+        orders
       };
       setPaymentResult(fallbackResult);
-      setProcessingState('success');
+      setProcessingState('upi_reported');
       if (onPaymentSuccess) onPaymentSuccess(fallbackResult);
     }
-  };
-
-  // Direct In-App UPI Transfer Flow
-  const handleInitiateDirectUpiTransfer = () => {
-    setMpin('');
-    setMpinError('');
-    setShowMpinModal(true);
-  };
-
-  const handleMpinDigit = (digit) => {
-    if (mpin.length < 6) {
-      setMpin(prev => prev + digit);
-    }
-  };
-
-  const handleMpinBackspace = () => {
-    setMpin(prev => prev.slice(0, -1));
-  };
-
-  const handleVerifyMpinAndPay = () => {
-    if (mpin.length < 4) {
-      setMpinError('Please enter your 4 or 6-digit UPI PIN');
-      return;
-    }
-    setShowMpinModal(false);
-    handleCompletePayment('UPI_DIRECT_TRANSFER', {
-      bankName: selectedBankUpi === 'sbi' ? 'State Bank of India (A/C •••• 4892)' : selectedBankUpi === 'hdfc' ? 'HDFC Bank (A/C •••• 1045)' : 'ICICI Bank (A/C •••• 8821)'
-    });
   };
 
   const handleCopyUpi = () => {
@@ -227,16 +204,18 @@ export default function PaymentPortalModal({
   const downloadReceipt = () => {
     const receiptContent = `
 =========================================
-AGRILINK FARM-TO-TABLE SECURE RECEIPT
+AGRILINK FARM-TO-TABLE ORDER SLIP
 =========================================
-Transaction ID : ${paymentResult?.transactionId}
-Bank Reference : ${paymentResult?.bankRef}
 Order ID       : ${primaryOrderId}
-Amount Paid    : INR ${paymentResult?.amount}
-Payment Mode   : ${paymentResult?.method}
-Status         : COMPLETED & VERIFIED
+Total Payable  : INR ${paymentResult?.amount}
+Payment Mode   : ${paymentResult?.method || 'CASH ON DELIVERY'}
+Payment Status : ${paymentResult?.status || 'PAYMENT PENDING (PAY ON HANDOVER)'}
 Timestamp      : ${paymentResult?.timestamp}
 Farm Depots    : ${paymentResult?.orders?.length || 1} Direct Shipment(s)
+=========================================
+Instructions:
+• Pay directly to the verified delivery partner upon produce arrival.
+• Cash or UPI QR scan on handover is accepted.
 =========================================
 Thank you for supporting Indian Farmers!
 Zero Brokerage • 100% Direct to Producer
@@ -247,7 +226,7 @@ Zero Brokerage • 100% Direct to Producer
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `AgriLink_Receipt_${primaryOrderId}.txt`;
+    a.download = `AgriLink_OrderSlip_${primaryOrderId}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -313,7 +292,7 @@ Zero Brokerage • 100% Direct to Producer
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.3px' }}>
-                  AgriLink Secure UPI & Payment Gateway
+                  AgriLink Payment & Checkout Handover
                 </h3>
                 <span
                   style={{
@@ -326,11 +305,11 @@ Zero Brokerage • 100% Direct to Producer
                     borderRadius: '20px'
                   }}
                 >
-                  ⚡ NPCI & 256-Bit SSL
+                  🌾 Direct Farm Producer Purchase
                 </span>
               </div>
               <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#9db5aa' }}>
-                Order #{String(primaryOrderId).slice(-8).toUpperCase()} • Direct Farmer Escrow
+                Order #{String(primaryOrderId).slice(-8).toUpperCase()} • Verified Farm Gate Order
               </p>
             </div>
           </div>
@@ -384,30 +363,16 @@ Zero Brokerage • 100% Direct to Producer
               </div>
             </div>
             <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#effbe7', margin: '0 0 10px' }}>
-              Transferring ₹{finalPayable} to Farm Escrow
+              Recording Order Details...
             </h3>
             <p style={{ fontSize: '14px', color: '#6ee7b7', margin: '0 0 20px', fontWeight: '600' }}>
               {processingStepText}
             </p>
-            <div
-              style={{
-                maxWidth: '380px',
-                margin: '0 auto',
-                background: 'rgba(0,0,0,0.3)',
-                padding: '12px 18px',
-                borderRadius: '12px',
-                border: '1px solid rgba(255,255,255,0.08)',
-                fontSize: '12px',
-                color: '#9ca3af'
-              }}
-            >
-              🔒 Direct UPI Switch active. Encrypted end-to-end with bank security standard.
-            </div>
           </div>
         )}
 
-        {/* ── PAYMENT SUCCESS RECEIPT SCREEN ── */}
-        {processingState === 'success' && paymentResult && (
+        {/* ── COD CONFIRMED SCREEN (NO FAKE ESCROW) ── */}
+        {processingState === 'cod_confirmed' && paymentResult && (
           <div style={{ padding: '32px 24px' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div
@@ -415,30 +380,32 @@ Zero Brokerage • 100% Direct to Producer
                   width: '68px',
                   height: '68px',
                   borderRadius: '50%',
-                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(5, 150, 105, 0.35))',
-                  border: '2px solid #10b981',
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  border: '2px solid #f59e0b',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   margin: '0 auto 16px',
-                  boxShadow: '0 0 35px rgba(16, 185, 129, 0.45)'
+                  boxShadow: '0 0 30px rgba(245, 158, 11, 0.35)'
                 }}
               >
-                <CheckCircle2 size={40} color="#10b981" />
+                <Banknote size={38} color="#f59e0b" />
               </div>
-              <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#effbe7', margin: '0 0 6px' }}>
-                ₹{paymentResult.amount} Transferred Successfully! 🎉
+              <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#effbe7', margin: '0 0 6px' }}>
+                Order Placed — Cash on Delivery
               </h2>
-              <p style={{ fontSize: '13.5px', color: '#a7f3d0', margin: 0 }}>
-                Direct harvest order dispatch activated with real-time GPS tracking.
+              <p style={{ fontSize: '13.5px', color: '#fcd34d', margin: 0, fontWeight: '700' }}>
+                Payment Status: Payment Pending (Pay on Handover)
+              </p>
+              <p style={{ fontSize: '12.5px', color: '#a3c2b0', marginTop: '6px' }}>
+                Your harvest request is sent to farm depots. You will pay the delivery partner at your door.
               </p>
             </div>
 
-            {/* Official Receipt Card */}
             <div
               style={{
                 background: 'rgba(0,0,0,0.35)',
-                border: '1px solid rgba(16, 185, 129, 0.35)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
                 borderRadius: '18px',
                 padding: '20px',
                 marginBottom: '24px'
@@ -456,53 +423,53 @@ Zero Brokerage • 100% Direct to Producer
               >
                 <div>
                   <div style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>
-                    Total Amount Transferred
+                    Amount Due at Doorstep
                   </div>
-                  <div style={{ fontSize: '26px', fontWeight: '900', color: '#4ade80' }}>
+                  <div style={{ fontSize: '26px', fontWeight: '900', color: '#f59e0b' }}>
                     ₹{paymentResult.amount}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span
                     style={{
-                      background: 'rgba(16, 185, 129, 0.2)',
-                      color: '#4ade80',
-                      border: '1px solid rgba(74, 222, 128, 0.4)',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      color: '#fcd34d',
+                      border: '1px solid rgba(245, 158, 11, 0.5)',
                       padding: '4px 12px',
                       borderRadius: '20px',
-                      fontSize: '12px',
+                      fontSize: '11px',
                       fontWeight: '800'
                     }}
                   >
-                    ✓ SETTLED TO ESCROW
+                    PENDING COLLECTION
                   </span>
                   <div style={{ fontSize: '11.5px', color: '#9ca3af', marginTop: '4px' }}>
-                    {paymentResult.method}
+                    Doorstep Cash / QR Handover
                   </div>
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12.5px' }}>
                 <div>
-                  <div style={{ color: '#9db5aa' }}>Transaction ID:</div>
+                  <div style={{ color: '#9db5aa' }}>Order Reference:</div>
                   <div style={{ fontWeight: '700', color: '#effbe7', fontFamily: 'monospace' }}>
-                    {paymentResult.transactionId}
+                    #{String(primaryOrderId).slice(-8).toUpperCase()}
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: '#9db5aa' }}>Bank Ref / UTR:</div>
-                  <div style={{ fontWeight: '700', color: '#effbe7', fontFamily: 'monospace' }}>
-                    {paymentResult.bankRef}
+                  <div style={{ color: '#9db5aa' }}>Payment Method:</div>
+                  <div style={{ fontWeight: '700', color: '#effbe7' }}>
+                    Cash on Delivery (COD)
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: '#9db5aa' }}>Date & Time:</div>
+                  <div style={{ color: '#9db5aa' }}>Order Placed:</div>
                   <div style={{ fontWeight: '700', color: '#effbe7' }}>
                     {paymentResult.timestamp}
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: '#9db5aa' }}>Dispatched Shipments:</div>
+                  <div style={{ color: '#9db5aa' }}>Farm Packages:</div>
                   <div style={{ fontWeight: '700', color: '#4ade80' }}>
                     {paymentResult.orders?.length || 1} Farm Depot(s)
                   </div>
@@ -510,7 +477,6 @@ Zero Brokerage • 100% Direct to Producer
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => {
@@ -531,11 +497,10 @@ Zero Brokerage • 100% Direct to Producer
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 8px 24px rgba(16, 185, 129, 0.4)'
+                  gap: '8px'
                 }}
               >
-                📦 Track Live GPS Dispatch <ArrowRight size={16} />
+                📦 Track Order Status <ArrowRight size={16} />
               </button>
 
               <button
@@ -554,7 +519,161 @@ Zero Brokerage • 100% Direct to Producer
                   gap: '6px'
                 }}
               >
-                <Download size={15} /> Receipt
+                <Download size={15} /> Order Slip
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── UPI CLAIMED SCREEN (HONEST STATUS) ── */}
+        {processingState === 'upi_reported' && paymentResult && (
+          <div style={{ padding: '32px 24px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div
+                style={{
+                  width: '68px',
+                  height: '68px',
+                  borderRadius: '50%',
+                  background: 'rgba(56, 189, 248, 0.2)',
+                  border: '2px solid #38bdf8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px',
+                  boxShadow: '0 0 30px rgba(56, 189, 248, 0.35)'
+                }}
+              >
+                <Smartphone size={38} color="#38bdf8" />
+              </div>
+              <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#effbe7', margin: '0 0 6px' }}>
+                Payment Reported via UPI
+              </h2>
+              <p style={{ fontSize: '13.5px', color: '#38bdf8', margin: 0, fontWeight: '700' }}>
+                Status: Reported by Customer (Pending Handover Verification)
+              </p>
+              <p style={{ fontSize: '12.5px', color: '#a3c2b0', marginTop: '6px' }}>
+                The delivery partner will physically verify this UPI transaction during produce handover.
+              </p>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(0,0,0,0.35)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '18px',
+                padding: '20px',
+                marginBottom: '24px'
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '1px dashed rgba(255,255,255,0.15)',
+                  paddingBottom: '14px',
+                  marginBottom: '14px'
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase', fontWeight: '700' }}>
+                    Reported Amount
+                  </div>
+                  <div style={{ fontSize: '26px', fontWeight: '900', color: '#38bdf8' }}>
+                    ₹{paymentResult.amount}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span
+                    style={{
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      color: '#38bdf8',
+                      border: '1px solid rgba(56, 189, 248, 0.4)',
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      fontSize: '11px',
+                      fontWeight: '800'
+                    }}
+                  >
+                    PENDING VERIFICATION
+                  </span>
+                  <div style={{ fontSize: '11.5px', color: '#9ca3af', marginTop: '4px' }}>
+                    UPI on Handover
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12.5px' }}>
+                <div>
+                  <div style={{ color: '#9db5aa' }}>Order Reference:</div>
+                  <div style={{ fontWeight: '700', color: '#effbe7', fontFamily: 'monospace' }}>
+                    #{String(primaryOrderId).slice(-8).toUpperCase()}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: '#9db5aa' }}>Payee UPI VPA:</div>
+                  <div style={{ fontWeight: '700', color: '#effbe7', fontFamily: 'monospace' }}>
+                    agrilink@oksbi
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: '#9db5aa' }}>Reported At:</div>
+                  <div style={{ fontWeight: '700', color: '#effbe7' }}>
+                    {paymentResult.timestamp}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: '#9db5aa' }}>Farm Packages:</div>
+                  <div style={{ fontWeight: '700', color: '#4ade80' }}>
+                    {paymentResult.orders?.length || 1} Farm Depot(s)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  onClose();
+                  if (onViewOrders) onViewOrders();
+                }}
+                style={{
+                  flex: 1,
+                  minWidth: '200px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '14px 20px',
+                  borderRadius: '14px',
+                  fontWeight: '800',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                📦 Track Order Status <ArrowRight size={16} />
+              </button>
+
+              <button
+                onClick={downloadReceipt}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#ffffff',
+                  padding: '14px 18px',
+                  borderRadius: '14px',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Download size={15} /> Order Slip
               </button>
 
               <button
@@ -671,43 +790,51 @@ Zero Brokerage • 100% Direct to Producer
                 }}
               >
                 {[
-                  { id: 'upi', label: 'UPI & QR Code', icon: <QrCode size={18} />, badge: 'Instant Transfer' },
-                  { id: 'card', label: 'Credit / Debit Card', icon: <CreditCard size={18} />, badge: 'Visa/MC' },
-                  { id: 'netbanking', label: 'Net Banking', icon: <Building2 size={18} />, badge: '50+ Banks' },
-                  { id: 'wallet', label: 'Wallets & Pay Later', icon: <Wallet size={18} />, badge: 'Paytm/Amazon' },
-                  { id: 'cod', label: 'Cash on Delivery', icon: <Banknote size={18} />, badge: 'Doorstep' }
+                  { id: 'upi', label: 'UPI on Handover', icon: <QrCode size={18} />, badge: 'Pay on Delivery' },
+                  { id: 'cod', label: 'Cash on Delivery', icon: <Banknote size={18} />, badge: 'Doorstep Cash' },
+                  { id: 'card', label: 'Credit / Debit Card', icon: <CreditCard size={18} />, badge: 'Coming Soon', disabled: true },
+                  { id: 'netbanking', label: 'Net Banking', icon: <Building2 size={18} />, badge: 'Coming Soon', disabled: true },
+                  { id: 'wallet', label: 'Wallets & AgriCoins', icon: <Wallet size={18} />, badge: 'Coming Soon', disabled: true }
                 ].map((item) => {
                   const isActive = selectedMethod === item.id;
                   return (
                     <button
                       key={item.id}
-                      onClick={() => setSelectedMethod(item.id)}
+                      onClick={() => {
+                        if (item.disabled) {
+                          setErrorMessage(`${item.label} gateway is coming soon. Please choose Cash on Delivery or UPI on Handover.`);
+                          return;
+                        }
+                        setErrorMessage(null);
+                        setSelectedMethod(item.id);
+                      }}
                       style={{
                         background: isActive ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(6, 78, 59, 0.3))' : 'transparent',
                         border: `1px solid ${isActive ? 'rgba(16, 185, 129, 0.5)' : 'transparent'}`,
-                        color: isActive ? '#4ade80' : '#cbd5e1',
+                        color: item.disabled ? '#64748b' : (isActive ? '#4ade80' : '#cbd5e1'),
                         borderRadius: '12px',
                         padding: '12px 14px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         textAlign: 'left',
-                        cursor: 'pointer',
+                        cursor: item.disabled ? 'not-allowed' : 'pointer',
                         fontSize: '13px',
                         fontWeight: isActive ? '800' : '600',
+                        opacity: item.disabled ? 0.6 : 1,
                         transition: 'all 0.15s ease'
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ color: isActive ? '#4ade80' : '#94a3b8' }}>{item.icon}</span>
+                        <span style={{ color: item.disabled ? '#475569' : (isActive ? '#4ade80' : '#94a3b8') }}>{item.icon}</span>
                         <span>{item.label}</span>
                       </div>
                       {item.badge && (
                         <span
                           style={{
                             fontSize: '9.5px',
-                            background: isActive ? '#10b981' : 'rgba(255,255,255,0.06)',
-                            color: isActive ? '#000000' : '#9ca3af',
+                            background: item.disabled ? 'rgba(148, 163, 184, 0.12)' : (isActive ? '#10b981' : 'rgba(255,255,255,0.06)'),
+                            color: item.disabled ? '#94a3b8' : (isActive ? '#000000' : '#9ca3af'),
                             fontWeight: '800',
                             padding: '1px 6px',
                             borderRadius: '10px'
@@ -735,7 +862,7 @@ Zero Brokerage • 100% Direct to Producer
                   }}
                 >
                   <Lock size={14} color="#10b981" />
-                  <span>100% Escrow Guarantee</span>
+                  <span>Direct Farm-to-Table Handover</span>
                 </div>
               </div>
 
@@ -985,10 +1112,10 @@ Zero Brokerage • 100% Direct to Producer
                           </div>
                         </div>
 
-                        {/* Button: Already paid via QR */}
+                        {/* Button: Report paid via QR */}
                         <button
                           type="button"
-                          onClick={() => handleCompletePayment('UPI_QR_SCAN')}
+                          onClick={() => handleReportUpiPayment('UPI_QR_SCAN')}
                           style={{
                             width: '100%',
                             background: 'linear-gradient(135deg, #10b981, #059669)',
@@ -1006,83 +1133,47 @@ Zero Brokerage • 100% Direct to Producer
                             boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
                           }}
                         >
-                          <CheckCircle2 size={16} /> I Have Paid ₹{finalPayable} via QR / UPI App
+                          <CheckCircle2 size={16} /> I Have Paid / Notify Handover (₹{finalPayable})
                         </button>
                       </div>
                     )}
 
-                    {/* SUB-MODE B: IN-APP DIRECT AMOUNT TRANSFER (INTERACTIVE MPIN) */}
+                    {/* SUB-MODE B: IN-APP DIRECT AMOUNT TRANSFER */}
                     {upiSubMode === 'direct_transfer' && (
                       <div>
                         <h4 style={{ margin: '0 0 10px', fontSize: '15px', fontWeight: '800', color: '#effbe7' }}>
-                          Select Bank Account for In-App Transfer
+                          Direct Bank UPI Transfer
                         </h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                          {[
-                            { id: 'sbi', name: 'State Bank of India', acc: '•••• 4892', bal: '₹14,250.00', icon: '🏛️' },
-                            { id: 'hdfc', name: 'HDFC Bank', acc: '•••• 1045', bal: '₹28,900.00', icon: '🏦' },
-                            { id: 'icici', name: 'ICICI Bank', acc: '•••• 8821', bal: '₹8,400.00', icon: '🏢' }
-                          ].map(bank => (
-                            <div
-                              key={bank.id}
-                              onClick={() => setSelectedBankUpi(bank.id)}
-                              style={{
-                                background: selectedBankUpi === bank.id ? 'rgba(16, 185, 129, 0.18)' : 'rgba(0,0,0,0.3)',
-                                border: `1.5px solid ${selectedBankUpi === bank.id ? '#10b981' : 'rgba(255,255,255,0.08)'}`,
-                                borderRadius: '12px',
-                                padding: '12px 16px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between'
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontSize: '20px' }}>{bank.icon}</span>
-                                <div>
-                                  <div style={{ fontSize: '13.5px', fontWeight: '800', color: '#effbe7' }}>
-                                    {bank.name} ({bank.acc})
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: '#9db5aa' }}>
-                                    Available Balance: <span style={{ color: '#4ade80' }}>{bank.bal}</span>
-                                  </div>
-                                </div>
-                              </div>
-                              {selectedBankUpi === bank.id && (
-                                <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <Check size={14} color="#000" />
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                        <p style={{ fontSize: '12.5px', color: '#cbd5e1', marginBottom: '14px' }}>
+                          Use your bank UPI app to transfer ₹{finalPayable} to our verified account. The delivery partner will verify receipt upon produce arrival.
+                        </p>
 
                         <div
                           style={{
                             background: 'rgba(6, 78, 59, 0.25)',
                             border: '1px solid rgba(16, 185, 129, 0.3)',
                             borderRadius: '12px',
-                            padding: '12px 16px',
+                            padding: '14px 16px',
                             marginBottom: '16px'
                           }}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '4px' }}>
-                            <span style={{ color: '#9db5aa' }}>Payee:</span>
-                            <span style={{ color: '#effbe7', fontWeight: '700' }}>AgriLink Farmer Direct Escrow</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
+                            <span style={{ color: '#9db5aa' }}>Payee Account:</span>
+                            <span style={{ color: '#effbe7', fontWeight: '700' }}>AgriLink Producer Account</span>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '4px' }}>
-                            <span style={{ color: '#9db5aa' }}>Payee UPI VPA:</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
+                            <span style={{ color: '#9db5aa' }}>Payee UPI ID:</span>
                             <span style={{ color: '#6ee7b7', fontWeight: '700', fontFamily: 'monospace' }}>agrilink@oksbi</span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '800' }}>
-                            <span style={{ color: '#effbe7' }}>Transfer Amount:</span>
+                            <span style={{ color: '#effbe7' }}>Amount Due:</span>
                             <span style={{ color: '#34d399', fontSize: '16px' }}>₹{finalPayable}</span>
                           </div>
                         </div>
 
                         <button
                           type="button"
-                          onClick={handleInitiateDirectUpiTransfer}
+                          onClick={() => handleReportUpiPayment('DIRECT_UPI_TRANSFER')}
                           style={{
                             width: '100%',
                             background: 'linear-gradient(135deg, #10b981, #059669)',
@@ -1100,7 +1191,7 @@ Zero Brokerage • 100% Direct to Producer
                             boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
                           }}
                         >
-                          <Lock size={16} /> Enter UPI PIN & Transfer ₹{finalPayable}
+                          <CheckCircle2 size={16} /> I Have Transferred ₹{finalPayable} (Notify Driver)
                         </button>
                       </div>
                     )}
@@ -1165,7 +1256,7 @@ Zero Brokerage • 100% Direct to Producer
                               setErrorMessage('Please enter a valid UPI ID (e.g. mobile@upi or name@oksbi)');
                               return;
                             }
-                            handleCompletePayment('UPI_VPA_REQUEST', { upiId: upiId.trim() });
+                            handleReportUpiPayment('UPI_VPA_REQUEST');
                           }}
                           style={{
                             width: '100%',
@@ -1184,277 +1275,163 @@ Zero Brokerage • 100% Direct to Producer
                             boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
                           }}
                         >
-                          Send Payment Request for ₹{finalPayable}
+                          Request Doorstep UPI Handover for ₹{finalPayable}
                         </button>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* ── TAB 2: CREDIT / DEBIT CARD ── */}
+                {/* ── TAB 2: CREDIT / DEBIT CARD (COMING SOON) ── */}
                 {selectedMethod === 'card' && (
-                  <div>
-                    {/* Animated Card Mockup */}
+                  <div style={{ textAlign: 'center', padding: '36px 16px' }}>
                     <div
                       style={{
-                        background: 'linear-gradient(135deg, #1e3a5f, #0f172a, #064e3b)',
-                        borderRadius: '16px',
-                        padding: '18px 20px',
-                        marginBottom: '18px',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                        position: 'relative'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '800', color: '#4ade80', letterSpacing: '1px' }}>
-                          AGRILINK SECURE PLATINUM
-                        </div>
-                        <div style={{ fontSize: '13px', fontWeight: '900', color: '#fff', letterSpacing: '1px' }}>
-                          {getCardNetwork()}
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: '18px', fontWeight: '800', color: '#fff', letterSpacing: '2.5px', fontFamily: 'monospace', marginBottom: '16px' }}>
-                        {cardNumber || '•••• •••• •••• ••••'}
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                        <div>
-                          <div style={{ fontSize: '9px', color: '#94a3b8', textTransform: 'uppercase' }}>Cardholder Name</div>
-                          <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#effbe7' }}>
-                            {cardName || 'YOUR NAME'}
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '9px', color: '#94a3b8', textTransform: 'uppercase' }}>Expires</div>
-                          <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#effbe7' }}>
-                            {cardExpiry || 'MM/YY'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Inputs */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '11.5px', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                          Card Number
-                        </label>
-                        <input
-                          type="text"
-                          value={cardNumber}
-                          onChange={handleCardNumberChange}
-                          placeholder="4532 •••• •••• ••••"
-                          maxLength={19}
-                          style={{
-                            width: '100%',
-                            background: 'rgba(0,0,0,0.4)',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            borderRadius: '10px',
-                            padding: '10px 14px',
-                            color: '#fff',
-                            fontSize: '13px'
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <label style={{ display: 'block', fontSize: '11.5px', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                          Cardholder Name
-                        </label>
-                        <input
-                          type="text"
-                          value={cardName}
-                          onChange={e => setCardName(e.target.value)}
-                          placeholder="Name as printed on card"
-                          style={{
-                            width: '100%',
-                            background: 'rgba(0,0,0,0.4)',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            borderRadius: '10px',
-                            padding: '10px 14px',
-                            color: '#fff',
-                            fontSize: '13px'
-                          }}
-                        />
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '11.5px', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                            Expiry Date
-                          </label>
-                          <input
-                            type="text"
-                            value={cardExpiry}
-                            onChange={handleExpiryChange}
-                            placeholder="MM/YY"
-                            maxLength={5}
-                            style={{
-                              width: '100%',
-                              background: 'rgba(0,0,0,0.4)',
-                              border: '1px solid rgba(255,255,255,0.15)',
-                              borderRadius: '10px',
-                              padding: '10px 14px',
-                              color: '#fff',
-                              fontSize: '13px'
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '11.5px', color: '#cbd5e1', marginBottom: '4px', fontWeight: '600' }}>
-                            CVV / CVC
-                          </label>
-                          <input
-                            type="password"
-                            value={cardCvv}
-                            onChange={e => setCardCvv(e.target.value.slice(0, 4))}
-                            placeholder="•••"
-                            maxLength={4}
-                            style={{
-                              width: '100%',
-                              background: 'rgba(0,0,0,0.4)',
-                              border: '1px solid rgba(255,255,255,0.15)',
-                              borderRadius: '10px',
-                              padding: '10px 14px',
-                              color: '#fff',
-                              fontSize: '13px'
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleCompletePayment('CARD')}
-                      style={{
-                        width: '100%',
-                        background: 'linear-gradient(135deg, #10b981, #059669)',
-                        border: 'none',
-                        color: '#ffffff',
-                        padding: '14px 20px',
-                        borderRadius: '14px',
-                        fontSize: '14.5px',
-                        fontWeight: '800',
-                        cursor: 'pointer',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        background: 'rgba(148, 163, 184, 0.1)',
+                        border: '1px solid rgba(148, 163, 184, 0.25)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '8px',
-                        boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
+                        margin: '0 auto 16px'
                       }}
                     >
-                      <Lock size={16} /> Pay ₹{finalPayable} via Card
-                    </button>
+                      <CreditCard size={32} color="#94a3b8" />
+                    </div>
+                    <h4 style={{ margin: '0 0 8px', fontSize: '17px', fontWeight: '800', color: '#effbe7' }}>
+                      Card Payment Gateway (Coming Soon)
+                    </h4>
+                    <p style={{ fontSize: '13px', color: '#94a3b8', maxWidth: '380px', margin: '0 auto 20px', lineHeight: '1.6' }}>
+                      Online credit and debit card processing via RBI-regulated payment gateway is currently under integration. Please choose Cash on Delivery or UPI on Handover.
+                    </p>
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMethod('cod')}
+                        style={{
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                          border: 'none',
+                          color: '#ffffff',
+                          padding: '10px 18px',
+                          borderRadius: '10px',
+                          fontWeight: '700',
+                          fontSize: '13px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Switch to Cash on Delivery
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMethod('upi')}
+                        style={{
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          color: '#ffffff',
+                          padding: '10px 18px',
+                          borderRadius: '10px',
+                          fontWeight: '700',
+                          fontSize: '13px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Switch to UPI QR
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                {/* ── TAB 3: NET BANKING ── */}
+                {/* ── TAB 3: NET BANKING (COMING SOON) ── */}
                 {selectedMethod === 'netbanking' && (
-                  <div>
-                    <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '800', color: '#effbe7' }}>
-                      Select Your Bank
-                    </h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-                      {[
-                        { id: 'hdfc', name: 'HDFC Bank', code: 'HDFC' },
-                        { id: 'sbi', name: 'State Bank of India', code: 'SBI' },
-                        { id: 'icici', name: 'ICICI Bank', code: 'ICICI' },
-                        { id: 'axis', name: 'Axis Bank', code: 'AXIS' },
-                        { id: 'kotak', name: 'Kotak Mahindra', code: 'KOTAK' },
-                        { id: 'pnb', name: 'Punjab National', code: 'PNB' }
-                      ].map(b => (
-                        <div
-                          key={b.id}
-                          onClick={() => setSelectedBank(b.id)}
-                          style={{
-                            background: selectedBank === b.id ? 'rgba(16, 185, 129, 0.2)' : 'rgba(0,0,0,0.3)',
-                            border: `1.5px solid ${selectedBank === b.id ? '#10b981' : 'rgba(255,255,255,0.08)'}`,
-                            borderRadius: '12px',
-                            padding: '12px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between'
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#effbe7' }}>{b.name}</div>
-                            <div style={{ fontSize: '10.5px', color: '#9db5aa' }}>NetBanking Direct</div>
-                          </div>
-                          {selectedBank === b.id && <Check size={16} color="#10b981" />}
-                        </div>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleCompletePayment('NETBANKING')}
+                  <div style={{ textAlign: 'center', padding: '36px 16px' }}>
+                    <div
                       style={{
-                        width: '100%',
-                        background: 'linear-gradient(135deg, #10b981, #059669)',
-                        border: 'none',
-                        color: '#ffffff',
-                        padding: '14px 20px',
-                        borderRadius: '14px',
-                        fontSize: '14.5px',
-                        fontWeight: '800',
-                        cursor: 'pointer',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        background: 'rgba(148, 163, 184, 0.1)',
+                        border: '1px solid rgba(148, 163, 184, 0.25)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '8px',
-                        boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
+                        margin: '0 auto 16px'
                       }}
                     >
-                      <Lock size={16} /> Pay ₹{finalPayable} via NetBanking
+                      <Building2 size={32} color="#94a3b8" />
+                    </div>
+                    <h4 style={{ margin: '0 0 8px', fontSize: '17px', fontWeight: '800', color: '#effbe7' }}>
+                      Net Banking Direct Gateway (Coming Soon)
+                    </h4>
+                    <p style={{ fontSize: '13px', color: '#94a3b8', maxWidth: '380px', margin: '0 auto 20px', lineHeight: '1.6' }}>
+                      Direct bank integrations with 50+ Indian banks are scheduled for upcoming release. Please select Cash on Delivery or UPI on Handover.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMethod('cod')}
+                      style={{
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '10px 18px',
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Switch to Cash on Delivery
                     </button>
                   </div>
                 )}
 
-                {/* ── TAB 4: WALLETS ── */}
+                {/* ── TAB 4: WALLETS (COMING SOON) ── */}
                 {selectedMethod === 'wallet' && (
-                  <div>
-                    <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '800', color: '#effbe7' }}>
-                      Digital Wallets & Pay Later
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-                      {[
-                        { id: 'amazon', name: 'Amazon Pay Balance', balance: '₹420.00' },
-                        { id: 'paytm', name: 'Paytm Wallet', balance: '₹185.00' },
-                        { id: 'phonepe_wallet', name: 'PhonePe Wallet', balance: '₹350.00' },
-                        { id: 'mobikwik', name: 'MobiKwik ZIP Pay Later', balance: 'Credit Limit: ₹5,000' }
-                      ].map(w => (
-                        <div
-                          key={w.id}
-                          onClick={() => handleCompletePayment('WALLET_' + w.id.toUpperCase())}
-                          style={{
-                            background: 'rgba(0,0,0,0.3)',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            borderRadius: '12px',
-                            padding: '12px 16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontSize: '13.5px', fontWeight: '700', color: '#effbe7' }}>{w.name}</div>
-                            <div style={{ fontSize: '11px', color: '#6ee7b7' }}>{w.balance}</div>
-                          </div>
-                          <span style={{ fontSize: '11px', color: '#10b981', fontWeight: '700' }}>Link & Pay ₹{finalPayable} →</span>
-                        </div>
-                      ))}
+                  <div style={{ textAlign: 'center', padding: '36px 16px' }}>
+                    <div
+                      style={{
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        background: 'rgba(148, 163, 184, 0.1)',
+                        border: '1px solid rgba(148, 163, 184, 0.25)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 16px'
+                      }}
+                    >
+                      <Wallet size={32} color="#94a3b8" />
                     </div>
+                    <h4 style={{ margin: '0 0 8px', fontSize: '17px', fontWeight: '800', color: '#effbe7' }}>
+                      Digital Wallets & Pay Later (Coming Soon)
+                    </h4>
+                    <p style={{ fontSize: '13px', color: '#94a3b8', maxWidth: '380px', margin: '0 auto 20px', lineHeight: '1.6' }}>
+                      Amazon Pay, Paytm, and Mobikwik integrations are under certification. Please select Cash on Delivery or UPI on Handover.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMethod('cod')}
+                      style={{
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '10px 18px',
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Switch to Cash on Delivery
+                    </button>
                   </div>
                 )}
 
-                {/* ── TAB 5: COD ── */}
+                {/* ── TAB 5: COD (HONEST PAYMENT PENDING) ── */}
                 {selectedMethod === 'cod' && (
-                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                  <div style={{ textAlign: 'center', padding: '24px 16px' }}>
                     <div
                       style={{
                         width: '56px',
@@ -1471,15 +1448,37 @@ Zero Brokerage • 100% Direct to Producer
                       <Banknote size={30} color="#f59e0b" />
                     </div>
                     <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '800', color: '#effbe7' }}>
-                      Cash / Digital Handover on Delivery
+                      Cash on Delivery (Pay on Arrival)
                     </h4>
-                    <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#cbd5e1', lineHeight: '1.5' }}>
+                    <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#cbd5e1', lineHeight: '1.5', maxWidth: '420px', marginLeft: 'auto', marginRight: 'auto' }}>
                       Pay ₹{finalPayable} directly to the verified delivery driver when fresh farm produce reaches your doorstep. You can pay with Cash or UPI QR scan on handover.
                     </p>
 
+                    <div
+                      style={{
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(245, 158, 11, 0.25)',
+                        borderRadius: '12px',
+                        padding: '12px',
+                        marginBottom: '20px',
+                        display: 'flex',
+                        justifyContent: 'space-around',
+                        fontSize: '12.5px'
+                      }}
+                    >
+                      <div>
+                        <span style={{ color: '#9db5aa' }}>Payment Status: </span>
+                        <strong style={{ color: '#f59e0b' }}>Pending Collection</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#9db5aa' }}>Amount Due: </span>
+                        <strong style={{ color: '#effbe7' }}>₹{finalPayable}</strong>
+                      </div>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => handleCompletePayment('COD')}
+                      onClick={handleConfirmCod}
                       style={{
                         width: '100%',
                         background: 'linear-gradient(135deg, #f59e0b, #d97706)',
@@ -1497,7 +1496,7 @@ Zero Brokerage • 100% Direct to Producer
                         boxShadow: '0 6px 20px rgba(245, 158, 11, 0.4)'
                       }}
                     >
-                      Confirm Order with COD (₹{finalPayable})
+                      <CheckCircle2 size={16} /> Place Order — Pay on Delivery (₹{finalPayable})
                     </button>
                   </div>
                 )}
@@ -1522,194 +1521,6 @@ Zero Brokerage • 100% Direct to Producer
                     <span>{errorMessage}</span>
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── NPCI OFFICIAL UPI MPIN BOTTOM SHEET SIMULATOR ── */}
-        {showMpinModal && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: 100000,
-              background: 'rgba(3, 15, 20, 0.96)',
-              backdropFilter: 'blur(20px)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              padding: '24px',
-              animation: 'slideUp 0.3s ease-out'
-            }}
-          >
-            {/* Header */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ background: '#10b981', color: '#000', fontWeight: '900', fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>
-                    UPI NPCI
-                  </div>
-                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#effbe7' }}>
-                    Unified Payments Interface
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowMpinModal(false)}
-                  style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Transaction Summary */}
-              <div
-                style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '14px',
-                  padding: '14px 18px',
-                  marginBottom: '20px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase' }}>Paying to</div>
-                  <div style={{ fontSize: '14px', fontWeight: '800', color: '#effbe7' }}>AgriLink Farmer Escrow</div>
-                  <div style={{ fontSize: '11px', color: '#6ee7b7' }}>agrilink@oksbi</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', color: '#9db5aa', textTransform: 'uppercase' }}>Amount</div>
-                  <div style={{ fontSize: '22px', fontWeight: '900', color: '#4ade80' }}>₹{finalPayable}</div>
-                </div>
-              </div>
-
-              {/* PIN Prompt */}
-              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                <div style={{ fontSize: '15px', fontWeight: '800', color: '#effbe7', marginBottom: '6px' }}>
-                  ENTER 4 OR 6-DIGIT UPI PIN
-                </div>
-                <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                  You are transferring money directly from your linked bank account
-                </div>
-
-                {/* PIN Dots */}
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', marginTop: '16px' }}>
-                  {[0, 1, 2, 3, 4, 5].map(idx => (
-                    <div
-                      key={idx}
-                      style={{
-                        width: '16px',
-                        height: '16px',
-                        borderRadius: '50%',
-                        border: '2px solid rgba(16, 185, 129, 0.6)',
-                        background: mpin.length > idx ? '#10b981' : 'transparent',
-                        transition: 'all 0.15s ease'
-                      }}
-                    />
-                  ))}
-                </div>
-                {mpinError && (
-                  <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px', fontWeight: '700' }}>
-                    {mpinError}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Simulated Numeric Keypad */}
-            <div>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: '12px',
-                  maxWidth: '320px',
-                  margin: '0 auto 16px'
-                }}
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => handleMpinDigit(String(num))}
-                    style={{
-                      background: 'rgba(255,255,255,0.08)',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      color: '#ffffff',
-                      borderRadius: '14px',
-                      padding: '14px 0',
-                      fontSize: '20px',
-                      fontWeight: '800',
-                      cursor: 'pointer',
-                      transition: 'all 0.1s'
-                    }}
-                  >
-                    {num}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={handleMpinBackspace}
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    color: '#fca5a5',
-                    borderRadius: '14px',
-                    padding: '14px 0',
-                    fontSize: '14px',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Delete size={20} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMpinDigit('0')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    color: '#ffffff',
-                    borderRadius: '14px',
-                    padding: '14px 0',
-                    fontSize: '20px',
-                    fontWeight: '800',
-                    cursor: 'pointer'
-                  }}
-                >
-                  0
-                </button>
-                <button
-                  type="button"
-                  onClick={handleVerifyMpinAndPay}
-                  style={{
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    border: 'none',
-                    color: '#ffffff',
-                    borderRadius: '14px',
-                    padding: '14px 0',
-                    fontSize: '16px',
-                    fontWeight: '900',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)'
-                  }}
-                >
-                  <Check size={22} />
-                </button>
-              </div>
-
-              <div style={{ textAlign: 'center', fontSize: '11px', color: '#9db5aa' }}>
-                🔒 Protected by NPCI UPI Multi-Factor Authentication
               </div>
             </div>
           </div>

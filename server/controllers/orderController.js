@@ -1280,8 +1280,18 @@ const processOrderPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Order ID is required to process payment' });
     }
 
+    const method = (paymentMethod || 'UPI').toUpperCase();
+
+    // STRICT COD RULE: Cash on Delivery can NEVER be marked as paid via online gateway
+    if (method === 'COD') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cash on Delivery orders cannot be marked as paid online. Payment must be collected by the verified delivery partner upon physical doorstep produce handover.'
+      });
+    }
+
+    const isCustomerReport = req.body.isCustomerClaim === true || req.body.claimOnly === true;
     const txnId = transactionId || `TXN-AGRI-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const method = paymentMethod || 'UPI';
     const updatedOrders = [];
 
     for (const id of ids) {
@@ -1290,14 +1300,22 @@ const processOrderPayment = async (req, res) => {
           $or: [{ _id: id }, { id: id }, { orderId: id }]
         });
         if (order) {
-          if (order.paymentStatus === 'paid') {
+          if (order.paymentMethod === 'COD' && !isCustomerReport) {
+            return res.status(400).json({
+              success: false,
+              message: 'Cash on Delivery orders cannot be marked as paid online. Payment must be collected by the verified delivery partner upon physical doorstep produce handover.'
+            });
+          }
+          if (order.paymentStatus === 'paid' || order.paymentStatus === 'collected') {
             updatedOrders.push(order);
             continue;
           }
-          order.paymentStatus = 'paid';
+          order.paymentStatus = isCustomerReport ? 'reported' : 'paid';
           order.paymentMethod = method;
-          order.transactionId = txnId;
-          order.paidAt = new Date();
+          order.transactionId = isCustomerReport ? null : txnId;
+          if (!isCustomerReport) {
+            order.paidAt = new Date();
+          }
           if (order.status === 'pending') {
             order.status = 'confirmed';
           }
@@ -1309,8 +1327,10 @@ const processOrderPayment = async (req, res) => {
             recipientId: order.customerId,
             recipientRole: 'customer',
             orderId: order.orderId || order._id || order.id,
-            title: '💳 Payment Confirmed & Verified',
-            message: `Payment of ₹${order.totalAmount} via ${method} confirmed for Order ${order.orderId || order._id || order.id}. Txn Ref: ${txnId}`,
+            title: isCustomerReport ? '📝 Payment Claim Reported' : '💳 Payment Confirmed & Verified',
+            message: isCustomerReport
+              ? `Customer reported payment of ₹${order.totalAmount} via ${method} for Order #${order.orderId || order._id || order.id}. Awaiting driver handover verification.`
+              : `Payment of ₹${order.totalAmount} via ${method} confirmed for Order ${order.orderId || order._id || order.id}.`,
             category: 'order',
             priority: 'HIGH'
           });
@@ -1318,14 +1338,22 @@ const processOrderPayment = async (req, res) => {
       } else {
         const order = memoryOrders.find(o => String(o._id || o.id || o.orderId) === String(id));
         if (order) {
-          if (order.paymentStatus === 'paid') {
+          if (order.paymentMethod === 'COD' && !isCustomerReport) {
+            return res.status(400).json({
+              success: false,
+              message: 'Cash on Delivery orders cannot be marked as paid online. Payment must be collected by the verified delivery partner upon physical doorstep produce handover.'
+            });
+          }
+          if (order.paymentStatus === 'paid' || order.paymentStatus === 'collected') {
             updatedOrders.push(order);
             continue;
           }
-          order.paymentStatus = 'paid';
+          order.paymentStatus = isCustomerReport ? 'reported' : 'paid';
           order.paymentMethod = method;
-          order.transactionId = txnId;
-          order.paidAt = new Date();
+          order.transactionId = isCustomerReport ? null : txnId;
+          if (!isCustomerReport) {
+            order.paidAt = new Date();
+          }
           if (order.status === 'pending') {
             order.status = 'confirmed';
           }
@@ -1334,16 +1362,104 @@ const processOrderPayment = async (req, res) => {
       }
     }
 
+    if (updatedOrders.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order(s) not found for payment processing' });
+    }
+
     return res.json({
       success: true,
-      message: 'Payment received and verified successfully!',
-      transactionId: txnId,
+      message: isCustomerReport ? 'Payment reported. Awaiting delivery partner verification.' : 'Payment received and verified successfully!',
+      transactionId: isCustomerReport ? null : txnId,
       paymentMethod: method,
       orders: updatedOrders.map(o => sanitizeOrderFarmerDetails(o, req.user))
     });
   } catch (error) {
     console.error('processOrderPayment error:', error);
     return res.status(500).json({ success: false, message: error.message || 'Payment processing failed' });
+  }
+};
+
+/**
+ * POST /api/orders/:id/collect-cod
+ * Authorized delivery driver records cash or UPI collection at handover.
+ */
+const collectCodPayment = async (req, res) => {
+  try {
+    if (!req.user || (req.user.role !== 'delivery' && req.user.role !== 'admin')) {
+      return res.status(403).json({ success: false, message: 'Access denied: Only delivery partners can confirm cash collection' });
+    }
+
+    const { id } = req.params;
+    const driverId = String(req.user.id || req.user._id);
+    const { paymentMethod = 'CASH' } = req.body;
+
+    let order;
+    if (isConnected()) {
+      order = await Order.findOne({
+        $or: [{ _id: id }, { id: id }, { orderId: id }]
+      });
+    } else {
+      order = memoryOrders.find(o => String(o._id || o.id || o.orderId) === String(id));
+    }
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order record not found' });
+    }
+
+    // Ownership & assignment check
+    if (order.deliveryId && order.deliveryId !== 'Unassigned' && String(order.deliveryId) !== driverId && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You are not the assigned delivery partner for this order' });
+    }
+
+    // Prevent duplicate collection attempts
+    if (order.paymentStatus === 'collected' || order.paymentStatus === 'paid') {
+      return res.status(409).json({
+        success: false,
+        message: `Payment of ₹${order.totalAmount} has already been collected/settled on ${order.paymentCollectedAt ? new Date(order.paymentCollectedAt).toLocaleString() : 'record'}`
+      });
+    }
+
+    const cleanMethod = (paymentMethod || 'CASH').toUpperCase();
+    order.paymentStatus = 'collected';
+    order.paymentCollectedAt = new Date();
+    order.paymentCollectedBy = driverId;
+    order.paymentCollectionMethod = cleanMethod;
+    order.paidAt = new Date();
+
+    if (isConnected()) {
+      await order.save();
+    }
+
+    // Push notification to customer
+    pushNotification({
+      recipientId: order.customerId,
+      recipientRole: 'customer',
+      orderId: order.orderId || order._id || order.id,
+      title: '💵 Doorstep Payment Collected',
+      message: `₹${order.totalAmount} collected via ${cleanMethod} by delivery partner ${req.user.firstName || 'Courier'}. Handover complete!`,
+      category: 'order',
+      priority: 'HIGH'
+    });
+
+    // Push notification to farmer
+    pushNotification({
+      recipientId: order.farmerId,
+      recipientRole: 'farmer',
+      orderId: order.orderId || order._id || order.id,
+      title: '💵 Doorstep Payment Collected',
+      message: `Delivery partner collected ₹${order.totalAmount} for Order #${order.orderId || order._id || order.id}. Ready for account payout.`,
+      category: 'order',
+      priority: 'HIGH'
+    });
+
+    return res.json({
+      success: true,
+      message: `Payment of ₹${order.totalAmount} successfully recorded as collected via ${cleanMethod}.`,
+      order: sanitizeOrderFarmerDetails(order, req.user)
+    });
+  } catch (error) {
+    console.error('collectCodPayment error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to record payment collection' });
   }
 };
 
@@ -1360,6 +1476,7 @@ module.exports = {
   verifyDeliveryOtp,
   confirmDispatchSignal,
   processOrderPayment,
+  collectCodPayment,
   seedMemoryOrder,
   getMemoryOrders
 };

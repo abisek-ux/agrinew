@@ -3503,6 +3503,13 @@ export default function CustomerPortal({ onLogout }) {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewedKeys, setReviewedKeys] = useState([]);
 
+  // Delivery Courier Review State
+  const [reviewingDelivery, setReviewingDelivery] = useState(null); // { orderId, deliveryId, deliveryName }
+  const [deliveryRating, setDeliveryRating] = useState(5);
+  const [deliveryReviewComment, setDeliveryReviewComment] = useState('');
+  const [submittingDeliveryReview, setSubmittingDeliveryReview] = useState(false);
+  const [reviewedDeliveryKeys, setReviewedDeliveryKeys] = useState([]);
+
   // Phase 4 — Checkout, Orders & Payment State
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cod'); // 'cod' | 'upi_delivery'
@@ -3687,6 +3694,28 @@ export default function CustomerPortal({ onLogout }) {
       showToast(msg, 'error');
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handleSubmitDeliveryReview = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!reviewingDelivery) return;
+    setSubmittingDeliveryReview(true);
+    try {
+      await reviewAPI.createDeliveryReview({
+        orderId: reviewingDelivery.orderId,
+        rating: Number(deliveryRating),
+        comment: deliveryReviewComment
+      });
+      setReviewedDeliveryKeys(prev => [...prev, String(reviewingDelivery.orderId)]);
+      showToast('⭐ Delivery partner review submitted successfully!', 'success');
+      setReviewingDelivery(null);
+      setDeliveryReviewComment('');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to submit courier review';
+      showToast(msg, 'error');
+    } finally {
+      setSubmittingDeliveryReview(false);
     }
   };
 
@@ -4126,7 +4155,11 @@ export default function CustomerPortal({ onLogout }) {
         expressDelivery
       };
       setPaymentOrderData(placedOrderData);
-      setShowPaymentPortal(true);
+      if (selectedPaymentMethod === 'upi_delivery') {
+        setShowPaymentPortal(true);
+      } else {
+        setShowPaymentPortal(false);
+      }
       setConfirmedOrderResult(placedOrderData);
       fetchNotifications();
 
@@ -6510,36 +6543,75 @@ export default function CustomerPortal({ onLogout }) {
 
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                           {/* Payment status badge */}
-                          {order.paymentStatus === 'paid' ? (
-                            <span style={{
-                              background: 'rgba(16, 185, 129, 0.2)',
-                              border: '1px solid #10b981',
-                              color: '#4ade80',
-                              padding: '4px 10px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: '800',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}>
-                              ✓ Paid Online ({order.paymentMethod || 'UPI'})
-                            </span>
-                          ) : (
-                            <span style={{
-                              background: isDelivered ? 'rgba(55, 189, 120, 0.15)' : isCancelled ? 'rgba(255,255,255,0.05)' : 'rgba(244, 201, 93, 0.15)',
-                              border: `1px solid ${isDelivered ? 'rgba(55, 189, 120, 0.3)' : isCancelled ? 'rgba(255,255,255,0.1)' : 'rgba(244, 201, 93, 0.3)'}`,
-                              color: isDelivered ? '#8be28b' : isCancelled ? '#a3c2b0' : '#f4c95d',
-                              padding: '4px 10px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: '700'
-                            }}>
-                              {isDelivered ? 'Paid on Handover' : isCancelled ? 'No Payment Due' : 'Payment Pending / Due on Handover'}
-                            </span>
-                          )}
+                          {(() => {
+                            const isCod = (order.paymentMethod || '').toUpperCase() === 'COD' || (order.paymentMethod || '').toUpperCase() === 'CASH ON DELIVERY';
+                            if (order.paymentStatus === 'collected') {
+                              return (
+                                <span style={{
+                                  background: 'rgba(16, 185, 129, 0.2)',
+                                  border: '1px solid #10b981',
+                                  color: '#4ade80',
+                                  padding: '4px 10px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  ✓ Collected on Handover ({order.paymentCollectionMethod || order.paymentMethod || 'COD'})
+                                </span>
+                              );
+                            }
+                            if (order.paymentStatus === 'paid' && !isCod) {
+                              return (
+                                <span style={{
+                                  background: 'rgba(16, 185, 129, 0.2)',
+                                  border: '1px solid #10b981',
+                                  color: '#4ade80',
+                                  padding: '4px 10px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  ✓ Paid Online ({order.paymentMethod || 'UPI'})
+                                </span>
+                              );
+                            }
+                            if (order.paymentStatus === 'reported') {
+                              return (
+                                <span style={{
+                                  background: 'rgba(56, 189, 248, 0.15)',
+                                  border: '1px solid #38bdf8',
+                                  color: '#38bdf8',
+                                  padding: '4px 10px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: '800'
+                                }}>
+                                  UPI Reported (Pending Handover Verification)
+                                </span>
+                              );
+                            }
+                            return (
+                              <span style={{
+                                background: isCancelled ? 'rgba(255,255,255,0.05)' : 'rgba(244, 201, 93, 0.15)',
+                                border: `1px solid ${isCancelled ? 'rgba(255,255,255,0.1)' : 'rgba(244, 201, 93, 0.3)'}`,
+                                color: isCancelled ? '#a3c2b0' : '#f4c95d',
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: '700'
+                              }}>
+                                {isCancelled ? 'No Payment Due' : (isCod ? 'Cash on Delivery — Payment Pending' : 'Payment Pending / Due on Handover')}
+                              </span>
+                            );
+                          })()}
 
-                          {order.paymentStatus !== 'paid' && !isCancelled && !isDelivered && (
+                          {order.paymentStatus !== 'paid' && order.paymentStatus !== 'collected' && !isCancelled && !isDelivered && (
                             <button
                               type="button"
                               onClick={() => {
@@ -6566,7 +6638,6 @@ export default function CustomerPortal({ onLogout }) {
                             </button>
                           )}
 
-
                           {/* Order status badge */}
                           <span style={{
                             background: statusStyle.bg,
@@ -6587,11 +6658,27 @@ export default function CustomerPortal({ onLogout }) {
                       {/* Farmer and Courier Quick Info */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', marginBottom: '14px', fontSize: '12.5px', color: '#a3c2b0' }}>
                         <div>🧑‍🌾 <strong>Farmer:</strong> <span style={{ color: '#effbe7' }}>{order.farmerName || 'Tamil Nadu Farm Partner'}</span>
-                          {order.farmerLocation?.address && (
-                            <span style={{ fontSize: '11.5px', color: '#6ee7b7', display: 'block', marginTop: '2px' }}>
-                              📍 {order.farmerLocation.address.split(',')[0]} ({order.farmerLocation.placeName || 'Tamil Nadu'})
-                            </span>
-                          )}
+                          {(() => {
+                            const addr = (order.farmerLocation?.address || '').trim();
+                            const place = (order.farmerLocation?.placeName || '').trim();
+                            if (!addr && !place) {
+                              return (
+                                <span style={{ fontSize: '11.5px', color: '#9db5aa', display: 'block', marginTop: '2px' }}>
+                                  📍 Farmer Location: Location not provided
+                                </span>
+                              );
+                            }
+                            const cleanAddr = addr.split(',')[0].trim();
+                            let displayStr = cleanAddr || place;
+                            if (place && cleanAddr && !cleanAddr.toLowerCase().includes(place.toLowerCase()) && !place.toLowerCase().includes(cleanAddr.toLowerCase())) {
+                              displayStr = `${cleanAddr} (${place})`;
+                            }
+                            return (
+                              <span style={{ fontSize: '11.5px', color: '#6ee7b7', display: 'block', marginTop: '2px' }}>
+                                📍 Farmer Location: {displayStr}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <div>🚚 <strong>Courier:</strong> <span style={{ color: '#effbe7' }}>{order.deliveryName || 'Awaiting assignment'}</span></div>
                         <div>📍 <strong>Destination:</strong> <span style={{ color: '#effbe7' }}>{order.customerLocation?.address?.split(',')[0] || 'Doorstep'}</span></div>
@@ -6745,6 +6832,34 @@ export default function CustomerPortal({ onLogout }) {
                             <Radio size={15} />
                             <span>{isRadarExpanded ? 'Hide GPS Radar' : 'Live GPS Radar'}</span>
                           </button>
+
+                          {isDelivered && order.deliveryId && (
+                            <button
+                              onClick={() => setReviewingDelivery({
+                                orderId: order._id || order.id,
+                                deliveryId: order.deliveryId,
+                                deliveryName: order.deliveryName || 'Courier Partner'
+                              })}
+                              disabled={reviewedDeliveryKeys.includes(String(order._id || order.id))}
+                              style={{
+                                background: reviewedDeliveryKeys.includes(String(order._id || order.id)) ? 'rgba(52, 211, 153, 0.2)' : 'rgba(56, 189, 248, 0.15)',
+                                border: `1px solid ${reviewedDeliveryKeys.includes(String(order._id || order.id)) ? '#34d399' : '#38bdf8'}`,
+                                color: reviewedDeliveryKeys.includes(String(order._id || order.id)) ? '#34d399' : '#38bdf8',
+                                padding: '10px 16px',
+                                borderRadius: '10px',
+                                fontSize: '13px',
+                                fontWeight: '700',
+                                cursor: reviewedDeliveryKeys.includes(String(order._id || order.id)) ? 'default' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                minHeight: '44px'
+                              }}
+                            >
+                              <Star size={15} fill={reviewedDeliveryKeys.includes(String(order._id || order.id)) ? '#34d399' : '#38bdf8'} />
+                              <span>{reviewedDeliveryKeys.includes(String(order._id || order.id)) ? '✓ Courier Reviewed' : 'Review Courier'}</span>
+                            </button>
+                          )}
                         </div>
 
                         {isCancellable && (
@@ -6871,9 +6986,74 @@ export default function CustomerPortal({ onLogout }) {
                       {msg.role === 'user' ? <User size={13} /> : <Sparkles size={13} />}
                       <span>{msg.role === 'user' ? 'You' : 'AgriLink Culinary Assistant'}</span>
                     </div>
-                    <div style={{ fontSize: '13.5px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                      {msg.text}
-                    </div>
+                    {msg.recipe ? (
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ fontSize: '16px', fontWeight: '800', color: '#4ade80', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>🥗</span>
+                          <span>{msg.recipe.title}</span>
+                        </div>
+                        {msg.recipe.description && (
+                          <p style={{ fontSize: '13px', color: '#cbd5e1', margin: '0 0 10px', fontStyle: 'italic', lineHeight: '1.5' }}>
+                            {msg.recipe.description}
+                          </p>
+                        )}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                          {msg.recipe.time && (
+                            <span style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '12px', padding: '3px 10px', fontSize: '11px', color: '#effbe7', fontWeight: '700' }}>
+                              ⏱️ {msg.recipe.time}
+                            </span>
+                          )}
+                          {msg.recipe.servings && (
+                            <span style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '12px', padding: '3px 10px', fontSize: '11px', color: '#effbe7', fontWeight: '700' }}>
+                              🍽️ Serves {msg.recipe.servings}
+                            </span>
+                          )}
+                        </div>
+
+                        {msg.recipe.ingredients && msg.recipe.ingredients.length > 0 && (
+                          <div style={{ marginBottom: '14px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '800', color: '#6ee7b7', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>
+                              Ingredients & Quantities:
+                            </div>
+                            <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#effbe7', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {msg.recipe.ingredients.map((ing, iIdx) => (
+                                <li key={iIdx}>{ing}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {msg.recipe.procedure && msg.recipe.procedure.length > 0 && (
+                          <div style={{ marginBottom: '14px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '800', color: '#6ee7b7', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>
+                              Preparation Steps:
+                            </div>
+                            <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#effbe7', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {msg.recipe.procedure.map((step, sIdx) => (
+                                <li key={sIdx} style={{ lineHeight: '1.45' }}>{step}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
+
+                        {msg.recipe.storage && (
+                          <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#a7f3d0', marginTop: '10px' }}>
+                            💡 <strong>Storage & Guidance:</strong> {msg.recipe.storage}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '13.5px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                        {typeof msg.text === 'string' && msg.text.includes('**')
+                          ? msg.text.split(/(\*\*.*?\*\*)/g).map((part, pIdx) => {
+                              if (part.startsWith('**') && part.endsWith('**')) {
+                                return <strong key={pIdx} style={{ color: '#4ade80' }}>{part.slice(2, -2)}</strong>;
+                              }
+                              return part;
+                            })
+                          : msg.text}
+                      </div>
+                    )}
 
                     {msg.missingIngredients && msg.missingIngredients.length > 0 && (
                       <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -6975,19 +7155,49 @@ export default function CustomerPortal({ onLogout }) {
                 border: '1.5px solid rgba(55, 189, 120, 0.3)',
                 borderRadius: '20px',
                 padding: '24px',
-                boxShadow: '0 12px 32px rgba(0,0,0,0.3)'
+                boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#37bd78', fontWeight: '800', fontSize: '14px', marginBottom: '10px' }}>
-                  <ChefHat size={18} />
-                  <span>Farm-to-Table Organic Salad Bowl</span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#37bd78', fontWeight: '800', fontSize: '14px', marginBottom: '10px' }}>
+                    <ChefHat size={18} />
+                    <span>Farm-to-Table Organic Salad Bowl</span>
+                  </div>
+                  <h4 style={{ color: '#effbe7', fontSize: '17px', margin: '0 0 10px' }}>Roasted Heritage Tomato & Cucumber Medley</h4>
+                  <p style={{ color: '#a3c2b0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
+                    A high-antioxidant lunch rich in Vitamin C and Lycopene. Tossed with cold-pressed olive oil, crushed basil, and pink rock salt.
+                  </p>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#effbe7' }}>
+                    ⏱️ Prep Time: 10 mins • 🔥 180 kcal • 🌿 100% Vegan
+                  </div>
                 </div>
-                <h4 style={{ color: '#effbe7', fontSize: '17px', margin: '0 0 10px' }}>Roasted Heritage Tomato & Cucumber Medley</h4>
-                <p style={{ color: '#a3c2b0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
-                  A high-antioxidant lunch rich in Vitamin C and Lycopene. Tossed with cold-pressed olive oil, crushed basil, and pink rock salt.
-                </p>
-                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#effbe7' }}>
-                  ⏱️ Prep Time: 10 mins • 🔥 180 kcal • 🌿 100% Vegan
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleAskRecipeAssistant(null, 'How to make Roasted Heritage Tomato & Cucumber Medley?');
+                  }}
+                  style={{
+                    marginTop: '16px',
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #00897b, #004d40)',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '10px 16px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <ChefHat size={15} />
+                  <span>View Recipe & Steps</span>
+                </button>
               </div>
 
               <div style={{
@@ -6995,19 +7205,49 @@ export default function CustomerPortal({ onLogout }) {
                 border: '1.5px solid rgba(244, 201, 93, 0.3)',
                 borderRadius: '20px',
                 padding: '24px',
-                boxShadow: '0 12px 32px rgba(0,0,0,0.3)'
+                boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f4c95d', fontWeight: '800', fontSize: '14px', marginBottom: '10px' }}>
-                  <Activity size={18} />
-                  <span>Detox & Immunity Booster Smoothie</span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f4c95d', fontWeight: '800', fontSize: '14px', marginBottom: '10px' }}>
+                    <Activity size={18} />
+                    <span>Detox & Immunity Booster Smoothie</span>
+                  </div>
+                  <h4 style={{ color: '#effbe7', fontSize: '17px', margin: '0 0 10px' }}>Cold-Pressed Green Apple & Spinach Elixir</h4>
+                  <p style={{ color: '#a3c2b0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
+                    Stimulates natural liver detoxification and accelerates cellular hydration. Blended with fresh tender mint leaves and organic lemon zest.
+                  </p>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#effbe7' }}>
+                    ⏱️ Prep Time: 5 mins • 🔥 120 kcal • 🛡️ Immunity +45%
+                  </div>
                 </div>
-                <h4 style={{ color: '#effbe7', fontSize: '17px', margin: '0 0 10px' }}>Cold-Pressed Green Apple & Spinach Elixir</h4>
-                <p style={{ color: '#a3c2b0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
-                  Stimulates natural liver detoxification and accelerates cellular hydration. Blended with fresh tender mint leaves and organic lemon zest.
-                </p>
-                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#effbe7' }}>
-                  ⏱️ Prep Time: 5 mins • 🔥 120 kcal • 🛡️ Immunity +45%
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleAskRecipeAssistant(null, 'How to make Cold-Pressed Green Apple & Spinach Elixir?');
+                  }}
+                  style={{
+                    marginTop: '16px',
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #00897b, #004d40)',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '10px 16px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <ChefHat size={15} />
+                  <span>View Recipe & Steps</span>
+                </button>
               </div>
             </div>
           </div>
@@ -7746,6 +7986,102 @@ export default function CustomerPortal({ onLogout }) {
               }}
             >
               {submittingReview ? 'Publishing Review...' : 'Publish Verified Review'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Verified Delivery Partner Review Modal */}
+      {reviewingDelivery && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(4, 14, 12, 0.85)',
+          backdropFilter: 'blur(16px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }} onClick={() => setReviewingDelivery(null)}>
+          <div style={{
+            maxWidth: '440px',
+            width: '100%',
+            background: 'linear-gradient(145deg, rgba(9, 43, 39, 0.98), rgba(6, 28, 26, 0.99))',
+            border: '1.5px solid rgba(56, 189, 248, 0.45)',
+            borderRadius: '24px',
+            padding: '28px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.8)'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                Rate Courier ({reviewingDelivery.deliveryName})
+              </h3>
+              <button onClick={() => setReviewingDelivery(null)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <p style={{ color: '#a3c2b0', fontSize: '13px', margin: '0 0 16px' }}>
+              Doorstep Handover Review for Order #{String(reviewingDelivery.orderId).slice(-8).toUpperCase()}
+            </p>
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setDeliveryRating(star)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px'
+                  }}
+                >
+                  <Star
+                    size={28}
+                    color={star <= deliveryRating ? '#38bdf8' : '#4b5563'}
+                    fill={star <= deliveryRating ? '#38bdf8' : 'none'}
+                  />
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={deliveryReviewComment}
+              onChange={e => setDeliveryReviewComment(e.target.value)}
+              placeholder="Share feedback on delivery punctuality, polite handover, and package care..."
+              rows={4}
+              style={{
+                width: '100%',
+                background: 'rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '12px',
+                padding: '12px',
+                color: '#effbe7',
+                fontSize: '13.5px',
+                boxSizing: 'border-box',
+                marginBottom: '18px',
+                resize: 'vertical'
+              }}
+            />
+
+            <button
+              onClick={handleSubmitDeliveryReview}
+              disabled={submittingDeliveryReview}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                border: '1px solid #38bdf8',
+                color: '#ffffff',
+                padding: '12px',
+                borderRadius: '12px',
+                fontSize: '14px',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              {submittingDeliveryReview ? 'Submitting Review...' : 'Submit Courier Review'}
             </button>
           </div>
         </div>

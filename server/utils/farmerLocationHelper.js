@@ -53,41 +53,76 @@ function getRandomTamilNaduHub(seedKey) {
  * 3. Seed-based random distribution among Namakkal, Salem, Coimbatore
  */
 function resolveFarmerLocation(rawLoc, seedKey, loggedInUser) {
-  // If the logged-in user is a farmer, prioritize their verified location
-  if (loggedInUser && loggedInUser.role === 'farmer') {
-    if (loggedInUser.location?.lat && loggedInUser.location?.lng) {
-      const addr = String(loggedInUser.location.address || '').toLowerCase();
-      if (!addr.includes('mandya') && !addr.includes('karnataka')) {
-        return {
-          lat: Number(loggedInUser.location.lat),
-          lng: Number(loggedInUser.location.lng),
-          address: loggedInUser.location.address,
-          placeName: loggedInUser.nativePlace || loggedInUser.location.placeName || 'Tamil Nadu Farm Gate',
-          district: loggedInUser.nativePlace?.split(',')[0]?.trim() || 'Tamil Nadu'
-        };
-      }
-    }
-  }
-
-  // If raw location provided and does not refer to Mandya / Karnataka defaults
-  if (rawLoc && rawLoc.lat && rawLoc.lng) {
-    const isMandyaCoords = (Math.abs(Number(rawLoc.lat) - 12.5222) < 0.01 && Math.abs(Number(rawLoc.lng) - 76.9004) < 0.01);
+  // 1. If an authentic historical order snapshot already exists, preserve it!
+  if (rawLoc && (rawLoc.lat || rawLoc.address)) {
+    const isMandyaCoords = (rawLoc.lat && rawLoc.lng && Math.abs(Number(rawLoc.lat) - 12.5222) < 0.01 && Math.abs(Number(rawLoc.lng) - 76.9004) < 0.01);
     const addr = String(rawLoc.address || '').toLowerCase();
     const isMandyaAddr = addr.includes('mandya') || addr.includes('karnataka');
 
-    if (!isMandyaCoords && !isMandyaAddr) {
+    if (!isMandyaCoords && !isMandyaAddr && rawLoc.address) {
+      // Remove duplicate parenthetical repetitions, e.g. "AgriLink Hub (AgriLink Hub)"
+      let cleanAddress = String(rawLoc.address).trim();
+      cleanAddress = cleanAddress.replace(/\s*\(([^)]+)\)/g, (match, p1) => {
+        const withoutMatch = cleanAddress.replace(match, '').trim();
+        if (withoutMatch.toLowerCase().includes(p1.trim().toLowerCase())) {
+          return '';
+        }
+        return match;
+      }).trim();
+
+      const firstSegment = cleanAddress.split(',')[0].trim();
+      let placeName = rawLoc.placeName || rawLoc.district || firstSegment;
+      if (placeName.toLowerCase() === firstSegment.toLowerCase()) {
+        const parts = cleanAddress.split(',').map(s => s.trim()).filter(Boolean);
+        placeName = parts[1] || parts[0] || 'Tamil Nadu';
+      }
+
       return {
-        lat: Number(rawLoc.lat),
-        lng: Number(rawLoc.lng),
-        address: rawLoc.address || 'Tamil Nadu Farm Gate',
-        placeName: rawLoc.placeName || rawLoc.address?.split(',')[0] || 'Farm Gate',
-        district: rawLoc.placeName?.split(',')[0] || 'Tamil Nadu'
+        lat: Number(rawLoc.lat) || 11.2189,
+        lng: Number(rawLoc.lng) || 78.1674,
+        address: cleanAddress,
+        placeName,
+        district: rawLoc.district || placeName,
+        source: rawLoc.source || 'historical_order_snapshot'
       };
     }
   }
 
-  // Fallback: Random / deterministic allocation across Namakkal, Salem, Coimbatore
-  return getRandomTamilNaduHub(seedKey);
+  // 2. If creating new order or resolving for farmer, prioritize farmer's verified farm address / native city
+  if (loggedInUser && (loggedInUser.role === 'farmer' || loggedInUser.farmAddress || loggedInUser.nativePlace || loggedInUser.city)) {
+    const farmAddr = loggedInUser.farmAddress || loggedInUser.location?.address;
+    if (farmAddr) {
+      const lowerAddr = String(farmAddr).toLowerCase();
+      if (!lowerAddr.includes('mandya') && !lowerAddr.includes('karnataka')) {
+        const placeName = loggedInUser.nativePlace || loggedInUser.city || loggedInUser.location?.placeName || 'Tamil Nadu Farm Gate';
+        return {
+          lat: Number(loggedInUser.location?.lat) || 11.2189,
+          lng: Number(loggedInUser.location?.lng) || 78.1674,
+          address: farmAddr,
+          placeName,
+          district: loggedInUser.nativePlace?.split(',')[0]?.trim() || loggedInUser.city || 'Tamil Nadu',
+          source: 'verified_farm_address'
+        };
+      }
+    } else if (loggedInUser.city || loggedInUser.nativePlace) {
+      const nativeStr = [loggedInUser.nativePlace || loggedInUser.city, loggedInUser.state || 'Tamil Nadu'].filter(Boolean).join(', ');
+      return {
+        lat: Number(loggedInUser.location?.lat) || 11.2189,
+        lng: Number(loggedInUser.location?.lng) || 78.1674,
+        address: nativeStr,
+        placeName: loggedInUser.nativePlace || loggedInUser.city,
+        district: loggedInUser.city || 'Tamil Nadu',
+        source: 'city_native_place'
+      };
+    }
+  }
+
+  // 3. Fallback: Seed-based deterministic regional farm hub
+  const hub = getRandomTamilNaduHub(seedKey);
+  return {
+    ...hub,
+    source: 'regional_hub_pickup_point'
+  };
 }
 
 function sanitizeOrderFarmerDetails(order, currentUser) {
@@ -95,16 +130,25 @@ function sanitizeOrderFarmerDetails(order, currentUser) {
   const ord = typeof order.toObject === 'function' ? order.toObject() : { ...order };
   const seedKey = ord._id || ord.id || ord.orderId || ord.farmerId;
 
-  const hub = resolveFarmerLocation(ord.farmerLocation, seedKey);
-
   // Authoritative identity preservation: NEVER overwrite legitimate farmer names
   if (!ord.farmerName || ord.farmerName === 'Farm Origin') {
     ord.farmerName = 'Farm Producer';
   }
 
-  ord.farmerLocation = hub;
-  const fLat = hub.lat;
-  const fLng = hub.lng;
+  // Historical location preservation: if order already has an authentic location snapshot, preserve it!
+  if (!ord.farmerLocation || !ord.farmerLocation.address) {
+    ord.farmerLocation = resolveFarmerLocation(ord.farmerLocation, seedKey);
+  } else {
+    // Ensure placeName and address are not identical duplicates
+    const firstSegment = String(ord.farmerLocation.address).split(',')[0].trim();
+    if (ord.farmerLocation.placeName && ord.farmerLocation.placeName.toLowerCase() === firstSegment.toLowerCase()) {
+      const parts = String(ord.farmerLocation.address).split(',').map(s => s.trim()).filter(Boolean);
+      ord.farmerLocation.placeName = parts[1] || parts[0] || 'Tamil Nadu';
+    }
+  }
+
+  const fLat = ord.farmerLocation?.lat || 11.2189;
+  const fLng = ord.farmerLocation?.lng || 78.1674;
   ord.farmerGpsLink = `https://www.google.com/maps?q=${fLat},${fLng}`;
 
   const cLat = ord.customerLocation?.lat || 12.9716;

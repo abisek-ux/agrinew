@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSelector from './LanguageSelector';
-import { orderAPI } from '../services/api';
+import { orderAPI, reviewAPI } from '../services/api';
 import usePolling from '../hooks/usePolling';
 import LiveTrackingMap from './LiveTrackingMap';
 import AgriLinkLogo from './AgriLinkLogo';
@@ -42,7 +42,9 @@ import {
   Map,
   Lock,
   LogOut,
-  Edit2
+  Edit2,
+  Star,
+  Banknote
 } from 'lucide-react';
 import ProfileEmailOtpModal from './ProfileEmailOtpModal';
 
@@ -442,7 +444,7 @@ function ColdChainTelemetry3D({ temp = 4.2, humidity = 88, onBoostCryo }) {
 /* ─────────────────────────────────────────────────────────────
    OTP Handover Verification Modal
 ───────────────────────────────────────────────────────────── */
-function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
+function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery, onCollectCodPayment, collectingPayment }) {
   const [enteredOtp, setEnteredOtp] = useState('');
   const [verified, setVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -608,7 +610,7 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
               border: '1px solid rgba(244, 201, 93, 0.25)',
               borderRadius: '12px',
               padding: '12px 14px',
-              marginBottom: '16px'
+              marginBottom: '14px'
             }}>
               <p style={{ color: '#fef08a', fontSize: '12px', fontWeight: '700', margin: '0 0 4px 0' }}>
                 🛡️ Verified Doorstep Handover
@@ -616,6 +618,78 @@ function OtpHandoverModal({ isOpen, order, onClose, onConfirmDelivery }) {
               <p style={{ color: '#c0d9cb', fontSize: '12px', lineHeight: '1.5', margin: 0 }}>
                 When standing at the customer's door, ask for their 6-digit confirmation PIN. If the customer has not received it, tap the dispatch button below to send it to <strong style={{ color: '#effbe7' }}>{customerEmail}</strong>.
               </p>
+            </div>
+
+            {/* COD Payment Status & Explicit Collection in Handover Modal */}
+            <div style={{
+              background: order.paymentStatus === 'collected'
+                ? 'rgba(52, 211, 153, 0.12)'
+                : order.paymentStatus === 'paid' && order.paymentMethod !== 'COD'
+                ? 'rgba(56, 189, 248, 0.12)'
+                : 'rgba(244, 201, 93, 0.12)',
+              border: `1.5px solid ${order.paymentStatus === 'collected' ? '#34d399' : order.paymentStatus === 'paid' ? '#38bdf8' : '#f4c95d'}`,
+              borderRadius: '14px',
+              padding: '12px 14px',
+              marginBottom: '16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <div>
+                <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: '800', color: '#a3c2b0', letterSpacing: '0.5px' }}>
+                  Payment Method: {order.paymentMethod || 'COD'}
+                </div>
+                <div style={{ fontSize: '17px', fontWeight: '900', color: '#effbe7', marginTop: '2px' }}>
+                  Amount: ₹{order.totalAmount}
+                </div>
+                <div style={{
+                  fontSize: '11.5px',
+                  fontWeight: '800',
+                  color: order.paymentStatus === 'collected'
+                    ? '#34d399'
+                    : order.paymentStatus === 'paid'
+                    ? '#38bdf8'
+                    : order.paymentStatus === 'reported'
+                    ? '#fbbf24'
+                    : '#f87171',
+                  marginTop: '3px'
+                }}>
+                  {order.paymentStatus === 'collected'
+                    ? '✓ Cash / Payment Collected on Handover'
+                    : order.paymentStatus === 'paid' && order.paymentMethod !== 'COD'
+                    ? '✓ Paid Online'
+                    : order.paymentStatus === 'reported'
+                    ? '⚠️ Customer Reported Handover UPI'
+                    : 'Payment Pending Collection (Collect from customer)'}
+                </div>
+              </div>
+
+              {order.paymentMethod === 'COD' && order.paymentStatus !== 'collected' && (
+                <button
+                  type="button"
+                  onClick={() => onCollectCodPayment && onCollectCodPayment(orderId, order.totalAmount)}
+                  disabled={collectingPayment}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    border: '1px solid #34d399',
+                    color: '#ffffff',
+                    fontSize: '12.5px',
+                    fontWeight: '800',
+                    cursor: collectingPayment ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
+                  }}
+                >
+                  <Banknote size={15} />
+                  <span>{collectingPayment ? 'Recording...' : `Collect ₹${order.totalAmount}`}</span>
+                </button>
+              )}
             </div>
 
             <button
@@ -732,10 +806,15 @@ export default function DeliveryPortal({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
   const [activeOrderId, setActiveOrderId] = useState(null);
-  const [activeNavTab, setActiveNavTab] = useState('active'); // 'active' | 'available' | 'history' | 'profile' | 'telemetry'
+  const [activeNavTab, setActiveNavTab] = useState('active'); // 'active' | 'available' | 'history' | 'reviews' | 'profile' | 'telemetry'
   const [refreshing, setRefreshing] = useState(false);
   const [sosActive, setSosActive] = useState(false);
   const [selectedHandoverOrder, setSelectedHandoverOrder] = useState(null);
+
+  // Driver Reviews state (Bug 2: multi-tenant delivery partner reviews)
+  const [driverReviews, setDriverReviews] = useState([]);
+  const [driverReviewsLoading, setDriverReviewsLoading] = useState(false);
+  const [collectingPaymentId, setCollectingPaymentId] = useState(null);
 
   // Profile Edit State (Phase 6 Security & Lock)
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -770,10 +849,48 @@ export default function DeliveryPortal({ onLogout }) {
 
   useEffect(() => {
     fetchDeliveryOrders(true);
+    if (isDriver) {
+      fetchDriverReviews();
+    }
   }, []);
 
+  const fetchDriverReviews = async () => {
+    setDriverReviewsLoading(true);
+    try {
+      const res = await reviewAPI.getDeliveryReviews();
+      const list = Array.isArray(res.data) ? res.data : (res.data?.reviews || []);
+      setDriverReviews(list);
+    } catch (err) {
+      console.warn('Driver reviews fetch note:', err.message);
+    } finally {
+      setDriverReviewsLoading(false);
+    }
+  };
+
+  const handleCollectPayment = async (orderId, totalAmount) => {
+    setCollectingPaymentId(orderId);
+    try {
+      const res = await orderAPI.collectCodPayment(orderId, {
+        method: 'CASH',
+        amount: totalAmount
+      });
+      showToast(res.data?.message || `✓ Payment of ₹${totalAmount} recorded as collected on handover.`, 'success');
+      await fetchDeliveryOrders(false);
+      if (selectedHandoverOrder && String(selectedHandoverOrder._id || selectedHandoverOrder.id) === String(orderId)) {
+        setSelectedHandoverOrder(prev => prev ? { ...prev, paymentStatus: 'collected' } : null);
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to record payment collection', 'error');
+    } finally {
+      setCollectingPaymentId(null);
+    }
+  };
+
   // Periodic polling using visibility-aware hook: stops on hidden tab, prevents overlaps (20s)
-  usePolling(() => fetchDeliveryOrders(false), 20000, {
+  usePolling(() => {
+    fetchDeliveryOrders(false);
+    if (isDriver) fetchDriverReviews();
+  }, 20000, {
     enabled: isDriver
   });
 
@@ -792,9 +909,9 @@ export default function DeliveryPortal({ onLogout }) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchDeliveryOrders(false);
+    await Promise.all([fetchDeliveryOrders(false), fetchDriverReviews()]);
     setRefreshing(false);
-    showToast('Delivery radar refreshed', 'info');
+    showToast('Delivery radar & courier feedback refreshed', 'info');
   };
 
   // Orders segmentation based on real DB status and driver ID
@@ -1047,6 +1164,47 @@ export default function DeliveryPortal({ onLogout }) {
             >
               <CheckCircle2 size={18} />
               <span>{t('History & Earnings')}</span>
+            </button>
+
+            {/* Courier Reviews Tab (Bug 2: Delivery Partner Reviews) */}
+            <button
+              onClick={() => {
+                setActiveNavTab('reviews');
+                fetchDriverReviews();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: activeNavTab === 'reviews' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'transparent',
+                color: activeNavTab === 'reviews' ? '#ffffff' : '#a3b899',
+                fontWeight: activeNavTab === 'reviews' ? '800' : '600',
+                fontSize: '13.5px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Star size={18} color={activeNavTab === 'reviews' ? '#fff' : '#f59e0b'} />
+                <span>{t('Driver Reviews')}</span>
+              </div>
+              {driverReviews.length > 0 && (
+                <span style={{
+                  background: '#f59e0b',
+                  color: '#092b27',
+                  fontSize: '11px',
+                  fontWeight: '900',
+                  padding: '2px 8px',
+                  borderRadius: '10px'
+                }}>
+                  {driverReviews.length}
+                </span>
+              )}
             </button>
 
             {/* 4. Telemetry & Cold-Chain (Preserved) */}
@@ -1525,8 +1683,59 @@ export default function DeliveryPortal({ onLogout }) {
                     ))}
                   </div>
 
-                  <div style={{ marginTop: '10px', fontSize: '11.5px', color: '#f4c95d', fontWeight: '600' }}>
-                    ℹ️ Payment: Cash on Delivery / UPI upon Handover
+                  <div style={{ marginTop: '12px', padding: '12px', borderRadius: '12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#a3c2b0', textTransform: 'uppercase', fontWeight: '800' }}>
+                          Payment Method: {currentActiveOrder.paymentMethod || 'COD'}
+                        </div>
+                        <div style={{
+                          fontSize: '13px',
+                          fontWeight: '800',
+                          marginTop: '2px',
+                          color: currentActiveOrder.paymentStatus === 'collected'
+                            ? '#34d399'
+                            : currentActiveOrder.paymentStatus === 'paid' && currentActiveOrder.paymentMethod !== 'COD'
+                            ? '#38bdf8'
+                            : currentActiveOrder.paymentStatus === 'reported'
+                            ? '#fbbf24'
+                            : '#f87171'
+                        }}>
+                          {currentActiveOrder.paymentStatus === 'collected'
+                            ? '✓ Payment Collected on Handover'
+                            : currentActiveOrder.paymentStatus === 'paid' && currentActiveOrder.paymentMethod !== 'COD'
+                            ? '✓ Paid Online'
+                            : currentActiveOrder.paymentStatus === 'reported'
+                            ? '⚠️ Customer Reported Handover UPI'
+                            : 'Cash on Delivery — Payment Due (Collect from customer)'}
+                        </div>
+                      </div>
+
+                      {currentActiveOrder.paymentMethod === 'COD' && currentActiveOrder.paymentStatus !== 'collected' && (
+                        <button
+                          type="button"
+                          onClick={() => handleCollectPayment(currentActiveOrder._id || currentActiveOrder.id, currentActiveOrder.totalAmount)}
+                          disabled={collectingPaymentId === (currentActiveOrder._id || currentActiveOrder.id)}
+                          style={{
+                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            border: '1px solid #34d399',
+                            color: '#ffffff',
+                            borderRadius: '10px',
+                            padding: '8px 14px',
+                            fontSize: '12.5px',
+                            fontWeight: '800',
+                            cursor: collectingPaymentId === (currentActiveOrder._id || currentActiveOrder.id) ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
+                          }}
+                        >
+                          <Banknote size={15} />
+                          <span>{collectingPaymentId === (currentActiveOrder._id || currentActiveOrder.id) ? 'Recording...' : `Collect ₹${currentActiveOrder.totalAmount}`}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1942,15 +2151,54 @@ export default function DeliveryPortal({ onLogout }) {
                           </div>
                         </div>
 
-                        <div style={{ textAlign: 'right' }}>
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                           <div style={{ color: '#37bd78', fontSize: '18px', fontWeight: '900' }}>
                             +₹{perDeliveryFee}
                           </div>
-                          <div style={{ color: '#a3c2b0', fontSize: '11.5px', marginTop: '2px' }}>
+                          <div style={{ color: '#a3c2b0', fontSize: '11.5px' }}>
                             {order.deliveryOtpVerifiedAt
                               ? new Date(order.deliveryOtpVerifiedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                               : 'Completed'}
                           </div>
+                          {order.paymentMethod === 'COD' && (
+                            <div style={{ marginTop: '4px' }}>
+                              {order.paymentStatus === 'collected' ? (
+                                <span style={{
+                                  background: 'rgba(52, 211, 153, 0.15)',
+                                  border: '1px solid #34d399',
+                                  color: '#86efac',
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '10.5px',
+                                  fontWeight: '800'
+                                }}>
+                                  ✓ COD Collected (₹{order.totalAmount})
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCollectPayment(orderId, order.totalAmount)}
+                                  disabled={collectingPaymentId === orderId}
+                                  style={{
+                                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                                    border: 'none',
+                                    color: '#ffffff',
+                                    padding: '4px 10px',
+                                    borderRadius: '8px',
+                                    fontSize: '11px',
+                                    fontWeight: '800',
+                                    cursor: collectingPaymentId === orderId ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <Banknote size={12} />
+                                  <span>{collectingPaymentId === orderId ? 'Recording...' : `Collect ₹${order.totalAmount}`}</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1958,6 +2206,184 @@ export default function DeliveryPortal({ onLogout }) {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────
+           TAB: DRIVER REVIEWS & RATINGS (Bug 2 Fix)
+        ───────────────────────────────────────────────────────────── */}
+        {activeNavTab === 'reviews' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h2 style={{ color: '#effbe7', fontSize: '20px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Star size={20} color="#f59e0b" />
+                  <span>Courier Ratings & Customer Feedback</span>
+                </h2>
+                <p style={{ color: '#a3c2b0', fontSize: '13px', margin: '4px 0 0 0' }}>
+                  Verified customer reviews for your doorstep deliveries. Scoped strictly to your courier account.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchDriverReviews}
+                disabled={driverReviewsLoading}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#effbe7',
+                  borderRadius: '10px',
+                  padding: '8px 14px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RefreshCw size={13} style={{ animation: driverReviewsLoading ? 'spin 1s linear infinite' : 'none' }} />
+                <span>Refresh Reviews</span>
+              </button>
+            </div>
+
+            {/* Scorecard Summary */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+              <div style={{
+                background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.95), rgba(8, 20, 16, 0.98))',
+                border: '1.5px solid rgba(245, 158, 11, 0.35)',
+                borderRadius: '16px',
+                padding: '18px'
+              }}>
+                <div style={{ color: '#a3c2b0', fontSize: '12px', textTransform: 'uppercase', fontWeight: '800' }}>
+                  Average Rating
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '6px' }}>
+                  <span style={{ fontSize: '28px', fontWeight: '900', color: '#f59e0b' }}>
+                    {driverReviews.length > 0
+                      ? (driverReviews.reduce((sum, r) => sum + (r.rating || 5), 0) / driverReviews.length).toFixed(1)
+                      : '5.0'}
+                  </span>
+                  <div style={{ display: 'flex', gap: '3px' }}>
+                    {[1, 2, 3, 4, 5].map(st => (
+                      <Star key={st} size={16} fill="#f59e0b" color="#f59e0b" />
+                    ))}
+                  </div>
+                </div>
+                <div style={{ color: '#86efac', fontSize: '11.5px', marginTop: '4px', fontWeight: '600' }}>
+                  Top Performer • Verified Courier
+                </div>
+              </div>
+
+              <div style={{
+                background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.95), rgba(8, 20, 16, 0.98))',
+                border: '1.5px solid rgba(74, 222, 128, 0.25)',
+                borderRadius: '16px',
+                padding: '18px'
+              }}>
+                <div style={{ color: '#a3c2b0', fontSize: '12px', textTransform: 'uppercase', fontWeight: '800' }}>
+                  Total Customer Reviews
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#effbe7', marginTop: '6px' }}>
+                  {driverReviews.length}
+                </div>
+                <div style={{ color: '#a3c2b0', fontSize: '11.5px', marginTop: '4px' }}>
+                  From {completedOrders.length} delivered farm runs
+                </div>
+              </div>
+            </div>
+
+            {/* Reviews List */}
+            {driverReviewsLoading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <SkeletonDeliveryCard />
+              </div>
+            ) : driverReviews.length === 0 ? (
+              <div style={{
+                background: 'rgba(16, 32, 26, 0.75)',
+                border: '1.5px dashed rgba(245, 158, 11, 0.3)',
+                borderRadius: '20px',
+                padding: '50px 20px',
+                textAlign: 'center',
+                color: '#a3c2b0'
+              }}>
+                <Star size={44} color="#f59e0b" style={{ margin: '0 auto 14px' }} />
+                <h3 style={{ color: '#effbe7', fontSize: '18px', fontWeight: '800', margin: '0 0 6px' }}>
+                  No Delivery Reviews Yet
+                </h3>
+                <p style={{ margin: 0, fontSize: '13.5px', maxWidth: '420px', marginLeft: 'auto', marginRight: 'auto' }}>
+                  When customers complete and receive their doorstep deliveries, their ratings on handling and punctuality will appear here.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {driverReviews.map((rev, idx) => (
+                  <div
+                    key={rev._id || rev.id || idx}
+                    style={{
+                      background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.95), rgba(8, 20, 16, 0.98))',
+                      border: '1px solid rgba(74, 222, 128, 0.2)',
+                      borderRadius: '16px',
+                      padding: '16px 20px',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.25)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: 'linear-gradient(135deg, #10b981, #059669)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: '800',
+                          color: '#fff',
+                          fontSize: '14px'
+                        }}>
+                          {rev.customerName?.[0]?.toUpperCase() || 'C'}
+                        </div>
+                        <div>
+                          <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '800' }}>
+                            {rev.customerName || 'Verified Buyer'}
+                          </div>
+                          <div style={{ color: '#a3c2b0', fontSize: '11px' }}>
+                            {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Verified Delivery'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(245, 158, 11, 0.15)', padding: '4px 10px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                        {[1, 2, 3, 4, 5].map(st => (
+                          <Star
+                            key={st}
+                            size={14}
+                            fill={st <= (rev.rating || 5) ? '#f59e0b' : 'none'}
+                            color={st <= (rev.rating || 5) ? '#f59e0b' : '#6b7280'}
+                          />
+                        ))}
+                        <span style={{ color: '#f59e0b', fontSize: '12px', fontWeight: '800', marginLeft: '4px' }}>
+                          {rev.rating || 5}.0
+                        </span>
+                      </div>
+                    </div>
+
+                    {rev.comment && (
+                      <p style={{ color: '#d1fae5', fontSize: '13.5px', lineHeight: '1.5', margin: '8px 0 0 0', fontStyle: 'italic' }}>
+                        "{rev.comment}"
+                      </p>
+                    )}
+
+                    {rev.orderId && (
+                      <div style={{ marginTop: '8px', fontSize: '11px', color: '#6ee7b7' }}>
+                        Reference: Order #{String(rev.orderId).slice(-8).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -2421,6 +2847,8 @@ export default function DeliveryPortal({ onLogout }) {
           order={selectedHandoverOrder}
           onClose={() => setSelectedHandoverOrder(null)}
           onConfirmDelivery={(id) => handleUpdateStatus(id, 'delivered')}
+          onCollectCodPayment={handleCollectPayment}
+          collectingPayment={Boolean(collectingPaymentId)}
         />
       </main>
 
@@ -2465,6 +2893,23 @@ export default function DeliveryPortal({ onLogout }) {
         >
           <CheckCircle2 size={20} />
           <span>Earnings</span>
+        </button>
+
+        <button
+          className={`mobile-nav-btn ${activeNavTab === 'reviews' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveNavTab('reviews');
+            fetchDriverReviews();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <Star size={20} color="#f59e0b" />
+            {driverReviews.length > 0 && (
+              <span className="mobile-nav-badge" style={{ background: '#f59e0b' }}>{driverReviews.length}</span>
+            )}
+          </div>
+          <span>Reviews</span>
         </button>
 
         <button
