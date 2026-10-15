@@ -33,48 +33,34 @@ export default function FlipkartMarketplaceHeader({
     return () => clearInterval(timer);
   }, []);
 
-  // Flash Sale Countdown (hours, minutes, seconds)
-  const [timeLeft, setTimeLeft] = useState({ hours: 2, minutes: 42, seconds: 18 });
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
-        if (prev.minutes > 0) return { ...prev, minutes: 59, seconds: 59 };
-        if (prev.hours > 0) return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        return { hours: 3, minutes: 0, seconds: 0 };
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Flipkart Hero Carousel Banners
+  // Authentic Agricultural Marketplace Carousel Banners
   const banners = [
     {
       id: 1,
-      badge: 'MEGA HARVEST UTSAV 🌾',
-      title: 'Direct Farm-to-Doorstep Festival',
-      subtitle: 'Up to 45% OFF Direct From Mandya, Mysuru & Ooty Organic Farmers • 0% Broker Fee',
-      coupon: 'USE CODE: HARVEST45',
+      badge: 'DIRECT FARM TO KITCHEN 🌾',
+      title: 'Direct Farm-to-Doorstep Marketplace',
+      subtitle: 'Fresh produce harvested and packed directly by verified farmers across Tamil Nadu & Karnataka • 0% Broker Fee',
+      tag: '100% Farm-Gate Payout',
       bg: 'linear-gradient(135deg, #064e3b 0%, #047857 50%, #0f172a 100%)',
       accent: '#34d399',
       image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=700&q=80'
     },
     {
       id: 2,
-      badge: '⚡ SAME-DAY DISPATCH',
-      title: 'Fresh Harvest In < 4 Hours',
-      subtitle: 'Harvested at 5:00 AM, delivered to your kitchen before lunch with real-time GPS tracking',
-      coupon: 'FREE DELIVERY ON ALL ORDERS',
+      badge: '⚡ VERIFIED DISPATCH',
+      title: 'Daily Harvest & Real-Time Logistics',
+      subtitle: 'Harvested directly from regional agricultural hubs with authentic fleet dispatch and doorstep verification',
+      tag: 'Verified Producer Origin',
       bg: 'linear-gradient(135deg, #1e3a8a 0%, #0369a1 50%, #064e3b 100%)',
       accent: '#38bdf8',
       image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=700&q=80'
     },
     {
       id: 3,
-      badge: '100% ORGANIC CERTIFIED 🌱',
-      title: 'Lab-Tested Zero Residue Produce',
-      subtitle: 'Direct certified natural farms • No synthetic chemicals or waxes • Pure health guarantee',
-      coupon: 'EXTRA 15% AGRICOINS BACK',
+      badge: 'BULK PRODUCE BARGAINING 🤝',
+      title: 'Direct Bulk Farmer Negotiation',
+      subtitle: 'Ordering 5kg+ produce? Submit custom price proposals directly to farmers with transparent counteroffers',
+      tag: 'Direct Grower Negotiation',
       bg: 'linear-gradient(135deg, #78350f 0%, #d97706 50%, #065f46 100%)',
       accent: '#fbbf24',
       image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=700&q=80'
@@ -147,9 +133,9 @@ export default function FlipkartMarketplaceHeader({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', flexWrap: 'wrap' }}>
           <div
             style={{
-              background: 'rgba(245, 158, 11, 0.15)',
-              border: '1px solid rgba(245, 158, 11, 0.4)',
-              color: '#fcd34d',
+              background: 'rgba(52, 211, 153, 0.15)',
+              border: '1px solid rgba(52, 211, 153, 0.4)',
+              color: '#34d399',
               padding: '3px 10px',
               borderRadius: '14px',
               fontWeight: '800',
@@ -158,8 +144,8 @@ export default function FlipkartMarketplaceHeader({
               gap: '6px'
             }}
           >
-            <span>🪙 140 AgriCoins</span>
-            <span style={{ color: '#9ca3af', fontSize: '10px' }}>(Save ₹70)</span>
+            <ShieldCheck size={14} color="#34d399" />
+            <span>Direct Farm Gate</span>
           </div>
 
           <div style={{ color: '#6ee7b7', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -518,10 +504,10 @@ export default function FlipkartMarketplaceHeader({
         </div>
       </div>
 
-      {/* ── FLIPKART DEAL OF THE DAY / FLASH SALE TICKER ── */}
+      {/* ── AUTHENTIC LIVE HARVEST MARKETPLACE TELEMETRY STRIP ── */}
       <div
         style={{
-          background: 'linear-gradient(90deg, #991b1b, #b91c1c, #7f1d1d)',
+          background: 'linear-gradient(90deg, #064e3b 0%, #065f46 50%, #047857 100%)',
           borderRadius: '16px',
           padding: '12px 18px',
           display: 'flex',
@@ -529,52 +515,46 @@ export default function FlipkartMarketplaceHeader({
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '12px',
-          boxShadow: '0 6px 20px rgba(185, 28, 28, 0.35)',
-          border: '1px solid rgba(248, 113, 113, 0.4)'
+          boxShadow: '0 6px 20px rgba(6, 78, 59, 0.25)',
+          border: '1px solid rgba(16, 185, 129, 0.35)'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
-              background: '#ffffff',
+              background: 'rgba(255, 255, 255, 0.15)',
               borderRadius: '8px',
-              padding: '4px',
+              padding: '6px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
             }}
           >
-            <Flame size={18} color="#dc2626" />
+            <Sparkles size={18} color="#a7f3d0" />
           </div>
           <div>
-            <div style={{ fontSize: '14px', fontWeight: '900', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>FLASH HARVEST SALE</span>
-              <span style={{ fontSize: '11px', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '12px' }}>
-                {activeDealsCount} items on discount
+            <div style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span>LIVE HARVEST MARKETPLACE</span>
+              <span style={{ fontSize: '11px', background: 'rgba(0, 0, 0, 0.25)', padding: '2px 8px', borderRadius: '12px', color: '#a7f3d0', border: '1px solid rgba(167, 243, 208, 0.3)' }}>
+                {activeDealsCount} in-stock lots available
               </span>
             </div>
-            <div style={{ fontSize: '11.5px', color: '#fecaca' }}>
-              Direct farmer harvest stock selling fast at mandi bulk pricing
+            <div style={{ fontSize: '11.5px', color: '#d1fae5' }}>
+              Direct farmer harvest stock verified with fair mandi pricing & zero middlemen markups
             </div>
           </div>
         </div>
 
-        {/* Live Countdown Clock */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Clock size={16} color="#fef08a" />
-          <span style={{ fontSize: '12px', color: '#fef08a', fontWeight: '700' }}>Ends in:</span>
-          <div style={{ display: 'flex', gap: '4px', fontFamily: 'monospace', fontWeight: '900' }}>
-            <span style={{ background: 'rgba(0,0,0,0.4)', padding: '3px 6px', borderRadius: '6px', color: '#fff', fontSize: '13px' }}>
-              {String(timeLeft.hours).padStart(2, '0')}h
-            </span>
-            <span style={{ color: '#fff' }}>:</span>
-            <span style={{ background: 'rgba(0,0,0,0.4)', padding: '3px 6px', borderRadius: '6px', color: '#fff', fontSize: '13px' }}>
-              {String(timeLeft.minutes).padStart(2, '0')}m
-            </span>
-            <span style={{ color: '#fff' }}>:</span>
-            <span style={{ background: 'rgba(0,0,0,0.4)', padding: '3px 6px', borderRadius: '6px', color: '#fff', fontSize: '13px' }}>
-              {String(timeLeft.seconds).padStart(2, '0')}s
-            </span>
+        {/* Agricultural Trust Indicators */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(0, 0, 0, 0.2)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+            <ShieldCheck size={14} color="#6ee7b7" />
+            <span style={{ fontSize: '11.5px', color: '#f0fdf4', fontWeight: '600' }}>Verified Producers</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(0, 0, 0, 0.2)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+            <Tag size={14} color="#fde047" />
+            <span style={{ fontSize: '11.5px', color: '#fef9c3', fontWeight: '600' }}>Fair Mandi Rates</span>
           </div>
         </div>
       </div>

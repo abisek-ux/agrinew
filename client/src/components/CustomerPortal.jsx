@@ -61,7 +61,8 @@ import {
   CheckCircle2,
   Lock,
   LogOut,
-  Scan
+  Scan,
+  LayoutDashboard
 } from 'lucide-react';
 import AgriLinkLogo from './AgriLinkLogo';
 import ProfileEmailOtpModal from './ProfileEmailOtpModal';
@@ -4271,6 +4272,27 @@ export default function CustomerPortal({ onLogout }) {
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotalPrice = cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
 
+  // Authentic Customer Dashboard Metrics (Section 3)
+  const ordersAwaitingConfirmation = orders.filter(o =>
+    ['pending', 'placed'].includes(String(o.status || '').toLowerCase())
+  );
+  const ordersBeingPrepared = orders.filter(o =>
+    ['confirmed', 'processing', 'preparing', 'packed'].includes(String(o.status || '').toLowerCase())
+  );
+  const ordersOutForDelivery = orders.filter(o =>
+    ['out_for_delivery', 'shipped', 'in_transit', 'assigned'].includes(String(o.status || '').toLowerCase()) ||
+    ['out_for_delivery', 'in_transit', 'assigned'].includes(String(o.deliveryStatus || '').toLowerCase())
+  );
+  const ordersCompleted = orders.filter(o =>
+    ['delivered', 'completed'].includes(String(o.status || '').toLowerCase())
+  );
+  const activeBargains = customerBargains.filter(b =>
+    ['pending', 'countered', 'accepted'].includes(String(b.status || '').toLowerCase())
+  );
+  const seasonalRecommendations = products
+    .filter(p => Number(p.stock) > 0)
+    .slice(0, 4);
+
   const activeFiltersCount = (filterCategory !== 'all' ? 1 : 0) +
     (filterFarmerId !== 'all' ? 1 : 0) +
     (inStockOnly ? 1 : 0) +
@@ -4463,9 +4485,12 @@ export default function CustomerPortal({ onLogout }) {
               </div>
             </div>
 
-            <p style={{ color: '#a3c2b0', fontSize: '12.5px', lineHeight: '1.5', margin: '0 0 14px' }}>
+            <p style={{ color: '#a3c2b0', fontSize: '12.5px', lineHeight: '1.5', margin: '0 0 10px' }}>
               Are you sure you want to cancel this farm order? Reserved produce stock will be immediately replenished to the live catalog.
             </p>
+            <div style={{ background: 'rgba(55, 189, 120, 0.1)', border: '1px solid rgba(55, 189, 120, 0.25)', borderRadius: '10px', padding: '10px 12px', marginBottom: '14px', fontSize: '11.5px', color: '#d1fae5', lineHeight: '1.4' }}>
+              <strong>Refund & Settlement Policy:</strong> For Cash on Delivery (COD), order cancellation is free of charges. For online prepaid transactions, refunds will be initiated to your original payment method within 3–5 working days upon cancellation confirmation.
+            </div>
 
             <div style={{ marginBottom: '12px' }}>
               <label style={{ display: 'block', color: '#a3c2b0', fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', marginBottom: '6px' }}>
@@ -4592,6 +4617,30 @@ export default function CustomerPortal({ onLogout }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <button
+              id="customer-nav-dashboard"
+              onClick={() => setActiveTab('dashboard')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '11px 14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: activeTab === 'dashboard' ? 'linear-gradient(135deg, #00897b, #004d40)' : 'transparent',
+                color: activeTab === 'dashboard' ? '#ffffff' : '#9db5aa',
+                fontWeight: activeTab === 'dashboard' ? '700' : '600',
+                fontSize: '13.5px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <LayoutDashboard size={18} />
+              <span>{t('Customer Dashboard') || 'Customer Dashboard'}</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('marketplace')}
               style={{
@@ -4903,6 +4952,790 @@ export default function CustomerPortal({ onLogout }) {
 
       {/* Main Content Pane */}
       <main className="portal-main-content" style={{ flex: 1, padding: '24px', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+        {/* ─── CUSTOMER DASHBOARD VIEW (Section 3) ─── */}
+        {activeTab === 'dashboard' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Customer Welcome & Agricultural Telemetry Banner */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #072a23 0%, #064e3b 50%, #042f2e 100%)',
+                borderRadius: '20px',
+                padding: '24px',
+                border: '1.5px solid rgba(110, 219, 208, 0.3)',
+                boxShadow: '0 12px 32px rgba(0, 0, 0, 0.35)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '18px'
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  <span style={{
+                    background: 'rgba(52, 211, 153, 0.2)',
+                    color: '#6ee7b7',
+                    fontSize: '11.5px',
+                    fontWeight: '800',
+                    padding: '3px 10px',
+                    borderRadius: '20px',
+                    border: '1px solid rgba(52, 211, 153, 0.4)'
+                  }}>
+                    ✓ VERIFIED CUSTOMER ACCOUNT
+                  </span>
+                  <span style={{ color: '#a3c2b0', fontSize: '12px' }}>
+                    {user?.email || 'Authenticated Direct Buyer'}
+                  </span>
+                </div>
+                <h2 style={{ margin: '0 0 6px', color: '#effbe7', fontSize: 'clamp(20px, 3vw, 28px)', fontWeight: '900', letterSpacing: '-0.3px' }}>
+                  Welcome back, {user?.firstName ? `${user.firstName} ${user?.lastName || ''}`.trim() : 'Farm Fresh Buyer'}! 🌾
+                </h2>
+                <p style={{ margin: 0, color: '#d1fae5', fontSize: '13.5px', maxWidth: '640px', lineHeight: '1.5' }}>
+                  Your direct link to registered farmers across Tamil Nadu & Karnataka. Zero intermediaries, verified harvest origin, and real-time cold-chain logistics.
+                </p>
+              </div>
+
+              {/* Quick Actions */}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  id="dashboard-browse-marketplace-btn"
+                  onClick={() => setActiveTab('marketplace')}
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '12px 20px',
+                    borderRadius: '12px',
+                    fontWeight: '800',
+                    fontSize: '13.5px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                    minHeight: '44px'
+                  }}
+                >
+                  <Package size={17} />
+                  <span>Browse Fresh Produce</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('cart')}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(110, 219, 208, 0.3)',
+                    color: '#effbe7',
+                    padding: '12px 18px',
+                    borderRadius: '12px',
+                    fontWeight: '700',
+                    fontSize: '13.5px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    minHeight: '44px'
+                  }}
+                >
+                  <ShoppingCart size={17} color="#6edbd0" />
+                  <span>View Cart ({cartItemCount})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ── 4 Primary KPI Summary Cards (Section 3) ── */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '16px'
+            }}>
+              {/* Metric 1: Awaiting Confirmation */}
+              <div
+                id="kpi-awaiting-confirmation"
+                onClick={() => setActiveTab('orders')}
+                style={{
+                  background: 'rgba(9, 36, 31, 0.85)',
+                  border: '1.5px solid rgba(245, 158, 11, 0.35)',
+                  borderRadius: '18px',
+                  padding: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                  <div style={{
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    padding: '10px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(245, 158, 11, 0.3)'
+                  }}>
+                    <Clock size={20} color="#f59e0b" />
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '800', color: '#fcd34d', background: 'rgba(245, 158, 11, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
+                    NEW ORDERS
+                  </span>
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#effbe7', marginBottom: '4px' }}>
+                  {ordersAwaitingConfirmation.length}
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#fcd34d', marginBottom: '4px' }}>
+                  Awaiting Confirmation
+                </div>
+                <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                  Orders submitted and pending farmer acceptance
+                </div>
+              </div>
+
+              {/* Metric 2: Being Prepared */}
+              <div
+                id="kpi-being-prepared"
+                onClick={() => setActiveTab('orders')}
+                style={{
+                  background: 'rgba(9, 36, 31, 0.85)',
+                  border: '1.5px solid rgba(16, 185, 129, 0.35)',
+                  borderRadius: '18px',
+                  padding: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                  <div style={{
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    padding: '10px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(16, 185, 129, 0.3)'
+                  }}>
+                    <Package size={20} color="#10b981" />
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '800', color: '#6ee7b7', background: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
+                    IN PACKING
+                  </span>
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#effbe7', marginBottom: '4px' }}>
+                  {ordersBeingPrepared.length}
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#6ee7b7', marginBottom: '4px' }}>
+                  Being Prepared
+                </div>
+                <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                  Farm harvest packing and sorting in progress
+                </div>
+              </div>
+
+              {/* Metric 3: Out for Delivery */}
+              <div
+                id="kpi-out-for-delivery"
+                onClick={() => setActiveTab('orders')}
+                style={{
+                  background: 'rgba(9, 36, 31, 0.85)',
+                  border: '1.5px solid rgba(6, 182, 212, 0.35)',
+                  borderRadius: '18px',
+                  padding: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                  <div style={{
+                    background: 'rgba(6, 182, 212, 0.15)',
+                    padding: '10px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(6, 182, 212, 0.3)'
+                  }}>
+                    <Truck size={20} color="#06b6d4" />
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '800', color: '#67e8f9', background: 'rgba(6, 182, 212, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
+                    COLD CHAIN
+                  </span>
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#effbe7', marginBottom: '4px' }}>
+                  {ordersOutForDelivery.length}
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#67e8f9', marginBottom: '4px' }}>
+                  Out for Delivery
+                </div>
+                <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                  Courier transit dispatched with live GPS tracking
+                </div>
+              </div>
+
+              {/* Metric 4: Completed Orders */}
+              <div
+                id="kpi-completed-orders"
+                onClick={() => setActiveTab('orders')}
+                style={{
+                  background: 'rgba(9, 36, 31, 0.85)',
+                  border: '1.5px solid rgba(52, 211, 153, 0.35)',
+                  borderRadius: '18px',
+                  padding: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                  <div style={{
+                    background: 'rgba(52, 211, 153, 0.15)',
+                    padding: '10px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(52, 211, 153, 0.3)'
+                  }}>
+                    <CheckCircle2 size={20} color="#34d399" />
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '800', color: '#34d399', background: 'rgba(52, 211, 153, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
+                    DELIVERED
+                  </span>
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#effbe7', marginBottom: '4px' }}>
+                  {ordersCompleted.length}
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#34d399', marginBottom: '4px' }}>
+                  Completed Orders
+                </div>
+                <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                  Successfully fulfilled direct farm shipments
+                </div>
+              </div>
+            </div>
+
+            {/* ── Mid Section: Two-Column Layout (Recent Orders vs Active Bargains & Alerts) ── */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+              gap: '24px'
+            }}>
+              {/* Left Column: Recent Farm Orders */}
+              <div
+                style={{
+                  background: 'rgba(9, 36, 31, 0.8)',
+                  border: '1px solid rgba(110, 219, 208, 0.25)',
+                  borderRadius: '20px',
+                  padding: '22px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Truck size={18} color="#6edbd0" />
+                    <h3 style={{ margin: 0, color: '#effbe7', fontSize: '17px', fontWeight: '800' }}>
+                      Recent Farm Orders
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('orders')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#6edbd0',
+                      fontSize: '12.5px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <span>View All ({orders.length})</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
+
+                {orders.length === 0 ? (
+                  <div style={{
+                    padding: '36px 16px',
+                    textAlign: 'center',
+                    background: 'rgba(0, 0, 0, 0.2)',
+                    borderRadius: '16px',
+                    border: '1px dashed rgba(110, 219, 208, 0.2)'
+                  }}>
+                    <Package size={36} color="#6edbd0" style={{ opacity: 0.6, marginBottom: '12px' }} />
+                    <div style={{ color: '#effbe7', fontSize: '15px', fontWeight: '800', marginBottom: '6px' }}>
+                      No farm orders placed yet
+                    </div>
+                    <p style={{ color: '#a3c2b0', fontSize: '12.5px', margin: '0 0 16px', maxWidth: '300px', marginLeft: 'auto', marginRight: 'auto' }}>
+                      Connect with local farmers and order fresh seasonal harvest directly to your kitchen.
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('marketplace')}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '10px 18px',
+                        borderRadius: '10px',
+                        fontWeight: '800',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Explore Fresh Marketplace
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {orders.slice(0, 3).map(order => {
+                      const orderIdShort = String(order.orderId || order._id || order.id || '').slice(-8).toUpperCase();
+                      const statusClean = String(order.status || 'placed').toLowerCase();
+                      const isDelivered = statusClean === 'delivered' || statusClean === 'completed';
+                      const isCancelled = statusClean === 'cancelled';
+                      const isInTransit = ['out_for_delivery', 'shipped', 'in_transit'].includes(statusClean) ||
+                        ['out_for_delivery', 'in_transit'].includes(String(order.deliveryStatus || '').toLowerCase());
+
+                      return (
+                        <div
+                          key={order._id || order.id}
+                          style={{
+                            background: 'rgba(0, 0, 0, 0.3)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '14px',
+                            padding: '14px 16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ color: '#effbe7', fontWeight: '800', fontSize: '13.5px' }}>
+                                #{orderIdShort}
+                              </span>
+                              <span style={{ color: '#a3c2b0', fontSize: '11.5px' }}>
+                                {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'Recent'}
+                              </span>
+                            </div>
+                            <span style={{
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              padding: '2px 8px',
+                              borderRadius: '8px',
+                              textTransform: 'uppercase',
+                              background: isDelivered ? 'rgba(52, 211, 153, 0.2)' : isCancelled ? 'rgba(239, 68, 68, 0.2)' : isInTransit ? 'rgba(6, 182, 212, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                              color: isDelivered ? '#34d399' : isCancelled ? '#fca5a5' : isInTransit ? '#67e8f9' : '#fcd34d',
+                              border: `1px solid ${isDelivered ? 'rgba(52, 211, 153, 0.4)' : isCancelled ? 'rgba(239, 68, 68, 0.4)' : isInTransit ? 'rgba(6, 182, 212, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
+                            }}>
+                              {order.status || 'Processing'}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: '12px', color: '#d1fae5', lineHeight: '1.4' }}>
+                            <strong>Producer:</strong> {order.farmerName || 'Verified Regional Producer'} • {order.items?.length || 1} produce item(s)
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ color: '#34d399', fontWeight: '900', fontSize: '15px' }}>
+                              ₹{order.totalAmount}
+                              <span style={{ fontSize: '10.5px', color: '#a3c2b0', fontWeight: '500', marginLeft: '6px' }}>
+                                ({order.paymentMethod === 'cod' ? 'COD' : 'Paid Online'})
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {isInTransit && (
+                                <button
+                                  onClick={() => {
+                                    setExpandedRadarOrderId(order._id);
+                                    setActiveTab('orders');
+                                  }}
+                                  style={{
+                                    background: 'rgba(6, 182, 212, 0.2)',
+                                    border: '1px solid rgba(6, 182, 212, 0.4)',
+                                    color: '#67e8f9',
+                                    padding: '5px 10px',
+                                    borderRadius: '8px',
+                                    fontSize: '11px',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <Radio size={12} />
+                                  <span>Live Radar</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setSelectedOrderDetails(order)}
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.08)',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  color: '#effbe7',
+                                  padding: '5px 12px',
+                                  borderRadius: '8px',
+                                  fontSize: '11.5px',
+                                  fontWeight: '700',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                View Order
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Bulk Bargains & Notifications */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Active Bulk Bargains Card (Section 3 & Section 8) */}
+                <div
+                  style={{
+                    background: 'rgba(9, 36, 31, 0.8)',
+                    border: '1px solid rgba(244, 201, 93, 0.3)',
+                    borderRadius: '20px',
+                    padding: '20px',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Handshake size={18} color="#f4c95d" />
+                      <h3 style={{ margin: 0, color: '#effbe7', fontSize: '16.5px', fontWeight: '800' }}>
+                        Active Bulk Bargains ({activeBargains.length})
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('bargains')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#f4c95d',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Bargains Hub ➔
+                    </button>
+                  </div>
+
+                  {activeBargains.length === 0 ? (
+                    <div style={{
+                      padding: '18px 14px',
+                      background: 'rgba(0,0,0,0.25)',
+                      borderRadius: '12px',
+                      color: '#a3c2b0',
+                      fontSize: '12px',
+                      lineHeight: '1.5'
+                    }}>
+                      No open price negotiations. You can propose wholesale unit rates on eligible farm lots directly in the produce catalog!
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {activeBargains.slice(0, 2).map(b => (
+                        <div
+                          key={b._id || b.bargainId}
+                          style={{
+                            background: 'rgba(0, 0, 0, 0.3)',
+                            border: '1px solid rgba(244, 201, 93, 0.25)',
+                            borderRadius: '12px',
+                            padding: '12px 14px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '10px',
+                            flexWrap: 'wrap'
+                          }}
+                        >
+                          <div>
+                            <div style={{ color: '#effbe7', fontSize: '13px', fontWeight: '800' }}>
+                              {b.productTitle || 'Produce Lot'}
+                            </div>
+                            <div style={{ color: '#a3c2b0', fontSize: '11px', marginTop: '2px' }}>
+                              Qty: <strong>{b.quantity} {b.unit || 'kg'}</strong> • Proposed: <strong style={{ color: '#f4c95d' }}>₹{b.counterPrice || b.proposedPrice}</strong> (was ₹{b.originalPrice || '—'})
+                            </div>
+                          </div>
+                          {b.status === 'ACCEPTED' ? (
+                            <button
+                              onClick={() => handleAddBargainToCart(b)}
+                              style={{
+                                background: 'linear-gradient(135deg, #10b981, #059669)',
+                                border: 'none',
+                                color: '#ffffff',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                fontSize: '11px',
+                                fontWeight: '800',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Add to Cart
+                            </button>
+                          ) : (
+                            <span style={{
+                              fontSize: '10.5px',
+                              fontWeight: '800',
+                              padding: '2px 7px',
+                              borderRadius: '6px',
+                              background: 'rgba(244, 201, 93, 0.2)',
+                              color: '#f4c95d'
+                            }}>
+                              {b.status}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Notifications Snippet (Section 3 & Section 14) */}
+                <div
+                  style={{
+                    background: 'rgba(9, 36, 31, 0.8)',
+                    border: '1px solid rgba(110, 219, 208, 0.25)',
+                    borderRadius: '20px',
+                    padding: '20px',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Bell size={17} color="#6edbd0" />
+                      <h3 style={{ margin: 0, color: '#effbe7', fontSize: '16.5px', fontWeight: '800' }}>
+                        Recent Notifications
+                      </h3>
+                    </div>
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={() => setShowNotifications(true)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#6edbd0',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Open Drawer ➔
+                      </button>
+                    )}
+                  </div>
+
+                  {notifications.length === 0 ? (
+                    <div style={{ color: '#a3c2b0', fontSize: '12px', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '10px' }}>
+                      All caught up! Real-time harvest alerts, bargain updates, and delivery notices will appear here.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {notifications.slice(0, 2).map((n, idx) => (
+                        <div
+                          key={n._id || idx}
+                          style={{
+                            padding: '10px 12px',
+                            background: 'rgba(0, 0, 0, 0.25)',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(255, 255, 255, 0.05)',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <div style={{ color: '#effbe7', fontWeight: '700' }}>{n.title || 'Marketplace Update'}</div>
+                          <div style={{ color: '#a3c2b0', fontSize: '11px', marginTop: '2px' }}>{n.message || n.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Bottom Section: Authentic Seasonal Produce Recommendations ── */}
+            <div
+              style={{
+                background: 'rgba(9, 36, 31, 0.75)',
+                border: '1px solid rgba(110, 219, 208, 0.25)',
+                borderRadius: '20px',
+                padding: '24px',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '18px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <Sparkles size={18} color="#34d399" />
+                    <h3 style={{ margin: 0, color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                      Fresh Seasonal Harvest (Direct from Farms)
+                    </h3>
+                  </div>
+                  <p style={{ margin: 0, color: '#a3c2b0', fontSize: '12.5px' }}>
+                    Authentic database inventory in stock with fair mandi rate parity and producer traceability.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('marketplace')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#34d399',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <span>Explore Full Catalog ({products.length} Lots)</span>
+                  <ArrowRight size={15} />
+                </button>
+              </div>
+
+              {seasonalRecommendations.length === 0 ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: '#a3c2b0', fontSize: '13px' }}>
+                  No seasonal lots currently available in the database.
+                </div>
+              ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                  gap: '16px'
+                }}>
+                  {seasonalRecommendations.map(prod => {
+                    const prodId = getProductId(prod);
+                    const isFav = favorites.includes(prodId);
+                    const prodImg = prod.image || prod.imageUrl || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80';
+
+                    return (
+                      <div
+                        key={prodId}
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.35)',
+                          border: '1px solid rgba(110, 219, 208, 0.2)',
+                          borderRadius: '16px',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ position: 'relative', height: '140px', overflow: 'hidden' }}>
+                          <img
+                            src={prodImg}
+                            alt={prod.title || prod.name}
+                            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80'; }}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                          <button
+                            onClick={() => toggleFavorite(prodId)}
+                            style={{
+                              position: 'absolute',
+                              top: '8px',
+                              right: '8px',
+                              background: 'rgba(0, 0, 0, 0.55)',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Heart size={16} color={isFav ? '#f43f5e' : '#ffffff'} fill={isFav ? '#f43f5e' : 'none'} />
+                          </button>
+                          <span style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            left: '8px',
+                            background: 'rgba(0, 0, 0, 0.75)',
+                            color: '#34d399',
+                            fontSize: '10.5px',
+                            fontWeight: '800',
+                            padding: '2px 8px',
+                            borderRadius: '8px'
+                          }}>
+                            {prod.stock} {prod.unit || 'kg'} in stock
+                          </span>
+                        </div>
+
+                        <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+                          <div>
+                            <div style={{ fontSize: '14px', fontWeight: '800', color: '#effbe7', marginBottom: '2px' }}>
+                              {prod.title || prod.name}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#a3c2b0', marginBottom: '10px' }}>
+                              By {prod.farmerName || 'Verified Local Farmer'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
+                              <span style={{ fontSize: '18px', fontWeight: '900', color: '#34d399' }}>
+                                ₹{prod.price}
+                                <span style={{ fontSize: '11px', color: '#a3c2b0', fontWeight: '500' }}> / {prod.unit || 'kg'}</span>
+                              </span>
+                              <span style={{ fontSize: '10.5px', color: '#fcd34d', fontWeight: '700' }}>
+                                Min: {prod.minOrderQty || 1} {prod.unit || 'kg'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <button
+                                onClick={() => setDetailsProduct(prod)}
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.08)',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  color: '#effbe7',
+                                  padding: '8px',
+                                  borderRadius: '8px',
+                                  fontSize: '11.5px',
+                                  fontWeight: '700',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Details
+                              </button>
+                              <button
+                                onClick={() => addToCart(prod, Number(prod.minOrderQty) || 1)}
+                                style={{
+                                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                                  border: 'none',
+                                  color: '#ffffff',
+                                  padding: '8px',
+                                  borderRadius: '8px',
+                                  fontSize: '11.5px',
+                                  fontWeight: '800',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                <ShoppingCart size={13} />
+                                <span>Add</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Marketplace View */}
         {(activeTab === 'marketplace' || activeTab === 'favorites') && (
           <div>
@@ -8944,8 +9777,19 @@ export default function CustomerPortal({ onLogout }) {
       )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar (Home | Search | Cart | Orders | Profile) */}
+      {/* Mobile Bottom Navigation Bar (Dashboard | Home | 3D Lab | Cart | Orders | Profile) */}
       <nav className="mobile-bottom-nav customer-mobile-nav">
+
+        <button
+          className={`mobile-nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('dashboard');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <LayoutDashboard size={20} />
+          <span>{t('Dashboard') || 'Dashboard'}</span>
+        </button>
 
         <button
           className={`mobile-nav-btn ${activeTab === 'marketplace' ? 'active' : ''}`}

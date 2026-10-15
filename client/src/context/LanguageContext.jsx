@@ -484,7 +484,23 @@ export const TRANSLATIONS = {
     'Average Buyer Rating': 'Average Buyer Rating',
     'Verified Buyer Reviews': 'Verified Buyer Reviews',
     'No Product Reviews Yet': 'No Product Reviews Yet',
-    'Reviews Hint': 'Reviews will appear here as customers receive their delivered farm orders and rate your produce.'
+    'Reviews Hint': 'Reviews will appear here as customers receive their delivered farm orders and rate your produce.',
+
+    // --- Customer Dashboard & Transformation Keys ---
+    'Customer Dashboard': 'Customer Dashboard',
+    'customer_dashboard': 'Customer Dashboard',
+    'customer_dashboard_nav': 'Dashboard',
+    'Awaiting Confirmation': 'Awaiting Confirmation',
+    'Being Prepared': 'Being Prepared',
+    'Completed Orders': 'Completed Orders',
+    'Recent Farm Orders': 'Recent Farm Orders',
+    'Active Bulk Bargains': 'Active Bulk Bargains',
+    'Fresh Seasonal Harvest': 'Fresh Seasonal Harvest (Direct from Farms)',
+    'Live Radar': 'Live Radar',
+    'View Order Details': 'View Order Details',
+    'Explore Fresh Marketplace': 'Explore Fresh Marketplace',
+    'Browse Fresh Produce': 'Browse Fresh Produce',
+    'No farm orders placed yet': 'No farm orders placed yet'
   },
 
   ta: {
@@ -961,7 +977,23 @@ export const TRANSLATIONS = {
     'Average Buyer Rating': 'சராசரி நுகர்வோர் மதிப்பீடு',
     'Verified Buyer Reviews': 'சரிபார்க்கப்பட்ட மதிப்புரைகள்',
     'No Product Reviews Yet': 'மதிப்புரைகள் எதுவும் இன்னும் வரவில்லை',
-    'Reviews Hint': 'வாடிக்கையாளர்கள் தங்கள் விளைபொருட்களைப் பெற்று மதிப்பளிக்கும் போது மதிப்புரைகள் இங்கு தோன்றும்.'
+    'Reviews Hint': 'வாடிக்கையாளர்கள் தங்கள் விளைபொருட்களைப் பெற்று மதிப்பளிக்கும் போது மதிப்புரைகள் இங்கு தோன்றும்.',
+
+    // --- Customer Dashboard & Transformation Keys (Tamil) ---
+    'Customer Dashboard': 'நுகர்வோர் கட்டுப்பாட்டு மையம்',
+    'customer_dashboard': 'நுகர்வோர் கட்டுப்பாட்டு மையம்',
+    'customer_dashboard_nav': 'டாஷ்போர்டு',
+    'Awaiting Confirmation': 'உறுதிப்படுத்தலுக்காக காத்திருக்கிறது',
+    'Being Prepared': 'பண்ணையில் தயாரிக்கப்படுகிறது',
+    'Completed Orders': 'முடிக்கப்பட்ட ஆர்டர்கள்',
+    'Recent Farm Orders': 'சமீபத்திய பண்ணை ஆர்டர்கள்',
+    'Active Bulk Bargains': 'செயலில் உள்ள மொத்த பேரம்',
+    'Fresh Seasonal Harvest': 'புதிய பருவகால அறுவடை (பண்ணை நேரடி)',
+    'Live Radar': 'நேரடி ரேடார்',
+    'View Order Details': 'ஆர்டர் விவரங்களைக் காண்க',
+    'Explore Fresh Marketplace': 'புதிய சந்தையை ஆராயுங்கள்',
+    'Browse Fresh Produce': 'புதிய காய்கறிகளை உலாவவும்',
+    'No farm orders placed yet': 'இதுவரை பண்ணை ஆர்டர்கள் எதுவும் செய்யப்படவில்லை'
   },
 
   hi: {
