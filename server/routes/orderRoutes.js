@@ -10,7 +10,8 @@ const {
   verifyDeliveryOtp,
   confirmDispatchSignal,
   processOrderPayment,
-  collectCodPayment
+  collectCodPayment,
+  reportDeliveryIssue
 } = require('../controllers/orderController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -18,6 +19,7 @@ router.post('/', protect, createOrder);
 router.post('/pay', protect, processOrderPayment);
 router.post('/:id/pay', protect, processOrderPayment);
 router.post('/:id/collect-cod', protect, collectCodPayment);
+router.post('/:id/report-issue', protect, reportDeliveryIssue);
 router.get('/', protect, getOrders);
 
 router.put('/:id/status', protect, updateOrderStatus);

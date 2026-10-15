@@ -76,7 +76,8 @@ export const orderAPI = {
   verifyDeliveryOtp: (id, data) => axios.post(`${API_BASE}/orders/${id}/delivery-otp/verify`, data, { headers: getAuthHeaders() }),
   confirmDispatchSignal: (id, data) => axios.post(`${API_BASE}/orders/${id || 'batch'}/dispatch-signal`, data || {}, { headers: getAuthHeaders() }),
   processPayment: (data) => axios.post(`${API_BASE}/orders/pay`, data, { headers: getAuthHeaders() }),
-  collectCodPayment: (id, data) => axios.post(`${API_BASE}/orders/${id}/collect-cod`, data || {}, { headers: getAuthHeaders() })
+  collectCodPayment: (id, data) => axios.post(`${API_BASE}/orders/${id}/collect-cod`, data || {}, { headers: getAuthHeaders() }),
+  reportIssue: (id, data) => axios.post(`${API_BASE}/orders/${id}/report-issue`, data || {}, { headers: getAuthHeaders() })
 };
 
 

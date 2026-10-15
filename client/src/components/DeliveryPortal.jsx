@@ -44,7 +44,11 @@ import {
   LogOut,
   Edit2,
   Star,
-  Banknote
+  Banknote,
+  IndianRupee,
+  LayoutDashboard,
+  AlertCircle,
+  PhoneCall
 } from 'lucide-react';
 import ProfileEmailOtpModal from './ProfileEmailOtpModal';
 
@@ -807,7 +811,7 @@ export default function DeliveryPortal({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
   const [activeOrderId, setActiveOrderId] = useState(null);
-  const [activeNavTab, setActiveNavTab] = useState('active'); // 'active' | 'available' | 'history' | 'reviews' | 'profile' | 'telemetry'
+  const [activeNavTab, setActiveNavTab] = useState('dashboard'); // 'dashboard' | 'active' | 'available' | 'history' | 'reviews' | 'profile' | 'telemetry'
   const [refreshing, setRefreshing] = useState(false);
   const [sosActive, setSosActive] = useState(false);
   const [selectedHandoverOrder, setSelectedHandoverOrder] = useState(null);
@@ -816,6 +820,20 @@ export default function DeliveryPortal({ onLogout }) {
   const [driverReviews, setDriverReviews] = useState([]);
   const [driverReviewsLoading, setDriverReviewsLoading] = useState(false);
   const [collectingPaymentId, setCollectingPaymentId] = useState(null);
+
+  // Operational Issue & Payment Discrepancy Reporting
+  const [showIssueModal, setShowIssueModal] = useState(false);
+  const [issueOrder, setIssueOrder] = useState(null);
+  const [issueType, setIssueType] = useState('unreachable_customer');
+  const [issueNote, setIssueNote] = useState('');
+  const [discrepancyAmount, setDiscrepancyAmount] = useState('');
+  const [submittingIssue, setSubmittingIssue] = useState(false);
+
+  // Genuine Real Device Geolocation State
+  const [gpsActive, setGpsActive] = useState(false);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [gpsTimestamp, setGpsTimestamp] = useState(null);
+  const [gpsError, setGpsError] = useState(null);
 
   // Profile Edit State (Phase 6 Security & Lock)
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -920,6 +938,27 @@ export default function DeliveryPortal({ onLogout }) {
   const activeOrders = myAssignedOrders.filter(o => ['assigned', 'picked_up', 'in_transit', 'arrived'].includes(o.status));
   const completedOrders = myAssignedOrders.filter(o => o.status === 'delivered');
 
+  // Operational Sub-Segments (Section 3 & 6)
+  const ordersAwaitingPickup = myAssignedOrders.filter(o => o.status === 'assigned');
+  const ordersPickedUp = myAssignedOrders.filter(o => o.status === 'picked_up');
+  const ordersInTransit = myAssignedOrders.filter(o => ['picked_up', 'in_transit', 'out_for_delivery'].includes(o.status));
+  const ordersArrivedDoorstep = myAssignedOrders.filter(o => o.status === 'arrived');
+  const cancelledDeliveries = orders.filter(o => o.status === 'cancelled' && String(o.deliveryId) === driverId);
+
+  // Authoritative COD Financial Reconciliation (Section 3 & 12)
+  const codCollectedOrders = myAssignedOrders.filter(o =>
+    (String(o.paymentMethod || '').toUpperCase() === 'COD' || o.paymentCollectionMethod) &&
+    o.paymentStatus === 'collected'
+  );
+  const totalCodCollected = codCollectedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+  const codPendingOrders = activeOrders.filter(o =>
+    String(o.paymentMethod || '').toUpperCase() === 'COD' &&
+    o.paymentStatus !== 'collected'
+  );
+  const totalCodPending = codPendingOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+  const totalCodExpected = totalCodCollected + totalCodPending;
+
   // Available ready farm orders waiting for courier to claim
   const availableOrders = orders.filter(o =>
     (!o.deliveryId || o.deliveryId === 'Unassigned') &&
@@ -935,6 +974,12 @@ export default function DeliveryPortal({ onLogout }) {
   // Shift earnings: ₹50 standard logistics payout per completed delivery
   const perDeliveryFee = 50;
   const shiftEarnings = completedOrders.length * perDeliveryFee;
+
+  // Verified driver rating calculation
+  const validReviews = driverReviews.filter(r => r.rating && !isNaN(Number(r.rating)));
+  const avgRating = validReviews.length > 0
+    ? (validReviews.reduce((sum, r) => sum + Number(r.rating), 0) / validReviews.length).toFixed(1)
+    : null;
 
   // Selected active delivery (or first in active run)
   const currentActiveOrder = activeOrders.length > 0 ? activeOrders[0] : null;
@@ -978,43 +1023,80 @@ export default function DeliveryPortal({ onLogout }) {
     }
   };
 
-  const simulateGpsMovement = async (order) => {
+  const broadcastLiveLocation = (order) => {
+    if (!order) return;
     const orderId = String(order._id || order.id);
-    const fLat = order.farmerLocation?.lat || 11.2189;
-    const fLng = order.farmerLocation?.lng || 78.1674;
-    const cLat = order.customerLocation?.lat || 11.0168;
-    const cLng = order.customerLocation?.lng || 76.9558;
-
-    setSimulating(true);
-    setActiveOrderId(orderId);
-    showToast('🛰️ Simulating route navigation towards customer doorstep...', 'info');
-
-    const steps = 5;
-    for (let i = 1; i <= steps; i++) {
-      await new Promise(r => setTimeout(r, 800));
-      const currentLat = fLat + ((cLat - fLat) * (i / steps));
-      const currentLng = fLng + ((cLng - fLng) * (i / steps));
-      const stepAddress = i === steps ? 'Arrived at Customer Doorstep' : `En Route Waypoint ${i}/${steps}`;
-
-      try {
-        await orderAPI.updateLocation(orderId, {
-          lat: currentLat,
-          lng: currentLng,
-          address: stepAddress
-        });
-
-        setOrders(prev => prev.map(o => (String(o._id || o.id) === String(orderId))
-          ? { ...o, deliveryLocation: { lat: currentLat, lng: currentLng, address: stepAddress } }
-          : o
-        ));
-      } catch (err) {
-        console.warn('GPS step update note:', err.message);
-      }
+    if (!navigator.geolocation) {
+      showToast('Geolocation is not supported by your browser.', 'error');
+      return;
     }
+    setGpsActive(true);
+    setGpsError(null);
+    showToast('🛰️ Requesting device GPS coordinates...', 'info');
 
-    setSimulating(false);
-    setActiveOrderId(null);
-    showToast('🏁 Route simulation reached destination waypoint!', 'success');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        const now = new Date();
+        const accMeters = Math.round(accuracy);
+        setGpsAccuracy(accMeters);
+        setGpsTimestamp(now.toLocaleTimeString());
+
+        try {
+          await orderAPI.updateLocation(orderId, {
+            lat: latitude,
+            lng: longitude,
+            address: `Live Courier GPS (±${accMeters}m accuracy)`
+          });
+
+          setOrders(prev => prev.map(o => (String(o._id || o.id) === String(orderId))
+            ? {
+                ...o,
+                deliveryLocation: {
+                  lat: latitude,
+                  lng: longitude,
+                  address: `Live Courier GPS (±${accMeters}m accuracy)`
+                }
+              }
+            : o
+          ));
+          showToast(`✓ GPS Location Synced: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${accMeters}m)`, 'success');
+        } catch (err) {
+          console.warn('GPS location update note:', err.message);
+          showToast('Could not sync GPS coordinates with server', 'error');
+        } finally {
+          setGpsActive(false);
+        }
+      },
+      (err) => {
+        setGpsActive(false);
+        setGpsError(err.message);
+        showToast(`GPS Access Notice: ${err.message}`, 'error');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  };
+
+  const handleReportIssue = async () => {
+    if (!issueOrder) return;
+    setSubmittingIssue(true);
+    try {
+      const res = await orderAPI.reportIssue(issueOrder._id || issueOrder.id, {
+        issueType,
+        note: issueNote.trim(),
+        discrepancyAmount: Number(discrepancyAmount) || 0
+      });
+      showToast(res.data?.message || 'Delivery issue recorded and logged to dispatch.', 'warning');
+      setShowIssueModal(false);
+      setIssueOrder(null);
+      setIssueNote('');
+      setDiscrepancyAmount('');
+      await fetchDeliveryOrders(false);
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to submit delivery issue report', 'error');
+    } finally {
+      setSubmittingIssue(false);
+    }
   };
 
   const triggerSOS = () => {
@@ -1067,6 +1149,33 @@ export default function DeliveryPortal({ onLogout }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {/* 0. Delivery Dashboard Tab */}
+            <button
+              id="delivery-nav-dashboard"
+              onClick={() => setActiveNavTab('dashboard')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 14px',
+                borderRadius: '12px',
+                border: 'none',
+                background: activeNavTab === 'dashboard' ? 'linear-gradient(135deg, #10b981, #059669)' : 'transparent',
+                color: activeNavTab === 'dashboard' ? '#ffffff' : '#a3b899',
+                fontWeight: activeNavTab === 'dashboard' ? '800' : '600',
+                fontSize: '13.5px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <LayoutDashboard size={18} />
+                <span>{t('Delivery Dashboard')}</span>
+              </div>
+            </button>
+
             {/* 1. Active Delivery Tab */}
             <button
               onClick={() => setActiveNavTab('active')}
@@ -1388,6 +1497,624 @@ export default function DeliveryPortal({ onLogout }) {
         </div>
 
         {/* ─────────────────────────────────────────────────────────────
+           TAB 0: DELIVERY DASHBOARD (Authoritative Logistics Workspace)
+        ───────────────────────────────────────────────────────────── */}
+        {activeNavTab === 'dashboard' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Courier Profile & Telemetry Status Banner */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(16, 32, 26, 0.95), rgba(8, 20, 16, 0.98))',
+              border: '1.5px solid rgba(74, 222, 128, 0.3)',
+              borderRadius: '20px',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.35)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      background: 'rgba(55, 189, 120, 0.15)',
+                      border: '1px solid #37bd78',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#4ade80'
+                    }}>
+                      <Truck size={22} />
+                    </div>
+                    <div>
+                      <h2 style={{ margin: 0, color: '#effbe7', fontSize: '19px', fontWeight: '800' }}>
+                        {user?.firstName ? `${user.firstName} ${user?.lastName || ''}` : 'Courier Partner'}
+                      </h2>
+                      <div style={{ color: '#a3c2b0', fontSize: '12.5px', marginTop: '2px' }}>
+                        Vehicle: <span style={{ color: '#f4c95d', fontWeight: '700' }}>{user?.vehicleNumber || 'KA-04-EA-2026'}</span> ({user?.vehicleType || 'Electric Mini-Van'})
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ color: '#8be28b', fontSize: '12px', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={13} />
+                    <span>Territory: {user?.serviceArea || 'Mandya - Mysuru - Bengaluru Expressway'}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                  <button
+                    id="btn-dashboard-broadcast-gps"
+                    disabled={gpsActive}
+                    onClick={() => broadcastLiveLocation(currentActiveOrder)}
+                    style={{
+                      minHeight: '44px',
+                      padding: '8px 16px',
+                      borderRadius: '12px',
+                      background: gpsActive ? 'rgba(74, 222, 128, 0.25)' : 'linear-gradient(135deg, #10b981, #059669)',
+                      border: '1px solid #4ade80',
+                      color: '#ffffff',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      cursor: gpsActive ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                    }}
+                  >
+                    <Navigation size={15} style={{ animation: gpsActive ? 'spin 1s linear infinite' : 'none' }} />
+                    <span>{gpsActive ? t('Syncing GPS...') : t('Broadcast Live GPS')}</span>
+                  </button>
+                  {gpsAccuracy && (
+                    <span style={{ fontSize: '11px', color: '#a3c2b0' }}>
+                      Accuracy: ±{gpsAccuracy}m • {new Date(gpsTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                  {gpsError && (
+                    <span style={{ fontSize: '11px', color: '#f87171' }}>
+                      GPS Alert: {gpsError}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Next Priority Action Hero Card */}
+            {currentActiveOrder ? (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(244, 201, 93, 0.12), rgba(16, 32, 26, 0.95))',
+                border: '1.5px solid rgba(244, 201, 93, 0.4)',
+                borderRadius: '18px',
+                padding: '20px',
+                boxShadow: '0 8px 25px rgba(0,0,0,0.3)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      background: '#f4c95d',
+                      color: '#092b27',
+                      fontSize: '11px',
+                      fontWeight: '900',
+                      padding: '3px 8px',
+                      borderRadius: '8px',
+                      textTransform: 'uppercase'
+                    }}>
+                      {t('Next Priority Stop')}
+                    </span>
+                    <span style={{ color: '#effbe7', fontSize: '14px', fontWeight: '800' }}>
+                      Run #{String(currentActiveOrder.orderId || currentActiveOrder._id || currentActiveOrder.id).slice(-8).toUpperCase()}
+                    </span>
+                  </div>
+                  <span style={{
+                    color: '#34d399',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    background: 'rgba(52, 211, 153, 0.15)',
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(52, 211, 153, 0.3)'
+                  }}>
+                    {currentActiveOrder.status?.replace('_', ' ').toUpperCase()}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: '11px', color: '#f4c95d', fontWeight: '800', textTransform: 'uppercase' }}>
+                      1. Farm Pickup Origin
+                    </div>
+                    <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700', marginTop: '4px' }}>
+                      {currentActiveOrder.farmerName || 'Agricultural Producer'}
+                    </div>
+                    <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
+                      {currentActiveOrder.pickupLocation?.address || currentActiveOrder.farmerLocation?.address || 'Regional Agro Depot'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(0,0,0,0.25)', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800', textTransform: 'uppercase' }}>
+                      2. Consumer Delivery Destination
+                    </div>
+                    <div style={{ color: '#effbe7', fontSize: '14px', fontWeight: '700', marginTop: '4px' }}>
+                      {currentActiveOrder.customerName || 'Customer Residence'}
+                    </div>
+                    <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '2px' }}>
+                      {currentActiveOrder.customerLocation?.address || currentActiveOrder.customerAddress || 'Customer Address'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {currentActiveOrder.status === 'assigned' && (
+                    <button
+                      onClick={() => setActiveNavTab('active')}
+                      style={{
+                        minHeight: '44px',
+                        padding: '10px 20px',
+                        borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        border: 'none',
+                        color: '#ffffff',
+                        fontSize: '13.5px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)'
+                      }}
+                    >
+                      <Package size={16} />
+                      <span>{t('Proceed to Farm Pickup')}</span>
+                    </button>
+                  )}
+                  {['picked_up', 'in_transit'].includes(currentActiveOrder.status) && (
+                    <button
+                      onClick={() => setActiveNavTab('active')}
+                      style={{
+                        minHeight: '44px',
+                        padding: '10px 20px',
+                        borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                        border: 'none',
+                        color: '#ffffff',
+                        fontSize: '13.5px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)'
+                      }}
+                    >
+                      <Navigation size={16} />
+                      <span>{t('Navigate to Doorstep')}</span>
+                    </button>
+                  )}
+                  {currentActiveOrder.status === 'arrived' && (
+                    <button
+                      onClick={() => setSelectedHandoverOrder(currentActiveOrder)}
+                      style={{
+                        minHeight: '44px',
+                        padding: '10px 20px',
+                        borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                        border: 'none',
+                        color: '#ffffff',
+                        fontSize: '13.5px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)'
+                      }}
+                    >
+                      <KeyRound size={16} />
+                      <span>{t('Enter Customer Handover OTP')}</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setIssueOrder(currentActiveOrder);
+                      setShowIssueModal(true);
+                    }}
+                    style={{
+                      minHeight: '44px',
+                      padding: '10px 16px',
+                      borderRadius: '12px',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      color: '#f87171',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <AlertCircle size={15} />
+                    <span>{t('Report Delay or Dispute')}</span>
+                  </button>
+                </div>
+              </div>
+            ) : availableOrders.length > 0 ? (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.15), rgba(16, 32, 26, 0.95))',
+                border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                borderRadius: '18px',
+                padding: '20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '14px'
+              }}>
+                <div>
+                  <div style={{ color: '#38bdf8', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase' }}>
+                    Shipment Dispatch Queue Ready
+                  </div>
+                  <h3 style={{ margin: '4px 0 6px', color: '#effbe7', fontSize: '17px', fontWeight: '800' }}>
+                    {availableOrders.length} Farm Consignments Packed & Awaiting Courier
+                  </h3>
+                  <p style={{ margin: 0, color: '#a3c2b0', fontSize: '13px' }}>
+                    Claim a regional farm shipment to initiate your next paid logistics run.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveNavTab('available')}
+                  style={{
+                    minHeight: '44px',
+                    padding: '10px 20px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontSize: '13.5px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)'
+                  }}
+                >
+                  <Package size={16} />
+                  <span>{t('Claim Farm Shipment')}</span>
+                </button>
+              </div>
+            ) : null}
+
+            {/* 4 Primary Operational Metric Cards */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '14px'
+            }}>
+              {/* Card 1: Available Pickups */}
+              <div
+                onClick={() => setActiveNavTab('available')}
+                style={{
+                  background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.9), rgba(8, 20, 16, 0.95))',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease, border-color 0.2s ease'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#38bdf8', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase' }}>
+                    {t('Available Pickups')}
+                  </span>
+                  <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+                    <Package size={18} />
+                  </div>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '900', color: '#effbe7', margin: '8px 0 4px' }}>
+                  {availableOrders.length}
+                </div>
+                <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                  Packed & Ready at regional farms
+                </div>
+              </div>
+
+              {/* Card 2: Active Dispatches */}
+              <div
+                onClick={() => setActiveNavTab('active')}
+                style={{
+                  background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.9), rgba(8, 20, 16, 0.95))',
+                  border: '1px solid rgba(244, 201, 93, 0.3)',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#f4c95d', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase' }}>
+                    {t('Active Deliveries')}
+                  </span>
+                  <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(244, 201, 93, 0.15)', color: '#f4c95d' }}>
+                    <Truck size={18} />
+                  </div>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '900', color: '#effbe7', margin: '8px 0 4px' }}>
+                  {activeOrders.length}
+                </div>
+                <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                  {ordersInTransit.length} in transit • {ordersArrivedDoorstep.length} at doorstep
+                </div>
+              </div>
+
+              {/* Card 3: Completed Deliveries */}
+              <div
+                onClick={() => setActiveNavTab('history')}
+                style={{
+                  background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.9), rgba(8, 20, 16, 0.95))',
+                  border: '1px solid rgba(74, 222, 128, 0.3)',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#4ade80', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase' }}>
+                    {t('Completed Deliveries')}
+                  </span>
+                  <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(74, 222, 128, 0.15)', color: '#4ade80' }}>
+                    <CheckCircle2 size={18} />
+                  </div>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '900', color: '#effbe7', margin: '8px 0 4px' }}>
+                  {completedOrders.length}
+                </div>
+                <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                  {todayCompleted.length} fulfilled today
+                </div>
+              </div>
+
+              {/* Card 4: Courier Rating */}
+              <div
+                onClick={() => {
+                  setActiveNavTab('reviews');
+                  fetchDriverReviews();
+                }}
+                style={{
+                  background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.9), rgba(8, 20, 16, 0.95))',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#f59e0b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase' }}>
+                    {t('Driver Reviews')}
+                  </span>
+                  <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                    <Star size={18} />
+                  </div>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '900', color: '#effbe7', margin: '8px 0 4px' }}>
+                  {avgRating} ★
+                </div>
+                <div style={{ fontSize: '12px', color: '#a3c2b0' }}>
+                  {validReviews.length} verified customer reviews
+                </div>
+              </div>
+            </div>
+
+            {/* Authoritative COD Financial Reconciliation Card */}
+            <div style={{
+              background: 'linear-gradient(145deg, rgba(16, 32, 26, 0.95), rgba(8, 20, 16, 0.98))',
+              border: '1.5px solid rgba(52, 211, 153, 0.3)',
+              borderRadius: '20px',
+              padding: '20px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.35)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    padding: '8px',
+                    borderRadius: '10px',
+                    background: 'rgba(52, 211, 153, 0.15)',
+                    color: '#34d399'
+                  }}>
+                    <IndianRupee size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, color: '#effbe7', fontSize: '17px', fontWeight: '800' }}>
+                      {t('Authoritative COD Reconciliation')}
+                    </h3>
+                    <div style={{ color: '#a3c2b0', fontSize: '12px' }}>
+                      Audit-verified financial reconciliation records
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setIssueType('cod_discrepancy');
+                    setShowIssueModal(true);
+                  }}
+                  style={{
+                    minHeight: '44px',
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    color: '#f59e0b',
+                    fontSize: '12.5px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <AlertCircle size={14} />
+                  <span>{t('Report Payment Discrepancy')}</span>
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(52, 211, 153, 0.2)' }}>
+                  <div style={{ fontSize: '11px', color: '#34d399', fontWeight: '800', textTransform: 'uppercase' }}>
+                    {t('Cash Collected in Hand')}
+                  </div>
+                  <div style={{ fontSize: '22px', fontWeight: '900', color: '#34d399', margin: '4px 0' }}>
+                    ₹{totalCodCollected}
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#a3c2b0' }}>
+                    {codCollectedOrders.length} verified collections
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(244, 201, 93, 0.2)' }}>
+                  <div style={{ fontSize: '11px', color: '#f4c95d', fontWeight: '800', textTransform: 'uppercase' }}>
+                    {t('Pending Doorstep Cash')}
+                  </div>
+                  <div style={{ fontSize: '22px', fontWeight: '900', color: '#f4c95d', margin: '4px 0' }}>
+                    ₹{totalCodPending}
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#a3c2b0' }}>
+                    {codPendingOrders.length} runs in transit
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ fontSize: '11px', color: '#a3c2b0', fontWeight: '800', textTransform: 'uppercase' }}>
+                    {t('Total COD Expected')}
+                  </div>
+                  <div style={{ fontSize: '22px', fontWeight: '900', color: '#effbe7', margin: '4px 0' }}>
+                    ₹{totalCodExpected}
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#a3c2b0' }}>
+                    Sum of shift collections
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(74, 222, 128, 0.2)' }}>
+                  <div style={{ fontSize: '11px', color: '#4ade80', fontWeight: '800', textTransform: 'uppercase' }}>
+                    {t('Shift Delivery Earnings')}
+                  </div>
+                  <div style={{ fontSize: '22px', fontWeight: '900', color: '#4ade80', margin: '4px 0' }}>
+                    ₹{shiftEarnings}
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#a3c2b0' }}>
+                    ₹50/order × {completedOrders.length} completed
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Assigned Runs Summary */}
+            <div style={{
+              background: 'rgba(16, 32, 26, 0.85)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '18px',
+              padding: '20px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h3 style={{ margin: 0, color: '#effbe7', fontSize: '16px', fontWeight: '800' }}>
+                  Recent Assigned Shipments
+                </h3>
+                <button
+                  onClick={() => setActiveNavTab('active')}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#37bd78',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  View All Active ({activeOrders.length}) →
+                </button>
+              </div>
+
+              {activeOrders.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 10px', color: '#a3c2b0', fontSize: '13.5px' }}>
+                  No active assignments currently in progress. Claim ready consignments from the Available Pickups queue.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {activeOrders.slice(0, 4).map((ord) => (
+                    <div
+                      key={ord._id || ord.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '10px',
+                        padding: '12px 14px',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(255,255,255,0.06)'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ color: '#effbe7', fontWeight: '800', fontSize: '13.5px' }}>
+                            #{String(ord.orderId || ord._id || ord.id).slice(-8).toUpperCase()}
+                          </span>
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: '800',
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            background: ord.status === 'arrived' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(244, 201, 93, 0.2)',
+                            color: ord.status === 'arrived' ? '#4ade80' : '#f4c95d'
+                          }}>
+                            {ord.status?.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
+                        <div style={{ color: '#a3c2b0', fontSize: '12px', marginTop: '3px' }}>
+                          From: {ord.farmerName || 'Agri Farm'} → To: {ord.customerName || 'Customer'}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ color: '#37bd78', fontWeight: '800', fontSize: '14px' }}>
+                          ₹{ord.totalAmount}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setActiveOrderId(ord._id || ord.id);
+                            setActiveNavTab('active');
+                          }}
+                          style={{
+                            minHeight: '36px',
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            background: 'rgba(55, 189, 120, 0.2)',
+                            border: '1px solid #37bd78',
+                            color: '#8be28b',
+                            fontSize: '12px',
+                            fontWeight: '800',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Manage Run
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────
            TAB 1: ACTIVE DELIVERY (The Driver's Main Focus)
         ───────────────────────────────────────────────────────────── */}
         {activeNavTab === 'active' && (
@@ -1630,26 +2357,54 @@ export default function DeliveryPortal({ onLogout }) {
                       <span>Live GPS Route Radar</span>
                     </div>
 
-                    <button
-                      disabled={simulating}
-                      onClick={() => simulateGpsMovement(currentActiveOrder)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '8px',
-                        background: simulating ? '#37bd78' : 'rgba(255,255,255,0.08)',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        color: '#effbe7',
-                        fontSize: '11.5px',
-                        fontWeight: '700',
-                        cursor: simulating ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px'
-                      }}
-                    >
-                      <Play size={12} />
-                      <span>{simulating ? 'Simulating...' : 'Test Route Telemetry'}</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        id="btn-broadcast-real-gps"
+                        disabled={gpsActive}
+                        onClick={() => broadcastLiveLocation(currentActiveOrder)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          background: gpsActive ? 'rgba(74, 222, 128, 0.25)' : 'rgba(55, 189, 120, 0.15)',
+                          border: '1px solid #37bd78',
+                          color: '#8be28b',
+                          fontSize: '11.5px',
+                          fontWeight: '700',
+                          cursor: gpsActive ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        title="Broadcast real device GPS to customer radar"
+                      >
+                        <Navigation size={12} style={{ animation: gpsActive ? 'spin 1s linear infinite' : 'none' }} />
+                        <span>{gpsActive ? t('Syncing GPS...') : t('Broadcast Live GPS')}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIssueOrder(currentActiveOrder);
+                          setShowIssueModal(true);
+                        }}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '8px',
+                          background: 'rgba(239, 68, 68, 0.12)',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          color: '#f87171',
+                          fontSize: '11.5px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}
+                        title="Report address problem, delivery delay, or produce issue"
+                      >
+                        <AlertCircle size={12} />
+                        <span>{t('Report Delay/Issue')}</span>
+                      </button>
+                    </div>
                   </div>
 
                   <LiveTrackingMap order={currentActiveOrder} />
@@ -2851,10 +3606,203 @@ export default function DeliveryPortal({ onLogout }) {
           onCollectCodPayment={handleCollectPayment}
           collectingPayment={Boolean(collectingPaymentId)}
         />
+
+        {/* Operational Incident & COD Discrepancy Reporting Modal */}
+        {showIssueModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '16px'
+          }}>
+            <div style={{
+              background: 'linear-gradient(145deg, #10201a, #081410)',
+              border: '1.5px solid rgba(239, 68, 68, 0.4)',
+              borderRadius: '20px',
+              padding: '24px',
+              maxWidth: '480px',
+              width: '100%',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+              boxSizing: 'border-box'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <AlertCircle size={22} color="#ef4444" />
+                  <h3 style={{ margin: 0, color: '#effbe7', fontSize: '18px', fontWeight: '800' }}>
+                    {t('Report Delivery Issue')}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowIssueModal(false);
+                    setIssueOrder(null);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#a3c2b0',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    padding: '4px 8px'
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p style={{ margin: '0 0 16px', color: '#a3c2b0', fontSize: '13px' }}>
+                {issueOrder
+                  ? `Order #${String(issueOrder.orderId || issueOrder._id || issueOrder.id).slice(-8).toUpperCase()}`
+                  : 'General Dispatch Incident Report'}
+              </p>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#effbe7', fontWeight: '700', marginBottom: '6px' }}>
+                  {t('Issue Category')}
+                </label>
+                <select
+                  value={issueType}
+                  onChange={(e) => setIssueType(e.target.value)}
+                  style={{
+                    width: '100%',
+                    minHeight: '44px',
+                    background: 'rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '10px',
+                    color: '#effbe7',
+                    padding: '8px 12px',
+                    fontSize: '13px'
+                  }}
+                >
+                  <option value="unreachable_customer">{t('Unreachable Customer (Phone Unanswered)')}</option>
+                  <option value="incorrect_address">{t('Incorrect or Inaccessible Address')}</option>
+                  <option value="pickup_delay">{t('Farmer Pickup Delayed / Not Ready')}</option>
+                  <option value="damaged_produce">{t('Damaged or Missing Agricultural Produce')}</option>
+                  <option value="cod_discrepancy">{t('COD Cash Discrepancy / Customer Dispute')}</option>
+                  <option value="other">{t('Other Logistics Exception')}</option>
+                </select>
+              </div>
+
+              {issueType === 'cod_discrepancy' && (
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#f59e0b', fontWeight: '700', marginBottom: '6px' }}>
+                    {t('Cash Discrepancy Amount (₹)')}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={discrepancyAmount}
+                    onChange={(e) => setDiscrepancyAmount(e.target.value)}
+                    placeholder="e.g. 50"
+                    style={{
+                      width: '100%',
+                      minHeight: '44px',
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      borderRadius: '10px',
+                      color: '#effbe7',
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              )}
+
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#effbe7', fontWeight: '700', marginBottom: '6px' }}>
+                  {t('Incident Notes & Details')}
+                </label>
+                <textarea
+                  rows={3}
+                  value={issueNote}
+                  onChange={(e) => setIssueNote(e.target.value)}
+                  placeholder={t('Provide detailed notes for the dispatch manager and customer support...')}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '10px',
+                    color: '#effbe7',
+                    padding: '10px 12px',
+                    fontSize: '13px',
+                    resize: 'vertical',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    setShowIssueModal(false);
+                    setIssueOrder(null);
+                  }}
+                  disabled={submittingIssue}
+                  style={{
+                    minHeight: '44px',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#a3c2b0',
+                    fontWeight: '600',
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('Cancel')}
+                </button>
+                <button
+                  onClick={handleReportIssue}
+                  disabled={submittingIssue}
+                  style={{
+                    minHeight: '44px',
+                    padding: '8px 20px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    fontSize: '13px',
+                    cursor: submittingIssue ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <AlertCircle size={15} />
+                  <span>{submittingIssue ? t('Submitting...') : t('Submit Incident Log')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Mobile Bottom Navigation Bar */}
       <nav className="mobile-bottom-nav">
+        <button
+          id="mobile-nav-dashboard"
+          className={`mobile-nav-btn ${activeNavTab === 'dashboard' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveNavTab('dashboard');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          <LayoutDashboard size={20} />
+          <span>{t('Dashboard')}</span>
+        </button>
+
         <button
           className={`mobile-nav-btn ${activeNavTab === 'active' ? 'active' : ''}`}
           onClick={() => {

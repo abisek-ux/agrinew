@@ -1500,6 +1500,87 @@ const collectCodPayment = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/orders/:id/report-issue
+ * Delivery driver logs an operational issue (unreachable customer, incorrect address, delay, damaged produce, COD discrepancy)
+ */
+const reportDeliveryIssue = async (req, res) => {
+  try {
+    if (!req.user || (req.user.role !== 'delivery' && req.user.role !== 'admin')) {
+      return res.status(403).json({ success: false, message: 'Access denied: Only delivery partners can report delivery issues' });
+    }
+
+    const { id } = req.params;
+    const driverId = String(req.user.id || req.user._id);
+    const { issueType = 'other', note = '', discrepancyAmount = 0 } = req.body;
+
+    let order;
+    if (isConnected()) {
+      order = await Order.findOne({
+        $or: [{ _id: id }, { id: id }, { orderId: id }]
+      });
+    } else {
+      order = memoryOrders.find(o => String(o._id || o.id || o.orderId) === String(id));
+    }
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order record not found' });
+    }
+
+    // Authorization & assignment check
+    if (order.deliveryId && order.deliveryId !== 'Unassigned' && String(order.deliveryId) !== driverId && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You are not the assigned delivery partner for this order' });
+    }
+
+    const issueRecord = {
+      issueType,
+      note: String(note).trim(),
+      discrepancyAmount: Number(discrepancyAmount) || 0,
+      reportedBy: driverId,
+      reportedAt: new Date()
+    };
+
+    if (!Array.isArray(order.deliveryIssues)) {
+      order.deliveryIssues = [];
+    }
+    order.deliveryIssues.push(issueRecord);
+
+    if (isConnected()) {
+      await order.save();
+    }
+
+    // Dispatch incident notification to customer & farmer
+    const issueLabels = {
+      unreachable_customer: 'Customer Unreachable',
+      incorrect_address: 'Address Verification Issue',
+      pickup_delay: 'Depot Pickup Delay',
+      damaged_produce: 'Produce Transit Alert',
+      cod_discrepancy: 'Payment Amount Discrepancy',
+      other: 'Delivery Status Note'
+    };
+    const humanLabel = issueLabels[issueType] || 'Delivery Status Note';
+
+    pushNotification({
+      recipientId: order.customerId,
+      recipientRole: 'customer',
+      orderId: order.orderId || order._id || order.id,
+      title: `⚠️ ${humanLabel}`,
+      message: `Delivery Partner reported: ${note || humanLabel}. Order #${order.orderId || order._id || order.id}.`,
+      category: 'order',
+      priority: 'HIGH'
+    });
+
+    return res.json({
+      success: true,
+      message: `Delivery issue (${humanLabel}) recorded successfully.`,
+      order: sanitizeOrderFarmerDetails(order, req.user)
+    });
+  } catch (error) {
+    console.error('reportDeliveryIssue error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to record delivery issue' });
+  }
+};
+
 const seedMemoryOrder = (ord) => memoryOrders.push(ord);
 const getMemoryOrders = () => memoryOrders;
 
@@ -1514,6 +1595,7 @@ module.exports = {
   confirmDispatchSignal,
   processOrderPayment,
   collectCodPayment,
+  reportDeliveryIssue,
   seedMemoryOrder,
   getMemoryOrders
 };

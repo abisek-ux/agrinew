@@ -67,7 +67,16 @@ const orderSchema = new mongoose.Schema(
     // Farmer-Specific UPI Payment Snapshot (Preserves historical payment destination)
     farmerUpiQrCode: { type: String, default: '' },
     farmerUpiId: { type: String, default: '' },
-    farmerUpiPayeeName: { type: String, default: '' }
+    farmerUpiPayeeName: { type: String, default: '' },
+    deliveryIssues: [
+      {
+        issueType: { type: String, default: 'other' },
+        note: { type: String, default: '' },
+        discrepancyAmount: { type: Number, default: 0 },
+        reportedBy: { type: String, default: '' },
+        reportedAt: { type: Date, default: Date.now }
+      }
+    ]
   },
   { timestamps: true }
 );
